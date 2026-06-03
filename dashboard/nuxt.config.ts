@@ -1,4 +1,4 @@
-// BobNet – schlankes Live-Dashboard für Tech-Lead-orchestrierte Agent-Teams (claude-dev-team).
+// BobNet – schlankes Live-Dashboard für Tech-Lead-orchestrierte Agent-Teams (claude-bobnet).
 // Config-driven: Titel/Team/PO kommen aus der Projekt-Instanz (team.config.json), nicht hardcoded.
 // Liest Heartbeat-Logs aus <standupDir>. Nur Dev/intern, noindex.
 import { readFileSync } from 'node:fs'

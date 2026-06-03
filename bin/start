@@ -7,7 +7,7 @@
 # Geschwister unter dem tool-hub) und exec-t ihn unverändert — alle Args werden 1:1 durchgereicht
 # (z.B. `bin/start acme`, `bin/start --list`, `bin/start acme --dry-run`).
 #
-# Spiegelbildlich zur Auflösung im Launcher selbst (HERE/.. = tool-hub, tool-hub/claude-dev-team
+# Spiegelbildlich zur Auflösung im Launcher selbst (HERE/.. = tool-hub, tool-hub/claude-bobnet
 # = Engine): hier ENGINE_ROOT = bin/.. , TOOLHUB = ENGINE_ROOT/.. , Launcher = TOOLHUB/claude-team-dashboard/start.
 # Override via $BOBNET_LAUNCHER (absoluter Pfad), falls die Topologie mal abweicht.
 set -uo pipefail

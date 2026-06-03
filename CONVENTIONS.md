@@ -1,4 +1,4 @@
-# CONVENTIONS — claude-dev-team (harte Regeln)
+# CONVENTIONS — claude-bobnet (harte Regeln)
 
 Verbindliche Regeln für das Team-OS. Gelten projekt- und themen-übergreifend.
 
@@ -18,7 +18,7 @@ Verbindliche Regeln für das Team-OS. Gelten projekt- und themen-übergreifend.
   Kategorie aus der Taxonomie (`bob`/`service`/`coworker`/`helper`/`human`), Rolle = der
   beschreibende Archetyp-Slug. Die `id` ändert sich NIE (Branches/Logs/Refs hängen dran);
   der **Name** ist nur Anzeige und kommt aus dem Theme.
-- **Quelle/Kanon der konkreten IDs:** `acme-bobiverse/docs/BOB_MATRIX.md` bzw. die
+- **Quelle/Kanon der konkreten IDs:** die `archetypes/*.json` (`idPattern`) + die
   `team.config.json` der Instanz. Neue Rollen → neue beschreibende id, kein Durchnummerieren.
 - **In Logs/Heartbeats/Tasks** immer den Namen ODER die id verwenden, nie einen generischen Platzhalter.
 

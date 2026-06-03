@@ -2,7 +2,7 @@
 # bin/install — Maschinen-Bootstrap (idempotent, einmal pro Maschine).
 # Macht die Engine + ihre Skills global sichtbar + legt die Bobiverse-Config in ~/.claude an.
 #
-# Erstkontakt (Kollege):  git clone <engine> ~/Sites/claude-dev-team && ~/Sites/claude-dev-team/bin/install
+# Erstkontakt (Kollege):  git clone <engine> ~/Sites/claude-bobnet && ~/Sites/claude-bobnet/bin/install
 # Danach pro Projekt:      <engine>/bin/onboard <projekt-root>   (richtet _dev_team ein, fragt PROJECT_UID)
 #
 # Daten vor Code · non-destruktiv (readlink-Test vor Symlink, .bak-Sicherung) · Skill-Link koexistiert

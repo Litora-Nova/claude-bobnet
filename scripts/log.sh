@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Heartbeat-Logger fürs BobNet-Dashboard (universell, claude-dev-team).
+# Heartbeat-Logger fürs BobNet-Dashboard (universell, claude-bobnet).
 #
 # Usage:  log.sh <Agent> <status> <message...>
 #   status: busy | idle | blocked | done

@@ -1,4 +1,4 @@
-# scripts/ — claude-dev-team Toolkit
+# scripts/ — claude-bobnet Toolkit
 
 Universelle Shell-Scripts für das Team-OS. Projekt-spezifische Werte kommen aus
 Env-Variablen (siehe `dev-team.env.example`) — die Scripts selbst bleiben generisch.

@@ -15,5 +15,5 @@ members/          (optional) reichere Per-Member-Lore als <id>.md — derzeit un
 **HARTE Regel (Austin):** BobNet zeigt Mitglieder **ausschließlich als Bild, NIE als Emoji** —
 auch nicht als Fallback/Option. **Ohne eigenes Avatar-PNG** (Butterworth, GUPPI) kommt
 `defaultAvatar` (`default.png`, Anonymous-/Hacker-Maske).
-**Quelle der Persona-Daten:** `acme-lms/acme-bobiverse/docs/BOB_MATRIX.md` (Roster) +
-`bobiverse_background.md` (Lore). *Schema = Tool (publizierbar), Daten + Wiki = lokal/privat.*
+**Quelle der Persona-Daten:** `theme.json` (in diesem Repo). Der ausführliche Roster + das
+Lore-Wiki bleiben **privat/lokal** (nicht im public Repo). *Schema = Tool (publizierbar), Wiki/Klarnamen = privat.*

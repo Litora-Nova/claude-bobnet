@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# bin/onboard — richtet ein Projekt für das claude-dev-team-OS ein (idempotent).
+# bin/onboard — richtet ein Projekt für das claude-bobnet-OS ein (idempotent).
 #
 # Bausteine (jeder idempotent + non-destruktiv; Symlinks readlink-getestet vor jedem Eingriff):
 #   1  Memory-Symlink   ~/.claude/projects/<slug>/memory → <PROJECT_ROOT>/_dev_team/memories
@@ -196,7 +196,7 @@ fi
 #     status  = "active"
 # Pfad-Auflösung: $DEV_TEAM_REGISTRY-Env > Default $TOOLHUB/projects.registry.json,
 #   wobei TOOLHUB = dirname(ENGINE_ROOT) (= 3 Ebenen über dieser onboard-Datei:
-#   <toolhub>/claude-dev-team/bin/onboard). Die zentrale Registry liegt im tool-hub,
+#   <toolhub>/claude-bobnet/bin/onboard). Die zentrale Registry liegt im tool-hub,
 #   NICHT im Engine-Repo — daher kein $ENGINE_ROOT-Pfad mehr.
 # Upsert per python3 (jq-frei, wie der Launcher): uid existiert → Felder updaten;
 #   sonst anhängen. Gleicher Input → 0 Änderung (idempotent, kein Rewrite).

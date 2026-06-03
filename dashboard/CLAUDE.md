@@ -1,114 +1,123 @@
-# acme-bobiverse — Agent-Onboarding (Garfield-Revier)
+# Dashboard — Agent-Onboarding
 
-Live-Stand-up-Dashboard fürs Bobiverse-Team. Eigenes Repo, liegt physisch unter
-`~/Sites/<project>/acme-bobiverse/` aber **separat versioniert** (eigenes `.git`).
-Hauptrepo `acme-lms` ignoriert es via `.gitignore` (wie die anderen App-Repos).
+The **BobNet dashboard component**: a lean Nuxt 3 live dashboard that renders, in
+real time, what every agent on a Team-Lead-orchestrated agent team is doing. It is
+the render-hub of the engine. This file is agent guidance for working *inside* this
+component; the user-facing overview lives in [`README.md`](./README.md) — keep the
+two consistent.
 
 ## Stack
 
-- **Nuxt 3** (SSR) · TypeScript · keine UI-Lib (handgerolltes CSS, GitHub-Dark-Palette);
-  **Icons via `@nuxt/icon`@1 + mdi** (`clientBundle`, nur genutzte Icons inline, svg-Mode,
-  kein Egress — neue Icons in `nuxt.config.ts` `icon.clientBundle.icons` ergänzen!).
-  Persona-Avatare bleiben Emoji.
-- **Node 24** (`.nvmrc`) · `npm` (kein pnpm/yarn)
-- **Multi-Page** (seit 2026-06-01, Austin-Wunsch „jeder Bereich eine verlinkbare Seite"):
-  `app.vue` = Shell (`<NuxtLayout><NuxtPage/>`), `layouts/default.vue` = Header-Nav +
-  globales Blocker-Banner + Footer, `pages/*.vue` = je eine Route (`/`, `/tasks`,
-  `/reports`, `/feedback`, `/wishes`, `/qa`, `/briefing`, `/inbox`, `/bugs`, `/approvals`).
-  Das generische `components/OverlayPanel.vue` wird von den Panel-Seiten im
-  `page`-Mode gehostet (kein Overlay-Toggle mehr). Globale CSS: `assets/css/main.css`.
-  Geteilte Live-Daten + zentrales Polling: `composables/useLive.ts` (stabile
-  `useFetch`-Keys, Refresh via `refreshNuxtData`). Vor 06-01 war es eine Single-`app.vue`.
-- Server-Routen: `server/api/*.ts` (lesen `standup/`-Dateien aus dem **Hauptrepo**)
-- Keine DB, keine externen Deps zur Laufzeit — Quelle sind nur Heartbeat-Logs +
-  Markdown-Dateien (`standup/{wishes,qa,approvals,feedback}/`, `_bugs.md`, …)
+- **Nuxt 3** (SSR) · TypeScript · **no UI library** — hand-rolled CSS (dark palette)
+  in `assets/css/main.css`.
+- **Icons via `@nuxt/icon` + `mdi`**, bundled (`icon.clientBundle.icons` in
+  `nuxt.config.ts`, `svg` mode). No CDN fetch, no runtime egress — **add new icon
+  names to that list or they will not render.**
+- **Node 24** · `npm` (no pnpm/yarn).
+- **Multi-page:** `app.vue` = shell (`<NuxtLayout><NuxtPage/>`), `layouts/default.vue`
+  = header-nav + footer, `pages/*.vue` = one route each. Shared live data + central
+  polling: `composables/useLive.ts`.
+- **Server routes:** `server/api/*.ts` (read the heartbeat logs + Markdown from the
+  stand-up directory) and `server/routes/theme-avatar/[name].get.ts` (theme-aware
+  avatar delivery). No database, no runtime external deps — the source is purely the
+  per-agent heartbeat logs plus a few Markdown files in the stand-up directory.
 
-## Konventionen
+## Three display classes (HARD: avatars are always an image)
 
-- **Port hart auf 3030** (siehe `nuxt.config.ts` + Preview-Skript). Wird **nicht** geändert.
-- **`standupDir` über `NUXT_STANDUP_DIR`** (NICHT `STANDUP_DIR` — Nuxt-runtimeConfig
-  braucht das `NUXT_`-Präfix). Default: `../standup` (relativ zu cwd).
-- **Avatare:** `public/avatars/<Name>.png` mit Klar-Namen (z. B. `Bill.png`, `Henry.png`),
-  max 512px square, **<80KB** (Bender-Asset-Konsistenz, 2026-05-30-Slim-Sprint).
-  Master-Originale (1024+) liegen in `design/avatars/<Name>.png` als Quelle für
-  Re-Slim. Pipeline: `sips -Z 512` (oder 384 für große) + `pngquant --quality=70-90 --strip`.
-  Globaler Fallback = `public/avatars/default.png` (Anonymous-Maske) für jeden Bob
-  ohne eigenes Bild. Emoji greift nur, wenn auch `default.png` fehlt.
-- **Roster = Single Source of Truth** in `server/utils/roster.ts` (TEAM.md folgt).
-  Externe Coworker (Tim/Henry) tragen `external: true` + `channel: <relpath>` und
-  erscheinen nur im Grid, wenn ihre Channel-Datei < 48 h alt ist.
-- **Heartbeat-Format:** `YYYY-MM-DD HH:MM | status | msg` (alt `HH:MM | …` bleibt
-  rückwärts kompatibel — der Parser akzeptiert beides).
-- **Stil:** kompakte HTML-Tags auf 1 Zeile, kurze TS-Files, Kommentare auf Deutsch.
+The dashboard renders an entity in one of three places, driven by its archetype
+`category` (overridable per instance — never hardcoded):
 
-## PWA/Service-Worker ENTFERNT (2026-05-30, Austin-Entscheidung)
+| Class | Who | Rendering |
+|---|---|---|
+| **Roster** | Team members (`category: bob`) | Card with **image avatar**, name, role, status pill (`components/RosterCard.vue`). |
+| **Service** | Cross-project daemons (`category: service`) | Compact pill showing **alive / dead** instead of the full status scale — a daemon either runs or is down (`components/ServiceStatus.vue`). "alive" = a fresh heartbeat within the alive window. |
+| **Helper** | Ephemeral helpers (`category: helper`) | Icon-only **badge** on the parent agent's card — helpers are not roster entries (`components/HelperBadge.vue`). The status colors the badge dot. |
 
-PWA war ab 29.05. via `@vite-pwa/nuxt` aktiv (Branch `garfield/pwa-enable`,
-master 67a1ead). Am 30.05. 01:34 meldete Austin live: Dashboard zeigt seit
-Stunden stale Daten (gestriger Sprint, alte Heartbeats). Root-Cause: Workbox-
-`registerType: 'autoUpdate'` + Precache lieferte SSR-HTML CacheFirst. Austin-
-Entscheidung danach: **Service-Worker kann komplett weg** — er hatte 0 Nutzen
-für uns. Der einzige gewünschte Effekt („Browser fragt installieren") kommt
-NICHT vom SW, sondern von Meta-Tags + Manifest. Also: SW raus, Install behalten.
+Status colors for roster/helpers: `busy` · `idle` · `blocked` · `done`.
 
-**Install-Fähigkeit OHNE Service-Worker:**
-- **iOS „Zum Home-Bildschirm"** läuft rein über die `apple-mobile-web-app-*`-
-  Meta-Tags + `apple-touch-icon` (`nuxt.config` `app.head`). Kein Manifest, kein
-  SW nötig — iOS A2HS braucht nie einen SW.
-- **Chrome/Android „App installieren"** braucht ein echtes Manifest:
-  statisches **`public/manifest.webmanifest`** (name/short_name/start_url/
-  display:standalone/background+theme_color `#0b0e14`/Icons 192+512+512-maskable)
-  + `<link rel="manifest">` und `theme-color`-Meta im `app.head`.
-- Manifest ist ein **echtes statisches File** in `public/` (überlebt jede PWA-
-  Reste-Entfernung). Verify: `curl :3030/manifest.webmanifest` → 200 +
-  `content-type: application/manifest+json` (JSON, nicht HTML-Shell).
+### NO-EMOJI — hard rule (team members are NEVER an emoji)
 
-**Service-Worker-Stand:**
-- `@vite-pwa/nuxt` **restlos raus** aus `package.json` (devDeps) — kein Workbox-
-  SW, kein Auto-Manifest wird mehr generiert. **KEIN Re-Enable ohne Austin-Opt-in.**
-- `public/sw.js` = selbst-deregistrierender **Kill-Switch** (`install→skipWaiting`,
-  `activate→delete alle Caches + unregister + client.navigate`). Befreit Alt-
-  Clients (v.a. Austins iPhone) vom früheren Workbox-SW. Wird via `routeRules`
-  mit `Cache-Control: no-cache, no-store, must-revalidate` ausgeliefert, damit
-  Browser ihn sofort beim nächsten Update-Check abholen statt erst nach ~24h.
-  **Retire (Datei löschen) erst wenn alle Clients clean** — frühestens in ein
-  paar Tagen. NICHT vorher löschen, sonst kriegt ein Alt-Gerät das Kill-Signal nie.
+**Team-member avatars are ALWAYS an image, NEVER an emoji** — not even as a fallback
+or an option. This is enforced in code, not by convention:
 
-## Demo-Mode-Vertrag
+- `server/utils/theme.ts` has **no `emoji` field** at all (the `Persona` type is
+  `name` / `avatar` / `bio` / `positionLabel`). `avatarFileOf()` **always** returns a
+  filename — the persona's `avatar` or the theme's `defaultAvatar` (`default.png`, an
+  anonymous mask) — so the dashboard can never fall back to a glyph.
+- The avatar route (`theme-avatar/[name].get.ts`) is two-stage: `persona.avatar` →
+  theme `defaultAvatar` → 404; on 404 the client `<img @error>` falls back to the
+  static `public/avatars/default.png`. At no point is an emoji rendered.
+- `RosterCard.vue` / `ServiceStatus.vue` both load `/theme-avatar/<name>` and fall
+  back to the static default image on error — image-only end to end.
+- **Helper badges are the only glyphs**, and they are **mdi icons keyed to the helper
+  *type*** (`mdi:spider`, `mdi:satellite-variant`, generic `mdi:robot-outline`) — UI
+  iconography like the rest of the dashboard's mdi icons, **not** a member rendered as
+  an emoji. Do not confuse the two: type-icons are fine, member-as-emoji is forbidden.
 
-`?demo=1` → Header anonymisiert (`Team Stand-up` statt `Acme Inc · Stand-up`,
-beide mit dem grünen Live-Pulse-Dot davor) + Tasks-Panel zwingend offen +
-Austin-Toggle (`👤 Status`) zwingend AN (Roster-Card + Status-Eingabeform sichtbar)
-— alles für reproduzierbare Screenshots/Doku/FR. Liest in diesem Mode **kein**
-localStorage; revertiert sauber beim Wegnehmen des Query-Params. Wenn ein neues
-Feature ein „aufgeräumtes" Verhalten für Screenshots braucht, gehört der Branch
-hierher (nicht ins normale UI verschmieren).
+When touching any rendering path, keep this invariant. Image or static default —
+never a glyph for a member.
 
-## No-Push-Regel (HARTE Regel)
+## Config-driven (engine stays generic)
 
-- **NIEMALS** zum `origin` pushen, **NIEMALS** master direkt anfassen ohne Austins ausdrückliches OK.
-- Arbeitsmodus: Feature-Branch `garfield/<thema>` lokal, kleine Commits, **lokal lassen**
-  bis Austin „push" sagt. Auch dann nicht nach master mergen ohne separates OK.
-- Repo ist privat — wenn es jemals public/GitHub geht, vorher Key-Purge wie in
-  `~/Sites/<project>/standup/Garfield.log` 2026-05-25 (Tailscale-Key/Cert raus, History gc).
+Nothing about the concrete team is hardcoded — the specifics live in the project
+instance:
 
-## Dev-Server (eigene App — darf neu gestartet werden)
+- **`team.config.json`** — title, Product-Owner, and the member list (each member
+  keyed by a stable archetype `id`, with `role`, `order`, `groups`, optional
+  `category`/`parent` overrides). Located via `NUXT_TEAM_CONFIG`, or as
+  `team.config.json` inside the stand-up directory. See
+  [`team.config.example.json`](./team.config.example.json).
+- **`archetypes/*.json`** — supply each `id`'s default display `category` (read from
+  the engine's archetype layer; `NUXT_ARCHETYPES_DIR` to relocate).
+- **Themes** — name / avatar / bio per persona, keyed by the same stable `id`. Active
+  theme: `NUXT_THEME` > `team.config.theme` > engine default. Switching themes changes
+  only appearance, never structure — and **never** introduces an emoji avatar.
+
+Relevant `NUXT_*` env (all optional, sensible defaults):
+
+| Env | Purpose | Default |
+|---|---|---|
+| `NUXT_STANDUP_DIR` | Where the per-agent `<Agent>.log` files + Markdown live | `../standup` |
+| `NUXT_TEAM_CONFIG` | Explicit path to `team.config.json` | `<standupDir>/team.config.json` |
+| `NUXT_THEME` | Active theme id | `team.config.theme` |
+| `NUXT_THEMES_DIR` | Where theme folders live | `../themes` |
+| `NUXT_ARCHETYPES_DIR` | Where archetype JSON lives | `../archetypes` |
+| `NUXT_ALLOWED_HOSTS` | Extra Vite-allowed hosts (comma-separated) | — |
+
+## Heartbeat-fed (one file per agent → no write conflicts)
+
+1. Each agent appends `YYYY-MM-DD HH:MM | status | message` to **its own** log via the
+   engine's `log.sh` helper (`<status>` ∈ `busy | idle | blocked | done`). One file per
+   agent means there are **no write conflicts** — no shared file to corrupt, no locking.
+   The old `HH:MM | …` form stays parse-compatible.
+- The only write per step is that one line — token-cheap. The dashboard polls and
+   renders; no database, no runtime egress.
+2. The server route reads the stand-up directory, takes the **last 3** lines per agent,
+   enriches them with the active theme's display name / avatar / bio, and returns JSON.
+3. The pages poll on an interval and render the roster, service strip, helper badges,
+   plus sprint goals (from an optional `_sprint.md`).
+
+## Run
 
 ```bash
-lsof -ti tcp:3030 | xargs kill -9 2>/dev/null
-bash -lc 'cd ~/Sites/<project>/acme-bobiverse && nvm use && npm run dev'
-# Health: curl -s -o /dev/null -w '%{http_code}' localhost:3030  → 200
+# Via the engine launcher (resolves the project by its PROJECT_UID):
+bin/start <uid>          # e.g. bin/start acme
+
+# Or directly in this directory:
+npm install
+npm run dev      # → http://localhost:3030
+npm run build    # production build
+npm run preview  # serve the production build
 ```
 
-Build-Verify (vor Commit) auf Port 3099, damit :3030 ungestört bleibt:
-```bash
-npm run build && PORT=3099 node .output/server/index.mjs &
-```
+Port is fixed to **3030** (`nuxt.config.ts` `devServer`). The dashboard is internal
+tooling and serves `noindex` — it is not a public site.
 
-## Wer hier wohnt
+## Conventions
 
-`Garfield` (Bobiverse-/Dashboard-Maintainer). Scope: alles unter `acme-bobiverse/`
-plus **Lesezugriff** `~/Sites/<project>/standup/**`. Schreibrechte im Hauptrepo:
-nur eigene Heartbeat-Datei (`standup/Garfield.log` via `standup/log.sh`). Andere
-`standup/*.md` (Reports, Feedback, Wünsche) gehören Homer bzw. dem Team — Garfield
-flaggt Formatprobleme, fixt sie aber im Parser, nicht in fremden Dateien.
+- **Avatars:** `public/avatars/default.png` is the only avatar shipped here — the
+  image-only fallback (anonymous mask). Per-persona avatars live in the **theme**
+  (`themes/<theme>/avatars/`), keyed by stable `id`, not in this component.
+- **Compact HTML/Vue tags** on a single line; short TS files; comments may be in the
+  team's working language.
+- Add new mdi icons to `nuxt.config.ts` `icon.clientBundle.icons` before using them.

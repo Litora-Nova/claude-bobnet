@@ -1,4 +1,4 @@
-# State-Sync-Disziplin (claude-dev-team)
+# State-Sync-Disziplin (claude-bobnet)
 
 **State sauber halten ist Pflicht.** Drift zwischen lokal (z. B. Mac/Real-Instanz) und remote
 (LXC/VR-Instanz/origin) ist der teuerste Fehler — er kostet Tasks und Arbeit auf veralteter Basis.
