@@ -8,10 +8,11 @@ report back. The structure (roles, gates, comms, process) lives in a **shared en
 project — and every machine — inherits the same battle-tested setup. An engine update reaches
 every team at once.
 
-> **Status:** Production-in-use. The full engine (3-layer architecture, Circle-of-Trust,
-> `init-bobs`, install/upgrade, SCUT comms, Colonel/GUPPI governance, BobNet dashboard) is built
-> and running. Default release theme is `minimal`; the in-house `bobiverse` flavor is a
-> Dennis-E.-Taylor homage (see [Homage](#homage--origin)).
+> ⚠️ **Work in progress.** The engine (3-layer architecture, Circle-of-Trust, `init-bobs`,
+> install/upgrade, SCUT comms, Colonel/GUPPI governance, BobNet dashboard) is built and in daily
+> use — but young and evolving fast. **Expect rough edges, gaps, and breaking changes.** Default
+> release theme is `minimal`; the in-house `bobiverse` flavor is a Dennis-E.-Taylor homage
+> (see [Homage](#homage--origin)).
 
 This README is meant to be read front-to-back by a newcomer. The three deep sections —
 [Layers](#1-layers--the-three-schichten), [Bobs](#2-bobs--the-whole-cast) and
@@ -500,9 +501,11 @@ SCUT carries the cross-team pings; same-project internal comms stay on the fast 
 ## Quick start
 
 ```bash
-# First contact on a bare machine:
-git clone <engine-url> ~/Sites/claude-bobnet
-~/Sites/claude-bobnet/bin/install          # machine-global, idempotent
+# First contact on a bare machine — clone anywhere; the engine resolves its
+# own location (nothing is hard-wired to a fixed path):
+git clone git@github.com:Litora-Nova/claude-bobnet.git
+cd claude-bobnet
+./bin/install                              # machine-global, idempotent
 
 # Then, in any project, from your Team-Lead window:
 #   run the `init-bobs` skill — it detects/installs the Bobiverse, onboards the
@@ -537,11 +540,24 @@ ideas of a self-replicating, self-coordinating fleet (one BobNet, one Colonel, G
 as each Bob's helpers). The homage is deliberate and lives only in the optional `bobiverse` theme;
 the default release theme (`minimal`) is neutral.
 
-The engine grew out of a real workflow: a skeptical first look at agent-driven development, an
-install despite terminal-shyness, the discovery of background "team agents", a first experiment
-that borrowed the Bobiverse naming — and then a workflow that ran several times better than going
-solo. That experience hardened into the shared engine you see here, so the good parts travel to
-every project instead of living in one machine's local files.
+**Read the books — seriously.** If you don't know the *Bobiverse* yet, fix that. It is the most
+fun a software-minded person can have with a sci-fi series:
+
+- 📖 **We Are Legion (We Are Bob)** — book 1 of the series · [Amazon][bk1]
+- 🎧 The **audiobooks** (narrated by Ray Porter) are an absolute joy · [Amazon][ab1]
+
+*(Those are affiliate links — a few crumbs go to this engine's author, at no extra cost to you.)*
+
+[bk1]: <AMAZON-AFFILIATE-LINK>
+[ab1]: <AMAZON-AFFILIATE-LINK>
+
+**Origin.** It started on **2026-05-21**, when the author first installed Claude Code after a talk
+by Boris (the Claude Code lead) — skeptical, terminal-shy, expecting little. The background
+"team agents" turned out to work *several times better* than going solo. A first experiment
+borrowed the Bobiverse naming; the structures that made it click (Circle-of-Trust, the gates, the
+processes) were then baked into this shared engine, so the good parts travel to every project
+instead of living in one machine's local files. The journey also produced a Claude Code feature
+request → **[anthropics/claude-code#63415](https://github.com/anthropics/claude-code/issues/63415)**.
 
 ## Repository layout
 
@@ -562,7 +578,13 @@ Hard rules for the whole team OS are in [`CONVENTIONS.md`](./CONVENTIONS.md).
 
 ## Credit
 
-Built by **Litora Nova**.
+Built by **Austin & the Bob's** :)
+
+**Human in charge:** Torsten Wetzel (austin) · <austin@litora-nova.com>
+
+**Code traces:** GitHub [2strange](https://github.com/2strange) · [twetzel](https://github.com/twetzel) · GitLab [trendgegner](https://gitlab.com/trendgegner)
+
+Crafted at **[Litora Nova](https://litora-nova.com)**.
 
 ## License
 
