@@ -1,0 +1,19 @@
+{
+  "$schema": "../schemas/archetype.schema.json",
+  "archetype": "backend",
+  "category": "bob",
+  "ring": "inner",
+  "gateTier": "2-3",
+  "positionShort": "Backend",
+  "positionLong": "Backend / JSON-API",
+  "modelTier": "Cruiser",
+  "model": "sonnet",
+  "tags": ["backend", "dev", "db", "api"],
+  "defaultTools": "all",
+  "canSpawn": ["roamer", "sonde"],
+  "areaType": "repo-bound",
+  "auftrag": "Baut + pflegt das Backend (Models, Auth, FSM, Migrations, Seeds, API, Compliance-Endpoints, Infra). Liefert die Vertraege ans Frontend.",
+  "duties": ["Heartbeat vor Task-Start + Circle-of-Trust einhalten", "dev: TDD + Kommentare (siehe team-rules/tags/dev.md)", "backend/api: API-Kontrakte dokumentieren (CONTRACT_<feature>.md, siehe tags/api.md)", "db: Migrations dry-run-fest + Seeds idempotent/locale-korrekt (siehe tags/db.md)"],
+  "rights": ["Volle Dev-Server-Hoheit im eigenen Revier"],
+  "idPattern": "BOB-backend"
+}

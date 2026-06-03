@@ -1,0 +1,14 @@
+{
+  "$schema": "../schemas/archetype.schema.json",
+  "archetype": "human",
+  "category": "human",
+  "ring": "core",
+  "positionShort": "Product Owner",
+  "positionLong": "Head of Dev / Product Owner",
+  "defaultTools": "all",
+  "canSpawn": [],
+  "areaType": "cross-cutting",
+  "auftrag": "Der Mensch im Team: Product Owner / Head of Dev. Gibt Richtung, nimmt Aufgaben entgegen (eigene Inbox), haelt die harten Grenzen (Production / DNS / Secrets / Repo-Erstellung = nur Mensch).",
+  "duties": ["Ist Teammitglied, nicht nur 'oben' — bekommt + gibt Aufgaben", "Production-Deploy-OK liegt ausschliesslich hier"],
+  "idPattern": "HUMAN-<rolle>"
+}

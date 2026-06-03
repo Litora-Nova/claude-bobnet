@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# bin/start <PROJECT_UID> [...] — dünner Engine-Wrapper auf den BobNet-Launcher.
+#
+# Hintergrund: SKILL.md (init-bobs §0) + PLAN §7 referenzieren `bin/start <uid>`. Der REALE
+# Launcher liegt aber im tool-hub-Root neben der Engine (claude-team-dashboard/start), nicht in
+# der Engine selbst. Dieser Wrapper löst ihn topologie-robust auf (Engine + Launcher sind
+# Geschwister unter dem tool-hub) und exec-t ihn unverändert — alle Args werden 1:1 durchgereicht
+# (z.B. `bin/start acme`, `bin/start --list`, `bin/start acme --dry-run`).
+#
+# Spiegelbildlich zur Auflösung im Launcher selbst (HERE/.. = tool-hub, tool-hub/claude-dev-team
+# = Engine): hier ENGINE_ROOT = bin/.. , TOOLHUB = ENGINE_ROOT/.. , Launcher = TOOLHUB/claude-team-dashboard/start.
+# Override via $BOBNET_LAUNCHER (absoluter Pfad), falls die Topologie mal abweicht.
+set -uo pipefail
+
+BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENGINE_ROOT="$(cd "$BIN_DIR/.." && pwd)"
+TOOLHUB="$(cd "$ENGINE_ROOT/.." && pwd)"
+
+LAUNCHER="${BOBNET_LAUNCHER:-$TOOLHUB/claude-team-dashboard/start}"
+
+if [ ! -f "$LAUNCHER" ]; then
+  echo "bin/start: BobNet-Launcher nicht gefunden: $LAUNCHER" >&2
+  echo "  erwartet im tool-hub neben der Engine (claude-team-dashboard/start)." >&2
+  echo "  Override: BOBNET_LAUNCHER=/abs/pfad/zum/start bin/start <PROJECT_UID>" >&2
+  exit 1
+fi
+
+# Falls als reine Datei (nicht +x) vorliegend: via bash starten statt zu scheitern.
+if [ -x "$LAUNCHER" ]; then
+  exec "$LAUNCHER" "$@"
+else
+  exec bash "$LAUNCHER" "$@"
+fi

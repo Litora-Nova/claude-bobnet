@@ -1,0 +1,16 @@
+{
+  "name": "dashboard",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "nuxt dev --port 3030",
+    "build": "nuxt build",
+    "preview": "nuxt preview"
+  },
+  "devDependencies": {
+    "@iconify-json/mdi": "^1.2.3",
+    "@nuxt/icon": "^1.15.0",
+    "nuxt": "^3.13.0"
+  }
+}

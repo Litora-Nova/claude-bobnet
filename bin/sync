@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+# bin/sync — State-Sync-Disziplin als ein Befehl: fetch + pull + push über alle Repos + Branch-Check.
+#
+# Repos    : $DEV_TEAM_REPOS (Space-Liste, relativ zu $PROJECT_ROOT). "." = das Projekt-Repo selbst.
+# Branch   : $CANONICAL_BRANCH (Soll-Branch je Repo). Abweichung = WARN (kein Auto-Switch).
+# Modus    : --dry-run zeigt nur Status (fetch + Branch/Ahead-Behind), ohne pull/push.
+#
+# Quelle der Regel: team-rules/sync.md. Dieses Script ist die Mechanik dazu.
+# Fail-soft pro Repo: ein Fehler in Repo A stoppt nicht Repo B; am Ende Exit 1, wenn irgendwas schieflief.
+set -uo pipefail
+
+BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENGINE_ROOT="$(cd "$BIN_DIR/.." && pwd)"
+
+# Env sourcen (PROJECT_ROOT / DEV_TEAM_REPOS / CANONICAL_BRANCH).
+for env_candidate in \
+  "${DEV_TEAM_ENV:-}" \
+  "$ENGINE_ROOT/scripts/dev-team.env" \
+  "$ENGINE_ROOT/../../_dev_team/dev-team.env"; do
+  [ -n "$env_candidate" ] && [ -f "$env_candidate" ] && { . "$env_candidate"; break; }
+done
+
+DRY_RUN=0
+[ "${1:-}" = "--dry-run" ] && DRY_RUN=1
+
+PROJECT_ROOT="${PROJECT_ROOT:-$PWD}"
+REPOS="${DEV_TEAM_REPOS:-.}"
+WANT_BRANCH="${CANONICAL_BRANCH:-master}"
+
+FAILS=0
+echo "=== sync: root=$PROJECT_ROOT branch-soll=$WANT_BRANCH dry-run=$DRY_RUN ==="
+
+sync_one() {
+  local rel="$1" repo
+  repo="$(cd "$PROJECT_ROOT/$rel" 2>/dev/null && pwd)" || { echo "✗ $rel: Pfad fehlt"; FAILS=$((FAILS+1)); return; }
+  [ -d "$repo/.git" ] || { echo "⊘ $rel: kein Git-Repo — übersprungen"; return; }
+
+  local cur; cur="$(git -C "$repo" rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?')"
+  printf -- '--- %s (branch: %s) ---\n' "$rel" "$cur"
+
+  if [ "$cur" != "$WANT_BRANCH" ]; then
+    echo "  ⚠ NICHT auf $WANT_BRANCH (auf $cur) — kein Auto-Switch (Branch-Drift-Schutz)."
+  fi
+
+  git -C "$repo" fetch --quiet origin 2>/dev/null || { echo "  ✗ fetch fehlgeschlagen"; FAILS=$((FAILS+1)); return; }
+
+  # Ahead/Behind gegen origin/<cur> berichten (falls Upstream existiert).
+  if git -C "$repo" rev-parse --verify --quiet "origin/$cur" >/dev/null 2>&1; then
+    local lr; lr="$(git -C "$repo" rev-list --left-right --count "HEAD...origin/$cur" 2>/dev/null || echo '? ?')"
+    echo "  ahead/behind vs origin/$cur: $lr"
+  else
+    echo "  (kein origin/$cur — Upstream fehlt)"
+  fi
+
+  if [ "$DRY_RUN" = "1" ]; then
+    echo "  (dry-run: pull/push übersprungen)"
+    return
+  fi
+
+  if [ -n "$(git -C "$repo" status --porcelain 2>/dev/null)" ]; then
+    echo "  ⚠ Working-Tree dirty — pull/push übersprungen (erst committen!)."
+    FAILS=$((FAILS+1)); return
+  fi
+
+  if git -C "$repo" pull --quiet --ff-only origin "$cur" 2>/dev/null; then
+    echo "  ✓ pull (ff-only)"
+  else
+    echo "  ✗ pull --ff-only fehlgeschlagen (divergiert? manuell prüfen)"; FAILS=$((FAILS+1)); return
+  fi
+
+  if git -C "$repo" push --quiet origin "$cur" 2>/dev/null; then
+    echo "  ✓ push"
+  else
+    echo "  ✗ push fehlgeschlagen"; FAILS=$((FAILS+1)); return
+  fi
+}
+
+for rel in $REPOS; do
+  sync_one "$rel"
+done
+
+echo "=== sync fertig: $FAILS Problem(e) ==="
+[ "$FAILS" -eq 0 ] || exit 1
+exit 0

@@ -1,0 +1,12 @@
+{
+  "dashboardName": "BobNet",
+  "vrName": "Bobiverse",
+  "leadTitle": "Tech-Lead",
+  "network": "BobNet",
+  "helperWork": "ROAMER",
+  "helperScan": "Sonde",
+  "automation": "GUPPI",
+  "comms": "SCUT",
+  "memberSingular": "Bob",
+  "memberPlural": "Bobs"
+}

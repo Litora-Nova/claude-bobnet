@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# bin/upgrade [PROJECT_ROOT] — Engine aktualisieren + referenzierte Mechanik refreshen.
+#
+# Instanz-State bleibt GARANTIERT unangetastet: _dev_team/standup, dev-team.env, agents/*, memories-Inhalt.
+#   referenziert (Symlink: skills/memory/team-rules) → Update schlägt via git pull sofort durch
+#   generiert    (Hook-Wrapper)                      → bin/onboard erzeugt sie idempotent neu
+#   copy-once    (agents/*)                          → bin/onboard fasst sie nur an, wenn leer
+#   Instanz-State(env/standup/memories)              → NIE angefasst
+set -euo pipefail
+
+ENGINE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PROJECT_ROOT="${1:-${PROJECT_ROOT:-$PWD}}"
+echo "=== bobnet upgrade (engine: $ENGINE_ROOT, projekt: $PROJECT_ROOT) ==="
+
+# 1) Engine ziehen (ff-only, wie bin/sync — kein Merge/Rebase/Force)
+br="$(git -C "$ENGINE_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo master)"
+if git -C "$ENGINE_ROOT" pull --ff-only origin "$br"; then
+  echo "  ✓ Engine aktualisiert (origin/$br, v$(cat "$ENGINE_ROOT/VERSION" 2>/dev/null || echo '?'))"
+else
+  echo "  ✗ Engine-pull fehlgeschlagen (divergiert/offline) — Upgrade gestoppt." >&2; exit 1
+fi
+
+# 2) Kompat-Check VOR dem Re-Onboard (brechender Schema-Skew → Stopp statt still kaputt)
+if ! "$ENGINE_ROOT/bin/check-compat" "$PROJECT_ROOT"; then
+  echo "  → Schema-Skew: Re-Onboard NICHT ausgeführt. Migration nötig (siehe Meldung oben)." >&2; exit 5
+fi
+
+# 3) Idempotenter Re-Onboard (refresht Symlinks/Hook-Wrapper; agents/env/standup non-destruktiv)
+echo "[Re-Onboard]"
+"$ENGINE_ROOT/bin/onboard" "$PROJECT_ROOT"
+echo "✓ upgrade fertig."

@@ -1,0 +1,18 @@
+{
+  "$schema": "../schemas/archetype.schema.json",
+  "archetype": "compliance",
+  "category": "bob",
+  "ring": "gate",
+  "positionShort": "Compliance",
+  "positionLong": "QM — Compliance / Security",
+  "gateTier": "3",
+  "modelTier": "Cruiser",
+  "model": "sonnet",
+  "tags": ["compliance"],
+  "defaultTools": "all",
+  "canSpawn": ["sonde"],
+  "areaType": "cross-cutting",
+  "auftrag": "Prueft neue Deps / Lockfile-Touch / Egress / PII / Token-in-Logs / Asset-Provenance / DSGVO-Datensparsamkeit. Standing-Order: jeder Lockfile-Touch pingt diese Rolle automatisch.",
+  "duties": ["Heartbeat vor Task-Start + Circle-of-Trust einhalten", "compliance: Deps/Egress/PII/Secrets + Lockfile-Standing-Order + Findings-Inbox (siehe team-rules/tags/compliance.md)", "Fiktive-Platzhalter-Namen-Check (Google-Check vor Commit)"],
+  "idPattern": "BOB-compliance"
+}

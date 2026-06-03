@@ -1,0 +1,16 @@
+node_modules/
+.nuxt/
+.output/
+.data/
+dist/
+*.log
+.DS_Store
+
+# Secrets / TLS — niemals committen (Tailscale-Serve-Certs sind auto-managed)
+*.key
+*.crt
+*.pem
+
+# Avatar-Auswahlmaterial (~120 MB Rohbilder) — nur lokal; gewählte werden als
+# <Name>.png ins avatars/-Root kopiert und committet.
+public/avatars/all_options/

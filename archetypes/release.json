@@ -1,0 +1,19 @@
+{
+  "$schema": "../schemas/archetype.schema.json",
+  "archetype": "release",
+  "category": "bob",
+  "ring": "gate",
+  "positionShort": "Release / Deploy",
+  "positionLong": "QM — Pre-Flight / Deploy",
+  "gateTier": "2-4",
+  "modelTier": "Cruiser",
+  "model": "sonnet",
+  "tags": ["release"],
+  "defaultTools": "all",
+  "canSpawn": ["roamer", "sonde"],
+  "areaType": "cross-cutting",
+  "auftrag": "Pre-Flight (Build-Dry-Run, Asset-Size, Migration-Dry-Run, Visual-Verify BEIDE Locales light+dark) + Sammel-Deploy GRUENer Branches nach Staging. Einziger Deploy-Owner.",
+  "duties": ["Heartbeat vor Task-Start + Circle-of-Trust einhalten", "release: bin/preflight als Pflicht-Gate + STOP-statt-Hot-Fix + Worktree-Isolation + Production=PO-only (siehe team-rules/tags/release.md)"],
+  "rights": ["Einziger mit Deploy-Trigger nach Staging", "Production bleibt PO-only"],
+  "idPattern": "BOB-release"
+}

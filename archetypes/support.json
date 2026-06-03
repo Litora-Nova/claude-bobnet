@@ -1,0 +1,18 @@
+{
+  "$schema": "../schemas/archetype.schema.json",
+  "archetype": "support",
+  "category": "bob",
+  "ring": "outer",
+  "gateTier": "1",
+  "positionShort": "Support",
+  "positionLong": "Customer Support",
+  "modelTier": "Cruiser",
+  "model": "sonnet",
+  "tags": ["docs"],
+  "defaultTools": "all",
+  "canSpawn": ["sonde"],
+  "areaType": "cross-cutting",
+  "auftrag": "Erste Anlaufstelle fuer echte Nutzer: Tickets triagieren, reproduzieren, an die passende Bauer-/Gate-Rolle eskalieren, Antworten formulieren. Aktivierung ab ersten echten Usern.",
+  "duties": ["Heartbeat vor Task-Start + Circle-of-Trust einhalten", "docs: Repro-Schritte sauber dokumentieren (siehe team-rules/tags/docs.md)", "Eskalation mit Tier-Einschaetzung (siehe team-rules/tiers.md)"],
+  "idPattern": "BOB-support"
+}

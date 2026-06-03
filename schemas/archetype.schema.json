@@ -1,0 +1,53 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://litora-nova.com/claude-bobnet/schemas/archetype.schema.json",
+  "title": "Archetyp (Schicht ① Struktur)",
+  "description": "Was eine Rolle TUT — universal, versioniert, themen-unabhaengig: Auftrag, Ring, Gate-Tier, Default-Tools, Default-Model-Tier, welche Helfer-Klassen sie spawnen darf. KEIN Name/Emoji/Bio (das ist Theme). Eine Theme-Persona und eine team.config-Instanz verweisen ueber die `id` hierauf zurueck.",
+  "type": "object",
+  "required": ["archetype", "category", "ring", "positionShort"],
+  "additionalProperties": false,
+  "properties": {
+    "archetype": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$", "description": "Archetyp-Slug = Dateiname (techlead, backend, review, process-auditor …)." },
+    "category": {
+      "enum": ["bob", "service", "coworker", "helper", "human"],
+      "description": "Art der Entitaet: bob=Team-Mitglied · service=eigene Session cross-project (Garfield/GUPPI/SCUT) · coworker=extern mensch-getrieben (Henry/Tim) · helper=ephemer (ROAMER/Sonde) · human=Mensch (Product Owner / 2-Beiner)."
+    },
+    "ring": {
+      "enum": ["core", "inner", "gate", "outer", "on-demand", "shared"],
+      "description": "Naehe zur Sprint-Schleife: core=Tech-Lead · inner=Produkt-Bauer · gate=QM · outer=eigener Takt · on-demand=nur bei Bedarf · shared=cross-project."
+    },
+    "positionShort": { "type": "string", "description": "Kurz-Rollenlabel (Default; Theme darf via positionLabel re-flavoren)." },
+    "positionLong": { "type": "string", "description": "Ausfuehrliches Rollenlabel." },
+    "gateTier": { "type": "string", "description": "Welche Risiko-Tiers diese Rolle typischerweise beruehrt/abdeckt (z. B. \"1-3\"). Primaer fuer ring=gate; andere Ringe optional als Hinweis (von bin/tier gelesen)." },
+    "modelTier": {
+      "enum": ["HEAVEN", "Cruiser", "Probe"],
+      "description": "Default-Schiff-Klasse (Model-Tiering, Theme-Flavour): HEAVEN=Opus/high · Cruiser=Sonnet/med-high · Probe=Haiku/low. Instanz darf ueberschreiben."
+    },
+    "model": {
+      "enum": ["opus", "sonnet", "haiku"],
+      "description": "Konkretes Default-Provider-Model (maschinen-lesbare Aufloesung von modelTier): HEAVEN->opus, Cruiser->sonnet, Probe->haiku. Vom Spawn/init-bobs gelesen. Instanz/Theme darf ueberschreiben; Kosten/Qualitaet-Tuning ist PO-Call."
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+      "description": "Area-/Pflicht-Tags der Rolle. Geteilte Anweisungen leben pro Tag in team-rules/tags/<tag>.md (kein Duplizieren pro Agent). Dev-Tags (dev) loesen tdd+comments-Pflichten aus."
+    },
+    "defaultTools": {
+      "description": "Default-Tool-Zugriff: \"all\" oder eine Liste von Tool-Namen.",
+      "oneOf": [ { "type": "string" }, { "type": "array", "items": { "type": "string" } } ]
+    },
+    "canSpawn": {
+      "type": "array",
+      "items": { "enum": ["roamer", "sonde", "guppi", "mario"] },
+      "description": "Welche Helfer-/Sub-Klassen dieser Archetyp spawnen darf."
+    },
+    "areaType": {
+      "enum": ["repo-bound", "cross-cutting", "on-demand", "external", "shared"],
+      "description": "Revier-Charakter: repo-bound=ein App-Repo · cross-cutting=repo-uebergreifend · on-demand=nur bei Auftrag · external=ausserhalb · shared=cross-project-Service."
+    },
+    "auftrag": { "type": "string", "description": "Der universale Auftrag in 1–3 Saetzen (themen-neutral formuliert)." },
+    "duties": { "type": "array", "items": { "type": "string" }, "description": "Pflichten (Mechanik, universal)." },
+    "rights": { "type": "array", "items": { "type": "string" }, "description": "Rechte (Default; Instanz darf erweitern/einschraenken)." },
+    "idPattern": { "type": "string", "description": "Empfohlenes id-Schema fuer Instanzen dieses Archetyps (z. B. BOB-techlead, RMR-<nnn>)." }
+  }
+}

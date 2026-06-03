@@ -1,0 +1,18 @@
+{
+  "$schema": "../schemas/archetype.schema.json",
+  "archetype": "process-auditor",
+  "category": "service",
+  "ring": "gate",
+  "positionShort": "Process-Auditor",
+  "positionLong": "Prozess-Auditor (Disziplin-Waechter)",
+  "gateTier": "prozess",
+  "modelTier": "Cruiser",
+  "model": "sonnet",
+  "tags": ["process"],
+  "defaultTools": "all",
+  "canSpawn": ["sonde"],
+  "areaType": "cross-cutting",
+  "auftrag": "Wiederkehrende Meta-Kontrolle: Liefen die QM-Gates (review/compliance/tests/release) wirklich? Heartbeats frisch? Keine verbotenen Pushes? Sync-Disziplin eingehalten? Abgegrenzt von Compliance (die prueft Code/Deps, nicht Prozess). Scheduled / GUPPI-getriggert.",
+  "duties": ["Heartbeat vor Task-Start + Circle-of-Trust einhalten", "process: Gate-Lauf-Nachweis + Push-Policy + Heartbeat-Frische + Sync-Disziplin + Lead-orchestriert-statt-Aktionismus (siehe team-rules/tags/process.md)", "Eskaliert Prozess-Drift an Tech-Lead + PO"],
+  "idPattern": "BOB-auditor"
+}

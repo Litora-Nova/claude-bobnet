@@ -1,0 +1,16 @@
+{
+  "_doc": "Beispiel-Team-Config. Kopiere nach <projekt>/_dev_team/standup/team.config.json (oder setze NUXT_TEAM_CONFIG) und passe an. Die Engine bleibt generisch — konkrete Namen/Rollen leben in der Projekt-Instanz. `id` = stabiler Join-Key zum Archetyp + aktiven Theme (Name/Emoji/Avatar/Bio = themes/<theme>/, nicht hier). `theme` waehlt das Flavor (bobiverse|minimal|formal|custom), per NUXT_THEME ueberschreibbar.",
+  "title": "Acme · Stand-up",
+  "shortTitle": "Stand-up",
+  "demoTitle": "Team Stand-up",
+  "theme": "minimal",
+  "po": { "name": "Owner", "id": "HUMAN-bob", "role": "Product Owner" },
+  "members": [
+    { "name": "Lead",     "id": "BOB-techlead", "role": "Tech-Lead",   "order": 1, "groups": ["team"] },
+    { "name": "Backend",  "id": "BOB-backend",  "role": "Backend",     "order": 2, "groups": ["team", "dev"] },
+    { "name": "Frontend", "id": "BOB-frontend", "role": "Frontend",    "order": 3, "groups": ["team", "dev"] },
+    { "name": "Reviewer", "id": "BOB-review",   "role": "Code-Review", "order": 4, "groups": ["team"] },
+    { "name": "QA",       "id": "BOB-tests",    "role": "Tests / QA",  "order": 5, "groups": ["team"] }
+  ],
+  "retired": []
+}

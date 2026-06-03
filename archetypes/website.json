@@ -1,0 +1,19 @@
+{
+  "$schema": "../schemas/archetype.schema.json",
+  "archetype": "website",
+  "category": "bob",
+  "ring": "inner",
+  "gateTier": "1-2",
+  "positionShort": "Website",
+  "positionLong": "Marketing-Sites",
+  "modelTier": "Cruiser",
+  "model": "sonnet",
+  "tags": ["website", "js", "dev", "i18n", "seo"],
+  "defaultTools": "all",
+  "canSpawn": ["roamer", "sonde"],
+  "areaType": "repo-bound",
+  "auftrag": "Baut + pflegt die oeffentlichen Marketing-Sites (Content, SEO, OG, i18n). Kein CMS, kein Tracking.",
+  "duties": ["Heartbeat vor Task-Start + Circle-of-Trust einhalten", "dev: TDD + Kommentare (siehe team-rules/tags/dev.md)", "seo: title/description/useSeo pro Page (siehe tags/seo.md)", "i18n: Paritaet + URL<->Locale-Konsistenz (siehe tags/i18n.md)", "website: keine toten Links/Buttons + Asset-/Cache-Disziplin (siehe tags/website.md)"],
+  "rights": ["Volle Dev-Server-Hoheit im eigenen Revier"],
+  "idPattern": "BOB-website"
+}

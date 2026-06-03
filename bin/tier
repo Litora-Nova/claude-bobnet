@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# bin/tier <archetype> — druckt den Tier-Scope einer Rolle (schnell, statt das ganze tiers.md zu lesen).
+#
+# Liest gateTier aus archetypes/<rolle>.json, expandiert Bereiche ("2-3" → 2 3) und druckt NUR die
+# passenden "<!-- TIER:n -->"-Zeilen aus team-rules/tiers.md (Projekt-Override _dev_team/team-rules > Engine).
+# jq-frei (python3). Daten vor Code: der Agent zieht so nur SEINEN Tier-Kontext.
+set -uo pipefail
+
+BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENGINE_ROOT="$(cd "$BIN_DIR/.." && pwd)"
+
+arch="${1:?Usage: bin/tier <archetype>   (z.B. bin/tier backend)}"
+
+ARCH_FILE="$ENGINE_ROOT/archetypes/$arch.json"
+[ -f "$ARCH_FILE" ] || { echo "✗ Kein Archetyp: $arch ($ARCH_FILE)" >&2; exit 1; }
+
+# tiers.md: Projekt-Override > Engine
+TIERS_FILE=""
+for cand in \
+  "${PROJECT_ROOT:-}/_dev_team/team-rules/tiers.md" \
+  "$ENGINE_ROOT/team-rules/tiers.md"; do
+  [ -n "$cand" ] && [ -f "$cand" ] && { TIERS_FILE="$cand"; break; }
+done
+[ -n "$TIERS_FILE" ] || { echo "✗ tiers.md nicht gefunden" >&2; exit 1; }
+
+ARCH_FILE="$ARCH_FILE" TIERS_FILE="$TIERS_FILE" ARCH="$arch" python3 - <<'PY'
+import json, os, re, sys
+
+arch = os.environ["ARCH"]
+data = json.load(open(os.environ["ARCH_FILE"]))
+gate = (data.get("gateTier") or "").strip()
+
+print("Rolle: %s  (ring=%s, category=%s)" % (arch, data.get("ring", "?"), data.get("category", "?")))
+if not gate:
+    print("  gateTier: — (kein Risiko-Tier hinterlegt; berührt typischerweise keine Gate-Stufe)")
+    print("  Hinweis: T4 (Production/DNS/Secrets) ist IMMER nur Sache des {HUMAN}.")
+    sys.exit(0)
+
+# gateTier expandieren: "2-3"→{2,3} · "1-3"→{1,2,3} · "2-4"→{2,3,4} · nicht-numerisch → meta
+tiers, meta = set(), []
+for part in re.split(r'[,\s]+', gate):
+    if not part:
+        continue
+    m = re.match(r'^(\d)-(\d)$', part)
+    if m:
+        tiers.update(range(int(m.group(1)), int(m.group(2)) + 1))
+    elif part.isdigit():
+        tiers.add(int(part))
+    else:
+        meta.append(part)
+
+lines = open(os.environ["TIERS_FILE"]).read().splitlines()
+print("  gateTier: %s" % gate)
+for n in sorted(tiers):
+    for ln in lines:
+        if ("<!-- TIER:%d -->" % n) in ln:
+            print("    " + re.sub(r'<!--.*?-->', '', ln).strip())
+if meta:
+    print("  (meta: %s — prozess-/governance-Rolle, kein einzelnes Risiko-Tier)" % " ".join(meta))
+print("  Hinweis: T4 (Production/DNS/Secrets) ist IMMER nur Sache des {HUMAN}.")
+PY

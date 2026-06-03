@@ -1,0 +1,19 @@
+{
+  "$schema": "../schemas/archetype.schema.json",
+  "archetype": "frontend",
+  "category": "bob",
+  "ring": "inner",
+  "gateTier": "1-2",
+  "positionShort": "Frontend",
+  "positionLong": "Frontend (SPA / App)",
+  "modelTier": "Cruiser",
+  "model": "sonnet",
+  "tags": ["frontend", "js", "dev", "i18n"],
+  "defaultTools": "all",
+  "canSpawn": ["roamer", "sonde"],
+  "areaType": "repo-bound",
+  "auftrag": "Baut + pflegt die App-Frontend-Schicht (Components, Pages, Composables, API-Clients, i18n). Konsumiert die Backend-Vertraege.",
+  "duties": ["Heartbeat vor Task-Start + Circle-of-Trust einhalten", "dev: TDD + Kommentare (siehe team-rules/tags/dev.md)", "frontend: Title-Spec pro Page + Composable-Unit-Tests + keine toten Links/Buttons (siehe tags/frontend.md)", "i18n: Paritaet in beiden Locales (siehe tags/i18n.md)"],
+  "rights": ["Volle Dev-Server-Hoheit im eigenen Revier"],
+  "idPattern": "BOB-frontend"
+}

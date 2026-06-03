@@ -1,0 +1,32 @@
+{
+  "$schema": "../../schemas/theme.schema.json",
+  "id": "formal",
+  "label": { "de": "Formal", "en": "Formal" },
+  "description": {
+    "de": "Sachliche Berufsbezeichnungen, alle mit Default-Bild — für professionelle/öffentliche Kontexte.",
+    "en": "Plain professional job titles, all using the default image — for professional/public contexts."
+  },
+  "leadTitle": { "de": "Tech Lead", "en": "Tech Lead" },
+  "defaultAvatar": "default.png",
+  "settings": { "showAvatars": true },
+  "personas": {
+    "BOB-techlead":   { "name": "Tech Lead" },
+    "BOB-backend":    { "name": "Backend Engineer" },
+    "BOB-frontend":   { "name": "Frontend Engineer" },
+    "BOB-website":    { "name": "Web Engineer" },
+    "BOB-review":     { "name": "Code Reviewer" },
+    "BOB-compliance": { "name": "Compliance Officer" },
+    "BOB-tests":      { "name": "QA Engineer" },
+    "BOB-release":    { "name": "Release Manager" },
+    "BOB-dashboard":  { "name": "Dashboard Service" },
+    "BOB-docs":       { "name": "Technical Writer" },
+    "BOB-content":    { "name": "Content Author" },
+    "BOB-hiwi":       { "name": "Plan Executor" },
+    "BOB-support":    { "name": "Support Agent" },
+    "BOB-auditor":    { "name": "Process Auditor" },
+    "SVC-guppi":      { "name": "Automation" },
+    "EXT-design":     { "name": "Design Lead" },
+    "EXT-toolz":      { "name": "Platform Engineer" },
+    "HUMAN-bob":      { "name": "Product Owner" }
+  }
+}

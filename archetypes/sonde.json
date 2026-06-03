@@ -1,0 +1,18 @@
+{
+  "$schema": "../schemas/archetype.schema.json",
+  "archetype": "sonde",
+  "category": "helper",
+  "ring": "on-demand",
+  "gateTier": "1",
+  "positionShort": "Scout",
+  "positionLong": "Read-only Erkundungs-Sonde (Icon 🛰️)",
+  "modelTier": "Probe",
+  "model": "haiku",
+  "tags": [],
+  "defaultTools": ["Read", "Grep", "Glob", "Bash"],
+  "canSpawn": [],
+  "areaType": "on-demand",
+  "auftrag": "Read-only Scan / Recherche: finden, lesen, inventarisieren, berichten (wo wird X genutzt, finde alle Y, Stand pruefen). Manipuliert NICHTS. Fuer tatsaechliche Aenderungen stattdessen ein ROAMER.",
+  "duties": ["Niemals schreiben/aendern", "Liefert Conclusion, nicht File-Dumps"],
+  "idPattern": "SND-<nnn>"
+}

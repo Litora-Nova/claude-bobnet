@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+# bin/install — Maschinen-Bootstrap (idempotent, einmal pro Maschine).
+# Macht die Engine + ihre Skills global sichtbar + legt die Bobiverse-Config in ~/.claude an.
+#
+# Erstkontakt (Kollege):  git clone <engine> ~/Sites/claude-dev-team && ~/Sites/claude-dev-team/bin/install
+# Danach pro Projekt:      <engine>/bin/onboard <projekt-root>   (richtet _dev_team ein, fragt PROJECT_UID)
+#
+# Daten vor Code · non-destruktiv (readlink-Test vor Symlink, .bak-Sicherung) · Skill-Link koexistiert
+# mit eigenen User-Skills (pro-Skill statt Verzeichnis-Symlink).
+set -euo pipefail
+
+ENGINE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+echo "=== bobnet install (engine: $ENGINE_ROOT) ==="
+
+# 1) Engine aktuell ziehen (nur wenn Git-Repo + origin erreichbar; sonst lokal weiter)
+if git -C "$ENGINE_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+  br="$(git -C "$ENGINE_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo master)"
+  if git -C "$ENGINE_ROOT" pull --ff-only origin "$br" >/dev/null 2>&1; then
+    echo "  ✓ Engine aktuell (origin/$br)"
+  else
+    echo "  ⚠ Engine-pull übersprungen (offline / kein origin / lokale Commits) — lokaler Stand"
+  fi
+fi
+
+# 2) Preflight: Tools für Dashboard/Launcher/Registry
+echo "[Preflight]"
+for tool in git python3 node npm; do
+  if command -v "$tool" >/dev/null 2>&1; then echo "  ✓ $tool"
+  else echo "  ⚠ $tool fehlt (node+npm für Dashboard/Launcher; python3 für Registry/Scripts)"; fi
+done
+
+# 3) Skills global verlinken (pro-Skill-Symlink → koexistiert mit eigenen Skills)
+echo "[Skills → ~/.claude/skills]"
+mkdir -p "$HOME/.claude/skills"
+linked=0
+if [ -d "$ENGINE_ROOT/skills" ]; then
+  for skill in "$ENGINE_ROOT"/skills/*/; do
+    [ -d "$skill" ] || continue
+    name="$(basename "$skill")"; link="$HOME/.claude/skills/$name"; tgt="${skill%/}"
+    if [ -L "$link" ] && [ "$(readlink "$link")" = "$tgt" ]; then echo "  ✓ $name"; linked=$((linked+1)); continue; fi
+    [ -e "$link" ] && mv "$link" "$link.bak.$(date +%s 2>/dev/null || echo old)"
+    ln -s "$tgt" "$link"; echo "  ↻ verlinkt: $name"; linked=$((linked+1))
+  done
+fi
+[ "$linked" -eq 0 ] && echo "  ⊘ kein skills/* in der Engine — übersprungen (kommt mit der Monorepo-Konsolidierung)"
+
+# 4) Bobiverse-Config in ~/.claude (zeigt auf diese Engine; Bobiverse-Root bleibt variabel)
+echo "[Bobiverse-Config ~/.claude/bobiverse.json]"
+ver="$(cat "$ENGINE_ROOT/VERSION" 2>/dev/null || echo 0.0.0)"
+ENGINE_ROOT="$ENGINE_ROOT" CFG="$HOME/.claude/bobiverse.json" VER="$ver" python3 - <<'PY'
+import json, os
+cfg = os.environ["CFG"]
+data = {}
+if os.path.exists(cfg):
+    try: data = json.load(open(cfg))
+    except Exception: data = {}
+data["engine"] = os.environ["ENGINE_ROOT"]
+data["engineVersion"] = os.environ["VER"]
+data.setdefault("bobnet", None)      # optionaler BobNet-Pfad (von init-bobs gesetzt, wenn genutzt)
+data.setdefault("version", 1)
+with open(cfg, "w") as fh:
+    json.dump(data, fh, indent=2); fh.write("\n")
+print("  ✓ %s (engine=%s, v%s)" % (cfg, data["engine"], data["engineVersion"]))
+PY
+
+echo ""
+echo "✓ install fertig. Nächster Schritt pro Projekt:"
+echo "    $ENGINE_ROOT/bin/onboard <projekt-root>   (fragt PROJECT_UID, richtet _dev_team ein)"

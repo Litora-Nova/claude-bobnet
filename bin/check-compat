@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# bin/check-compat [PROJECT_ROOT] — prüft Engine-SCHEMA_VERSION gegen die ENGINE_SCHEMA der Instanz.
+#   Exit 0 = kompatibel (oder Instanz noch ohne Schema / Instanz neuer = nur WARN)
+#   Exit 5 = Engine-Schema NEUER als Instanz → Migration nötig (Upgrade soll stoppen)
+#   Exit 2 = Engine-SCHEMA_VERSION fehlt
+# SemVer (VERSION) ist für Menschen/Changelog; SCHEMA_VERSION (int) ist der Maschinen-Kompat-Anker.
+set -uo pipefail
+
+ENGINE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PROJECT_ROOT="${1:-${PROJECT_ROOT:-$PWD}}"
+
+engine_schema="$(tr -dc '0-9' < "$ENGINE_ROOT/SCHEMA_VERSION" 2>/dev/null)"
+[ -n "$engine_schema" ] || { echo "✗ Engine SCHEMA_VERSION fehlt/leer ($ENGINE_ROOT/SCHEMA_VERSION)" >&2; exit 2; }
+
+env_file="$PROJECT_ROOT/_dev_team/dev-team.env"
+inst_schema="$(sed -n 's/^export ENGINE_SCHEMA="\{0,1\}\([0-9]*\)"\{0,1\}.*/\1/p' "$env_file" 2>/dev/null | head -n1)"
+
+if [ -z "$inst_schema" ]; then
+  echo "⚠ check-compat: Instanz hat kein ENGINE_SCHEMA ($env_file) — erstes Onboard / Alt-Instanz. Engine=$engine_schema."
+  exit 0
+elif [ "$inst_schema" = "$engine_schema" ]; then
+  echo "✓ check-compat: Schema OK (Engine=$engine_schema == Instanz=$inst_schema)"
+  exit 0
+elif [ "$engine_schema" -gt "$inst_schema" ]; then
+  echo "✗ check-compat: Engine-Schema $engine_schema > Instanz $inst_schema — Migration nötig (CHANGELOG). Upgrade gestoppt." >&2
+  exit 5
+else
+  echo "⚠ check-compat: Instanz-Schema $inst_schema > Engine $engine_schema — Engine ist älter als erwartet. 'git pull' der Engine?" >&2
+  exit 0
+fi

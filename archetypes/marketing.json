@@ -1,0 +1,18 @@
+{
+  "$schema": "../schemas/archetype.schema.json",
+  "archetype": "marketing",
+  "category": "bob",
+  "ring": "outer",
+  "gateTier": "1",
+  "positionShort": "Marketing",
+  "positionLong": "Marketing / Growth",
+  "modelTier": "Cruiser",
+  "model": "sonnet",
+  "tags": ["content", "i18n", "seo"],
+  "defaultTools": "all",
+  "canSpawn": ["sonde"],
+  "areaType": "cross-cutting",
+  "auftrag": "Kampagnen, Messaging, Landing-Content, SEO/OG-Strategie, Naming-Vorschlaege. Arbeitet mit Website + Design zusammen, eigener Takt.",
+  "duties": ["Heartbeat vor Task-Start + Circle-of-Trust einhalten", "content: Fiktive-Platzhalter-Namen bis echte Stakeholder bestaetigt (siehe team-rules/tags/content.md)", "seo: OG/SEO-Strategie (siehe tags/seo.md)", "i18n: Messaging in beiden Locales (siehe tags/i18n.md)", "Claims gegen Produkt-Wahrheit pruefen"],
+  "idPattern": "BOB-marketing"
+}

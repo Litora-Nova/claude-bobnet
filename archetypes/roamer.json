@@ -1,0 +1,18 @@
+{
+  "$schema": "../schemas/archetype.schema.json",
+  "archetype": "roamer",
+  "category": "helper",
+  "ring": "on-demand",
+  "gateTier": "1-2",
+  "positionShort": "Work Drone",
+  "positionLong": "Ephemere Arbeits-Drohne (Icon 🕷️)",
+  "modelTier": "Probe",
+  "model": "haiku",
+  "tags": [],
+  "defaultTools": ["Read", "Edit", "Write", "Bash", "Grep", "Glob"],
+  "canSpawn": [],
+  "areaType": "on-demand",
+  "auftrag": "Ephemere Worker-Sub-Einheit: kurze, abgegrenzte Arbeit (aufraeumen, fixen, bauen, Screenshots, Asset-Slim, Datei-Migration). Spawn-on-demand, erledigt + verschwindet. KEIN Roster-Eintrag — im Dashboard nur als Badge am Eltern-Agent.",
+  "duties": ["Klein = Subagent, gross = Workflow + Worktree-Isolation", "Manipuliert aktiv (im Gegensatz zur read-only Sonde)"],
+  "idPattern": "RMR-<nnn>"
+}

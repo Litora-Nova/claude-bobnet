@@ -1,0 +1,62 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://litora-nova.com/claude-bobnet/schemas/theme.schema.json",
+  "title": "Theme (Schicht ② Flavor)",
+  "description": "Ein Theme gibt demselben Maschinenkern (Archetypen) Namen, Emoji, Avatar, Bio und i18n-Strings. Gekeyt ueber die stabile Archetyp-Instanz-`id` (z. B. BOB-techlead) — der Name ist nur ein Feld und beliebig austauschbar. Bobiverse ist NUR EINES von mehreren Themes (+ formal, minimal, custom).",
+  "type": "object",
+  "required": ["id", "label", "personas"],
+  "additionalProperties": false,
+  "definitions": {
+    "i18n": {
+      "description": "Lokalisierter String — entweder ein Plain-String (locale-neutral) oder {de,en}.",
+      "oneOf": [
+        { "type": "string" },
+        {
+          "type": "object",
+          "required": ["de", "en"],
+          "additionalProperties": { "type": "string" },
+          "properties": { "de": { "type": "string" }, "en": { "type": "string" } }
+        }
+      ]
+    },
+    "persona": {
+      "type": "object",
+      "description": "Wie ein Archetyp in diesem Theme erscheint. Gekeyt ueber die Archetyp-Instanz-`id`.",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "description": "Anzeige-Name (Theme-Default; Instanz darf ueberschreiben)." },
+        "avatar": { "type": "string", "description": "Dateiname relativ zu themes/<id>/avatars/ (z. B. Bob.png). Fehlt er / fehlt die Datei -> defaultAvatar (NIE Emoji)." },
+        "positionLabel": { "$ref": "#/definitions/i18n", "description": "Theme-Flavor des Rollen-Labels (Default kommt aus dem Archetyp)." },
+        "bio": { "$ref": "#/definitions/i18n", "description": "1–2 Zeilen Lore/Kurzbio fuer Detail-Ansicht. Volle Lore steht in themes/<id>/wiki/." }
+      }
+    }
+  },
+  "properties": {
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$", "description": "Theme-Slug = Ordnername (bobiverse, formal, minimal, custom)." },
+    "label": { "$ref": "#/definitions/i18n", "description": "Anzeige-Name des Themes." },
+    "description": { "$ref": "#/definitions/i18n" },
+    "leadTitle": { "$ref": "#/definitions/i18n", "description": "Wie der Orchestrator-/Tech-Lead-Titel in diesem Theme heisst." },
+    "defaultAvatar": { "type": "string", "default": "default.png", "description": "PFLICHT pro Theme: Fallback-BILD (in avatars/) fuer Personas ohne eigenes Avatar + unbekannte Mitglieder. Die Datei MUSS in themes/<id>/avatars/ existieren (erst die Anonymous-/Hacker-Maske; austauschbar). HARTE Regel (Austin): BobNet zeigt Team-Mitglieder AUSSCHLIESSLICH als Bild — NIE als Emoji, auch nicht als Option. Wer Emoji-Faces will, baut sein eigenes Theme/Tool." },
+    "settings": {
+      "type": "object",
+      "description": "Theme-Anzeige-Einstellungen (erweiterbar — 'andere settings' duerfen frei hinzukommen).",
+      "additionalProperties": true,
+      "properties": {
+        "showAvatars": { "type": "boolean", "default": true, "description": "Bilder/Avatare anzeigen (ja/nein). Bei false: nur der Name — NIE ein Emoji (harte Regel)." }
+      }
+    },
+    "strings": {
+      "type": "object",
+      "description": "Optionale Theme-Flavor-Begriffe (z. B. Dashboard-Name, Helfer-Klassen). Voll ausgelagert nach strings/{de,en}.json; hier nur Inline-Overrides.",
+      "additionalProperties": { "$ref": "#/definitions/i18n" }
+    },
+    "personas": {
+      "type": "object",
+      "description": "id → persona. Key = stabile Archetyp-Instanz-`id` (aus team.config / BOB_MATRIX).",
+      "minProperties": 1,
+      "patternProperties": { "^[A-Za-z0-9][A-Za-z0-9-]*$": { "$ref": "#/definitions/persona" } },
+      "additionalProperties": false
+    }
+  }
+}

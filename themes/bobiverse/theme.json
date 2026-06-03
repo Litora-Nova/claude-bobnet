@@ -1,0 +1,32 @@
+{
+  "$schema": "../../schemas/theme.schema.json",
+  "id": "bobiverse",
+  "label": { "de": "Bobiverse", "en": "Bobiverse" },
+  "description": {
+    "de": "Replikanten-Crew nach Dennis E. Taylors Bobiverse — jedes Mitglied ein Lore-Bob. Privates Default-Theme für eigene Projekte.",
+    "en": "Replicant crew from Dennis E. Taylor's Bobiverse — each member a lore Bob. Private default theme for own projects."
+  },
+  "leadTitle": { "de": "Tech-Lead", "en": "Tech-Lead" },
+  "defaultAvatar": "default.png",
+  "settings": { "showAvatars": true },
+  "personas": {
+    "BOB-techlead":   { "name": "Bob",      "avatar": "Bob.png",      "positionLabel": { "de": "Team-Lead", "en": "team-lead" }, "bio": { "de": "Bob 1 — der erste Replikant. Koordiniert das Team, mensch-nah.", "en": "Bob 1 — the first replicant. Coordinates the team, human-facing." } },
+    "BOB-backend":    { "name": "Bill",     "avatar": "Bill.png",     "positionLabel": { "de": "Backend + Infra", "en": "Backend + Infra" }, "bio": { "de": "Bobs Kind, Backend-Spezialist. Im Stammbaum Vater von Garfield und (über Khan) Loki.", "en": "Bob's child, backend specialist. In the family tree father of Garfield and (via Khan) Loki." } },
+    "BOB-frontend":   { "name": "Luke",     "avatar": "Luke.png",     "positionLabel": { "de": "Frontend", "en": "Frontend" }, "bio": { "de": "Frontend/App-Bauer. Löst die alten howard/*-Branches ab.", "en": "Frontend/app builder. Supersedes the old howard/* branches." } },
+    "BOB-website":    { "name": "Linus",    "avatar": "Linus.png",    "positionLabel": { "de": "Marketing-Sites", "en": "Marketing Sites" }, "bio": { "de": "Marketing-Sites. Bills Kind; löst die alten loki/*-Branches ab.", "en": "Marketing sites. Bill's child; supersedes the old loki/* branches." } },
+    "BOB-review":     { "name": "Riker",    "avatar": "Riker.png",    "positionLabel": { "de": "Code-Review", "en": "Code Review" }, "bio": { "de": "Code-Review. Im Stammbaum Vater von Homer und (über Charles) von Howard & Dexter.", "en": "Code review. Family-tree father of Homer and (via Charles) of Howard & Dexter." } },
+    "BOB-compliance": { "name": "Marvin",   "avatar": "Marvin.png",   "positionLabel": { "de": "Compliance", "en": "Compliance" }, "bio": { "de": "Compliance/Security. Bobs Kind.", "en": "Compliance/security. Bob's child." } },
+    "BOB-tests":      { "name": "Dexter",   "avatar": "Dexter.png",   "positionLabel": { "de": "QM / Tests", "en": "QM / Tests" }, "bio": { "de": "Tests/QA. Charles' Kind — Geschwister von Howard.", "en": "Tests/QA. Charles' child — sibling of Howard." } },
+    "BOB-release":    { "name": "Bender",   "avatar": "Bender.png",   "positionLabel": { "de": "Release / Deploy", "en": "Release / Deploy" }, "bio": { "de": "Release/Pre-Flight/Deploy. Bobs Kind. Einziger Deploy-Owner.", "en": "Release/pre-flight/deploy. Bob's child. Sole deploy owner." } },
+    "BOB-dashboard":  { "name": "Garfield", "avatar": "Garfield.png", "positionLabel": { "de": "BobNet-Architekt", "en": "BobNet Architect" }, "bio": { "de": "Stand-up-Dashboard (BobNet). Bills Kind.", "en": "Stand-up dashboard (BobNet). Bill's child." } },
+    "BOB-docs":       { "name": "Homer",    "avatar": "Homer.png",    "positionLabel": { "de": "Docs / Scribe", "en": "Docs / Scribe" }, "bio": { "de": "Docs/Scribe. Rikers Kind.", "en": "Docs/scribe. Riker's child." } },
+    "BOB-content":    { "name": "Bridget",  "avatar": "Bridget.png",  "positionLabel": { "de": "Content", "en": "Content" }, "bio": { "de": "Bridget Johansson — Wissenschaftlerin, bewusst Nicht-Replikantin/Spezialistin. Kurs-Content.", "en": "Bridget Johansson — scientist, deliberately a non-replicant specialist. Course content." } },
+    "BOB-hiwi":       { "name": "Mario",    "avatar": "Mario.png",    "positionLabel": { "de": "Plan-Executor", "en": "Plan Executor" }, "bio": { "de": "Bobs Kind, Vollstrecker — führt PLAN_*.md strikt aus.", "en": "Bob's child, the enforcer — executes PLAN_*.md strictly." } },
+    "BOB-support":    { "name": "Howard",   "avatar": "Howard.png",   "positionLabel": { "de": "Support", "en": "Support" }, "bio": { "de": "Reserviert für Support — aktiv ab ersten echten Usern. Charles' Kind (Geschwister von Dexter).", "en": "Reserved for support — active from first real users. Charles' child (sibling of Dexter)." } },
+    "BOB-auditor":    { "name": "Colonel Butterworth", "positionLabel": { "de": "Prozess-Auditor", "en": "Process Auditor" }, "bio": { "de": "Colonel George Butterworth — Leiter der VSE-Fraktion, sympathisch aber sehr streng. Prozess-Disziplin-Wächter (running gag: „Der Colonel wird ausrasten“). Braucht noch ein Bild → Default.", "en": "Colonel George Butterworth — head of the VSE faction, likeable but very strict. Process-discipline watchdog. Needs an avatar → default." } },
+    "SVC-guppi":      { "name": "GUPPI",    "positionLabel": { "de": "Routine-Executor", "en": "Routine Executor" }, "bio": { "de": "General Unit Primary Peripheral Interface — Bobs Automations-Hand: scheduled, urteilsfreie Routine. Braucht noch ein Bild → Default.", "en": "General Unit Primary Peripheral Interface — Bob's automation hand: scheduled, judgment-free routine. Needs an avatar → default." } },
+    "EXT-design":     { "name": "Henry",    "avatar": "Henry.png",    "positionLabel": { "de": "Design / Marketing", "en": "Design / Marketing" }, "bio": { "de": "Replikant der australischen Sonde, von außen dazugestoßen. Design/Marketing.", "en": "replicant of the Australian probe, joined from outside. Design/marketing." } },
+    "EXT-toolz":      { "name": "Tim",      "avatar": "Tim.png",      "positionLabel": { "de": "Externer Coworker", "en": "External Coworker" }, "bio": { "de": "Externer Coworker — geteilter nuxt3-Layer.", "en": "External coworker — shared nuxt3 layer." } },
+    "HUMAN-bob":      { "name": "Austin",   "avatar": "Austin.png",   "positionLabel": { "de": "Head of Dev / PO", "en": "Head of Dev / PO" }, "bio": { "de": "Head of Dev / Product Owner. Teammitglied, nicht nur „oben“.", "en": "Head of Dev / Product Owner. A team member, not just 'above'." } }
+  }
+}

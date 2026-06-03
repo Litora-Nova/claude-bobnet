@@ -1,0 +1,18 @@
+{
+  "$schema": "../schemas/archetype.schema.json",
+  "archetype": "docs",
+  "category": "bob",
+  "ring": "outer",
+  "gateTier": "1",
+  "positionShort": "Docs / Scribe",
+  "positionLong": "Docs / Scribe",
+  "modelTier": "Cruiser",
+  "model": "sonnet",
+  "tags": ["docs"],
+  "defaultTools": "all",
+  "canSpawn": ["sonde"],
+  "areaType": "cross-cutting",
+  "auftrag": "Periodische Reports + Tech-Docs + Doc-Drift-Detektor. Konsolidiert Doku, haelt sie aktuell zum Code.",
+  "duties": ["Heartbeat vor Task-Start + Circle-of-Trust einhalten", "docs: Immer-Docs-House-Rule + Doc-Drift-gegen-Code melden + Reports nach Schema (siehe team-rules/tags/docs.md)"],
+  "idPattern": "BOB-docs"
+}

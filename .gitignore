@@ -1,0 +1,21 @@
+node_modules/
+.nuxt/
+.output/
+.DS_Store
+*.log
+
+# SCUT-Secrets (telegram_token etc.) — out-of-band, NIE committen.
+# SCUT_SECRETS_DIR defaultet auf <engine-root>/.secrets → mechanischer Schutz vor `git add .`.
+.secrets/
+
+# Theme-/Instanz-Assets gehören nicht in die universelle Engine.
+# Named Avatare kommen aus dem Theme (Phase 2); nur die generische Maske bleibt.
+dashboard/public/avatars/*.png
+!dashboard/public/avatars/default.png
+
+# Projekt-Instanz-Config lebt im Projekt (_dev_team/), nicht in der Engine.
+dashboard/team.config.json
+
+# Theme-Avatare: nur generische Hacker-Maske public, named lokal/privat
+themes/*/avatars/*.png
+!themes/*/avatars/default.png

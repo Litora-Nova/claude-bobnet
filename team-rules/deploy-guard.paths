@@ -1,0 +1,37 @@
+# team-rules/deploy-guard.paths — geschützte Pfad-Globs (deklarativ).
+#
+# Der Hook hooks/deploy-guard.sh liest DIESE Datei statt hartkodierter Globs.
+# Wenn ein PreToolUse-Edit/Write/MultiEdit eine dieser Globs trifft, blockt der Hook
+# (Exit 2) und gibt einen Hinweis aus — Production/Deploy/Secrets sind {HUMAN}-only (Tier-4).
+#
+# Format:
+#   - eine Glob pro Zeile
+#   - Leerzeilen + '#'-Kommentare werden ignoriert
+#   - Matching ist substring-/glob-basiert gegen den absoluten file_path (case-sensitive)
+#   - '*' matcht beliebige Zeichen (auch '/'), passend zu Pfad-Fragmenten
+#
+# Schutz erweitern = Zeile anhängen. KEIN Code-Edit nötig.
+# Wenn diese Datei fehlt, fällt der Hook auf eingebaute Defaults zurück (gleiche Liste).
+#
+# 🔒 T4-FLOOR: Die Secret-/Deploy-Kern-Globs (*/.secrets/*, *master.key, *credentials.yml.enc,
+#   *.env.production, */config/deploy/*, */config/deploy.rb, *Capfile, *configuration.yml) sind ein NICHT-überschreibbarer Floor — der Hook
+#   merged sie IMMER dazu (Funktion t4_floor), auch wenn ein Override sie weglässt. Override darf nur ERWEITERN.
+
+# --- Deploy-/Capistrano-Konfiguration (Produktion + Stages) ---
+*/config/deploy.rb
+*/config/deploy/*
+*/Capfile
+*configuration.yml
+*recipes2go*
+
+# --- Secrets / Credentials (NIE über das Team editierbar) ---
+*/.secrets/*
+*credentials.yml.enc
+*master.key
+*.env.production
+*/config/master.key
+
+# --- Production-/Live-Infra (Tier-4, {HUMAN}-only) ---
+*/nginx/*production*
+*docker-compose.prod*
+*/k8s/production/*

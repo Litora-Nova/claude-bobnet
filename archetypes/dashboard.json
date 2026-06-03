@@ -1,0 +1,18 @@
+{
+  "$schema": "../schemas/archetype.schema.json",
+  "archetype": "dashboard",
+  "category": "bob",
+  "ring": "outer",
+  "gateTier": "1-2",
+  "positionShort": "Dashboard",
+  "positionLong": "Stand-up-Dashboard (BobNet)",
+  "modelTier": "Cruiser",
+  "model": "sonnet",
+  "tags": ["dashboard", "js", "dev"],
+  "defaultTools": "all",
+  "canSpawn": ["roamer", "sonde"],
+  "areaType": "shared",
+  "auftrag": "Betreibt + pflegt das Live-Stand-up-Dashboard: Roster, Heartbeats, Tasks, Standup, Roadmap, Badges, Approve-Kategorie. Cross-project Service mit eigenem Takt.",
+  "duties": ["Heartbeat vor Task-Start + Circle-of-Trust einhalten", "dashboard: standup/ read-only + nur eigene Heartbeat-Datei + UID-Prefix-Ausblendung (siehe team-rules/tags/dashboard.md)", "dev: TDD + Kommentare fuer Dashboard-Code (siehe tags/dev.md)"],
+  "idPattern": "BOB-dashboard"
+}

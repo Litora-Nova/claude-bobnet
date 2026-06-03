@@ -1,0 +1,331 @@
+:root { color-scheme: dark; }
+body { margin: 0; background: #0d1117; color: #c9d1d9; font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.wrap { max-width: 1140px; margin: 0 auto; padding: 28px 24px; }
+header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; position: relative; }
+h1 { font-size: 21px; margin: 0; color: #e6edf3; display: inline-flex; align-items: center; gap: 9px; }
+/* Live-Pulse-Dot direkt im Titel (statt Kaffeetassen-Emoji, Austin 2026-05-30 23:21).
+   Signalisiert "läuft live" prominent oben links, nicht mehr als kleine Pille rechts. */
+.title-pulse { display: inline-block; width: 11px; height: 11px; border-radius: 50%; background: #3fb950; box-shadow: 0 0 0 0 rgba(63,185,80,.55); animation: p 1.6s ease-in-out infinite; flex: 0 0 auto; }
+/* Rechte Header-Gruppe: Status-Icon-Link + Burger/Nav. Status-Icon VOR der Nav,
+   auf jeder Größe sichtbar (Austin 2026-06-01: Status auf jeder Seite). */
+.head-right { display: inline-flex; align-items: center; gap: 10px; }
+/* Status-Icon-Button: NUR Icon, KEIN Rahmen/Hintergrund, dafür größer (Austin 2026-06-01).
+   Inaktiv dezent grau, aktiv helles Grün. */
+.status-hdr { background: none; border: 0; padding: 2px 4px; cursor: pointer; font-size: 25px; line-height: 1; color: #8b949e; display: inline-flex; align-items: center; }
+.status-hdr:hover { color: #c9d1d9; }
+.status-hdr.active { color: #3fb950; }
+/* Desktop: Inline-Nav-Links (Austin 2026-06-01). Mobile: versteckt, öffnet über
+   den Burger als Dropdown OBEN unter dem Header (.menu-open, siehe @media unten). */
+.head-actions { display: inline-flex; align-items: center; gap: 12px; }
+.head-actions.menu-open {
+  display: flex; flex-direction: column; align-items: stretch; gap: 6px;
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 50;
+  background: #161b22; border: 1px solid #30363d; border-radius: 12px;
+  padding: 10px; min-width: 230px; box-shadow: 0 12px 32px rgba(0,0,0,.45);
+}
+.head-actions.menu-open .ghost { text-align: left; }
+/* Footer-Status: live-Label + Uhrzeit landen unten (Austin-Wish 02:2x).
+   Visuell zurückhaltend: zentrierter grauer Text, kleine Schrift, dezenter
+   Top-Border als Trenner zur sprint-Section darüber. */
+.footer-status { margin: 24px 0 8px; padding: 10px 0 4px; border-top: 1px solid #21262d; text-align: center; color: #6e7681; font-size: 11px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+@keyframes p { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+.ghost { background: #161b22; color: #c9d1d9; border: 1px solid #30363d; border-radius: 6px; padding: 5px 12px; font: inherit; cursor: pointer; }
+.ghost:hover { border-color: #58a6ff; color: #e6edf3; }
+.ghost.active { border-color: #58a6ff; color: #58a6ff; }
+/* Q&A-Badge: kleine grüne Pille mit Anzahl offener Antworten (Bob hat was Neues) */
+.qa-btn { display: inline-flex; align-items: center; gap: 6px; }
+.qa-badge { background: #3fb950; color: #0d1117; font-size: 11px; font-weight: 700; border-radius: 999px; padding: 1px 7px; line-height: 1.4; }
+.qa-badge.blocked { background: #f85149; color: #fff; }
+.sprintbar { margin: 14px 0 4px; padding: 8px 12px; background: #161b22; border: 1px solid #21262d; border-left: 3px solid #d29922; border-radius: 8px; color: #e6edf3; font-size: 13px; display: flex; align-items: center; gap: 10px; }
+.sb-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sb-info { flex: 0 0 auto; background: transparent; color: #d29922; border: 1px solid #d2992244; border-radius: 6px; padding: 3px 10px; font: inherit; font-size: 12px; cursor: pointer; }
+.sb-info:hover { border-color: #d29922; background: #1c1607; }
+
+/* Hamburger-Button: nur auf Mobile sichtbar (Desktop hat Inline-Links, @media unten).
+   Drei Bars via einem Span + 2 Pseudos (cooles X beim Öffnen). Sammel-Badge oben
+   rechts wenn offene Briefings — Austin sieht auf einen Blick "da ist was". */
+.burger { display: none; position: relative; background: #161b22; color: #c9d1d9; border: 1px solid #30363d; border-radius: 8px; width: 40px; height: 40px; padding: 0; cursor: pointer; align-items: center; justify-content: center; }
+.burger:hover { border-color: #58a6ff; }
+.burger .bars, .burger .bars::before, .burger .bars::after { content: ''; display: block; width: 18px; height: 2px; background: #c9d1d9; border-radius: 2px; position: relative; transition: transform .15s ease, opacity .15s ease; }
+.burger .bars::before { position: absolute; top: -6px; left: 0; }
+.burger .bars::after  { position: absolute; top:  6px; left: 0; }
+.burger.open .bars { background: transparent; }
+.burger.open .bars::before { transform: translateY(6px) rotate(45deg); }
+.burger.open .bars::after  { transform: translateY(-6px) rotate(-45deg); }
+.burger-badge { position: absolute; top: -6px; right: -6px; background: #3fb950; color: #0d1117; font-size: 10px; font-weight: 700; border-radius: 999px; padding: 1px 6px; line-height: 1.4; min-width: 18px; text-align: center; }
+.burger-backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 40; }
+
+.me { display: flex; align-items: center; gap: 8px; margin: 16px 0 14px; flex-wrap: wrap; background: #161b22; border: 1px solid #21262d; border-radius: 10px; padding: 10px 12px; }
+.me-label { color: #8b949e; font-size: 13px; }
+.me select, .me input { background: #0d1117; color: #c9d1d9; border: 1px solid #30363d; border-radius: 6px; padding: 6px 8px; font: inherit; }
+.me input { flex: 1; min-width: 200px; }
+.me button { background: #238636; color: #fff; border: 0; border-radius: 6px; padding: 6px 14px; font: inherit; cursor: pointer; }
+.me button:hover { background: #2ea043; }
+.me-info { background: transparent; border: 1px solid #30363d; color: #8b949e; border-radius: 6px; padding: 6px 10px; cursor: pointer; font: inherit; }
+.me-info:hover { border-color: #58a6ff; color: #58a6ff; }
+.me-hint { margin: 0 0 16px; font-size: 12px; color: #8b949e; background: #161b22; border: 1px solid #21262d; border-radius: 8px; padding: 8px 12px; }
+.me-hint b { color: #58a6ff; }
+
+/* Meine Tasks (Austin). margin-top sorgt fuer Luft zur Sprintbar/Status-Form
+   darueber (Austin-Wish 2026-05-30 02:2x — klebte vorher direkt drunter).
+   scroll-margin-top: Header-Action-Bar darf den Scroll-Anchor nicht ueberdecken. */
+.tasks { background: #161b22; border: 1px solid #21262d; border-radius: 10px; padding: 12px 14px; margin: 18px 0 22px; scroll-margin-top: 12px; }
+/* tasks-head: nur noch Label/Summary (kein Toggle mehr — Header-Button "📌 Tasks"
+   steuert die Sichtbarkeit), daher kein cursor:pointer + kein hover. */
+.tasks-head { display: flex; align-items: center; gap: 10px; color: #8b949e; font-size: 13px; margin-bottom: 8px; }
+.th-title { font-weight: 600; }
+.th-sum { color: #6e7681; }
+.th-block { color: #f85149; font-weight: 700; }
+.tasklist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.tasklist li { display: flex; align-items: center; gap: 10px; }
+.tasklist .ttext { flex: 1; min-width: 0; color: #e6edf3; }
+.tasklist li.doing .ttext { color: #d29922; }
+.tasklist li.done .ttext { color: #6e7681; text-decoration: line-through; }
+/* Drei-Zustands-Pill: offen (leer) → mach ich grad (gelb ◐) → fertig (grün ✓) */
+.state { flex: 0 0 auto; width: 18px; height: 18px; padding: 0; border-radius: 5px; border: 1px solid #30363d; background: #0d1117; color: #fff; font-size: 11px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+.state:hover { border-color: #58a6ff; }
+.state.doing { border-color: #d29922; color: #d29922; background: #1c1607; }
+.state.done { border-color: #238636; background: #238636; color: #fff; }
+.owner { flex: 0 0 auto; font-size: 11px; color: #58a6ff; background: #161f2e; border: 1px solid #1f6feb44; border-radius: 5px; padding: 1px 6px; }
+.now-btn { background: transparent; color: #58a6ff; border: 1px solid #30363d; border-radius: 6px; padding: 3px 10px; font: inherit; font-size: 12px; cursor: pointer; flex: 0 0 auto; }
+.now-btn:hover { border-color: #58a6ff; background: #161f2e; }
+.done-btn { background: transparent; color: #3fb950; border: 1px solid #30363d; border-radius: 6px; padding: 3px 10px; font: inherit; font-size: 12px; cursor: pointer; flex: 0 0 auto; }
+.done-btn:hover { border-color: #238636; background: #102310; }
+
+/* Dringend / blockiert */
+.urgent { list-style: none; margin: 0 0 10px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.urgent li { display: flex; align-items: center; gap: 10px; background: #2d1416; border: 1px solid #f8514955; border-radius: 8px; padding: 7px 10px; }
+.urgent .badge { flex: 0 0 auto; font-size: 11px; font-weight: 700; color: #f85149; }
+.urgent .b-agent { flex: 0 0 auto; font-weight: 700; color: #e6edf3; }
+.urgent .b-msg { flex: 1; min-width: 0; color: #c9d1d9; font-size: 13px; }
+.urgent .now-btn { color: #f0883e; border-color: #f0883e55; }
+.urgent .now-btn:hover { border-color: #f0883e; background: #2a1d10; }
+
+.addtask { display: flex; gap: 8px; margin-top: 10px; }
+.addtask input { flex: 1; background: #0d1117; color: #c9d1d9; border: 1px solid #30363d; border-radius: 6px; padding: 6px 8px; font: inherit; }
+.addtask button { background: #21262d; color: #c9d1d9; border: 1px solid #30363d; border-radius: 6px; padding: 6px 12px; font: inherit; cursor: pointer; }
+.addtask button:hover { border-color: #58a6ff; }
+
+/* Inbox / ans Team */
+.inbox { background: #161b22; border: 1px solid #21262d; border-radius: 10px; padding: 12px 14px; margin: 0 0 22px; scroll-margin-top: 12px; }
+.postbox { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.pb-label { color: #8b949e; font-size: 13px; }
+.postbox select, .postbox input { background: #0d1117; color: #c9d1d9; border: 1px solid #30363d; border-radius: 6px; padding: 6px 8px; font: inherit; }
+.postbox input { flex: 1; min-width: 200px; }
+.postbox button { background: #1f6feb; color: #fff; border: 0; border-radius: 6px; padding: 6px 14px; font: inherit; cursor: pointer; }
+.postbox button:hover { background: #388bfd; }
+.inboxlist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.inboxlist li { font-size: 13px; color: #c9d1d9; }
+.inboxlist .i-target { color: #58a6ff; font-weight: 600; }
+.inboxlist .i-msg { color: #c9d1d9; }
+
+.team-sort { display: flex; align-items: center; gap: 6px; margin: 10px 0 -4px; flex-wrap: wrap; }
+.ts-label { color: #6e7681; font-size: 12px; }
+.chip { background: #0d1117; color: #8b949e; border: 1px solid #30363d; border-radius: 999px; padding: 3px 10px; font: inherit; font-size: 12px; cursor: pointer; }
+.chip:hover { border-color: #58a6ff; color: #c9d1d9; }
+.chip.active { border-color: #58a6ff; color: #58a6ff; background: #161f2e; }
+.grid { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0 22px; }
+.member { flex: 1 1 100%; min-width: 0; display: flex; align-items: center; gap: 14px; background: #161b22; border: 1px solid #21262d; border-radius: 10px; padding: 12px 14px; text-decoration: none; color: inherit; cursor: pointer; transition: border-color .12s ease; }
+.member:hover { border-color: #58a6ff; }   /* Karte = Link zur Bob-Detail-Seite */
+/* Inaktiv = collapsed (Sort=Aktivität): gedimmt, Heartbeat raus, Avatar LINKS +
+   Name/Rolle DANEBEN (Row, KEIN Umbruch → konsistent wie "Dexter", Austin 2026-06-01).
+   Avatar bleibt groß; Name/Rolle clippen per Ellipsis im Restplatz. Desktop 25%,
+   Mobile 50% (box-sizing wegen 4/Reihe-Math). */
+.member.inactive { opacity: .84; flex-wrap: nowrap; }
+.member.inactive .beats { display: none; }
+.member.inactive .who { flex: 1 1 auto; min-width: 0; }
+.member.inactive .nm, .member.inactive .role { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+@media (min-width: 641px) { .member.inactive { box-sizing: border-box; flex: 0 0 calc(25% - 8px); } }
+
+/* Sort nach Rolle/Name (.byjob): Avatar LINKS, Text (Name/Rolle/Heartbeat) DANEBEN
+   (Row, KEIN Umbruch unter den Avatar — Austin "Text soll daneben passen"). Heartbeat
+   kompakt unter der Rolle, 1 Zeile mit Ellipsis. */
+.member.byjob { flex-wrap: nowrap; }
+.member.byjob .who { flex: 1 1 auto; min-width: 0; }
+/* nowrap + overflow:hidden + min-width:0 (Eltern) = 1 Zeile, KEIN Overflow aus
+   dem Karten-Design (Austin 2026-06-01). max-width sichert die Ellipsis ab. */
+.role-beat { font-size: 12px; opacity: .85; margin-top: 3px; color: #c9d1d9; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.role-beat b { font-weight: 600; }
+.ava { position: relative; flex: 0 0 auto; width: 68px; height: 68px; }
+.ava img { width: 68px; height: 68px; border-radius: 10px; object-fit: cover; background: #0d1117; }
+.ava .sdot { position: absolute; right: -3px; bottom: -3px; width: 14px; height: 14px; border-radius: 50%; border: 2px solid #161b22; }
+.who { flex: 0 0 170px; }
+.who .nm { font-size: 19px; font-weight: 700; color: #e6edf3; line-height: 1.1; display: inline-flex; align-items: center; gap: 6px; }
+.ext-badge { font-size: 9px; font-weight: 700; letter-spacing: .04em; color: #8b949e; background: #21262d; border: 1px solid #30363d; border-radius: 4px; padding: 1px 5px; text-transform: uppercase; vertical-align: middle; }
+.who .role { font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: .03em; margin-top: 3px; }
+.beats { flex: 1; min-width: 0; }
+.now { font-size: 15px; color: #c9d1d9; }            /* 25% größer als die Heartbeats (12px), sonst gleich formatiert */
+.now b { font-weight: 600; }
+.prev { font-size: 12px; color: #6e7681; margin-top: 2px; }
+.ts { color: #6e7681; font-size: 12px; }
+.muted { color: #6e7681; }
+
+/* Report/Feedback/Wünsche-Overlay liegt jetzt in components/OverlayPanel.vue
+   (scoped CSS); die früheren .report/.md-Regeln sind dorthin gewandert. */
+
+.sprint { margin-top: 26px; border-top: 1px solid #21262d; padding-top: 10px; scroll-margin-top: 12px; }
+.sprint-h { margin: 0 0 8px; font-size: 14px; color: #e6edf3; font-weight: 600; }
+/* Sprint-Markdown-Render (sprint-md ist die seitenspezifische Variante der
+   generischen .md-Klasse — die zweite Klasse liegt in OverlayPanel.vue scoped,
+   hier also nochmal flat damit auch app.vue v-html sauber rendert).
+   Austin 2026-05-30 03:xx: "der könnte noch HTML formatiert werden".
+   Compact-prose: kleine Schrift (13px), enge line-height, Listen mit Indent,
+   h1-h4 als deutliche Section-Trenner, code in monospace-Pille. */
+.sprint-md { color: #c9d1d9; font-size: 13px; line-height: 1.55; }
+.sprint-md h1, .sprint-md h2, .sprint-md h3, .sprint-md h4 { color: #e6edf3; margin: 14px 0 6px; line-height: 1.25; }
+.sprint-md h1 { font-size: 16px; }
+.sprint-md h2 { font-size: 14px; color: #58a6ff; border-bottom: 1px solid #21262d; padding-bottom: 3px; }
+.sprint-md h3 { font-size: 13px; color: #d29922; }
+.sprint-md h4 { font-size: 12px; color: #8b949e; text-transform: uppercase; letter-spacing: .04em; }
+.sprint-md p  { margin: 4px 0; }
+.sprint-md ul, .sprint-md ol { margin: 4px 0 8px; padding-left: 22px; }
+.sprint-md li { margin: 2px 0; }
+.sprint-md li > p { margin: 0; }
+.sprint-md strong { color: #e6edf3; }
+/* Inline-`code`-Pille — NICHT der <code> in einem Fenced-Block (.codeblock). */
+.sprint-md p code, .sprint-md li code, .sprint-md h1 code, .sprint-md h2 code, .sprint-md h3 code, .sprint-md td code { background: #0d1117; border: 1px solid #30363d; border-radius: 4px; padding: 1px 5px; font-size: 12px; color: #e6edf3; }
+/* Fenced Code Block (```…```) im GitHub-Dark-Look — geteiltes Token-Schema mit OverlayPanel. */
+.sprint-md .codeblock { background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 10px 12px; margin: 10px 0; overflow-x: auto; font-size: 12px; line-height: 1.5; }
+.sprint-md .codeblock code { display: block; background: none; border: 0; padding: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #c9d1d9; white-space: pre; }
+.codeblock .hl-comment { color: #8b949e; font-style: italic; }
+.codeblock .hl-string  { color: #a5d6ff; }
+.codeblock .hl-keyword { color: #ff7b72; }
+.codeblock .hl-builtin { color: #d2a8ff; }
+.codeblock .hl-flag    { color: #79c0ff; }
+.codeblock .hl-var     { color: #ffa657; }
+.codeblock .hl-num     { color: #79c0ff; }
+.codeblock .hl-key     { color: #7ee787; }
+.codeblock .hl-symbol  { color: #ffa657; }
+.sprint-md hr  { border: 0; border-top: 1px dashed #21262d; margin: 12px 0; }
+.sprint-md table { border-collapse: collapse; margin: 8px 0; font-size: 12px; }
+.sprint-md th, .sprint-md td { border: 1px solid #21262d; padding: 4px 8px; text-align: left; }
+.sprint-md th { background: #0d1117; color: #e6edf3; }
+
+/* .inbox-toggle + .link entfernt: Inbox-Toggle wanderte 2026-05-30 02:2x in
+   die Header-Action-Bar (📥 Inbox). Markup ist weg, CSS aufgeräumt. */
+
+/* ── Haupt-Nav-Breakpoint (≤920px): Burger statt Inline-Links (Austin 2026-06-01).
+   Eigener Breakpoint, GETRENNT vom 640er-Layout-Rest. Menü = Dropdown oben. */
+@media (max-width: 920px) {
+  header { flex-wrap: nowrap; }                       /* Burger bleibt rechts vom Titel */
+  .burger { display: inline-flex; }
+  .burger-backdrop { display: block; }
+  .head-actions { display: none; }
+  .head-actions.menu-open { display: flex; left: 12px; right: 12px; min-width: 0; max-height: 80vh; overflow-y: auto; }
+  .head-actions.menu-open .ghost { padding: 10px 14px; font-size: 15px; }
+}
+
+/* ── Mobile (≤640px) ───────────────────────────────────────────────────────
+   Aufs Handy zugeschnitten: schmalere Ränder, keine Fix-Spalten, Buttons
+   brechen um & werden Touch-tauglich, nichts läuft seitlich raus.            */
+@media (max-width: 640px) {
+  body { -webkit-text-size-adjust: 100%; }            /* iOS: kein Auto-Zoom auf Text */
+  .wrap { padding: 16px 12px; }
+  h1 { font-size: 18px; }
+
+  /* Eingabe-Zeilen (Status / Post / Task) untereinander, voll-breit. */
+  .me, .postbox { gap: 8px; }
+  .me input, .me select, .postbox input, .postbox select { flex: 1 1 100%; min-width: 0; }
+  .me button, .postbox button, .addtask button { flex: 1 1 auto; padding: 9px 14px; }
+  .me-info { flex: 0 0 auto; }
+
+  /* Sprintbar: Text + Info-Button bleiben in einer Zeile, Button schrumpft. */
+  .sprintbar { flex-wrap: nowrap; }
+  .sb-info { padding: 4px 8px; font-size: 11px; }
+
+  /* Team-Karte: Avatar + Name oben in einer Reihe, Heartbeats darunter
+     über die volle Breite — statt der festen 170px-Namensspalte. */
+  .member { flex-wrap: wrap; gap: 10px 12px; padding: 12px; }
+  .member.inactive { box-sizing: border-box; flex: 0 0 calc(50% - 5px); }   /* Mobile collapsed: 50%, sonst normale Karte */
+  .who { flex: 1 1 auto; }
+  .beats { flex: 1 1 100%; min-width: 0; }
+  .now { font-size: 14px; }
+  .now, .prev, .b-msg, .ttext, .i-msg { overflow-wrap: anywhere; }  /* lange Tokens umbrechen */
+
+  /* Task-/Blocker-Zeilen umbrechen lassen; Aktions-Buttons fingerfreundlich. */
+  .tasklist li, .urgent li { flex-wrap: wrap; }
+  .tasklist .ttext, .urgent .b-msg { flex: 1 1 100%; }
+  .now-btn, .done-btn { padding: 7px 12px; font-size: 13px; }
+  .state { width: 24px; height: 24px; }                /* größeres Touch-Target */
+
+}
+
+/* ── Multi-Page-Routing (2026-06-01: Overlay-Panels → echte Seiten) ───────────
+   Header-Buttons sind jetzt <NuxtLink class="ghost nav-link">. Active-Route =
+   exakt aktive URL; .router-link-exact-active spiegelt die alte .ghost.active. */
+.nav-link { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
+/* mdi-Icon in der Nav: erbt currentColor (also auch das Active-Blau), leicht größer. */
+.nav-ic { font-size: 16px; flex: 0 0 auto; }
+/* Inline-mdi-Icon im Fließtext/Buttons (erbt currentColor + Schriftgröße, leicht
+   abgesenkt für optische Baseline). Persona-Avatare bleiben Emoji, nicht mdi. */
+.ic { display: inline-block; vertical-align: -0.14em; flex: 0 0 auto; }
+.nav-link.router-link-exact-active { border-color: #58a6ff; color: #58a6ff; }
+.nav-home { font-weight: 700; }
+
+/* app-bar: Projektname-Link (brand) + Trenner + dynamischer Seitenname (statt
+   statischem "Stand-up"). Optik bewusst nah am alten Titel gehalten. */
+.brand { color: #e6edf3; text-decoration: none; font-weight: 700; }
+.brand:hover { color: #58a6ff; }
+.title-sep { color: #6e7681; font-weight: 400; }
+.page-name { color: #58a6ff; font-weight: 600; }
+
+/* page-main: kurze Seiten füllen den Viewport (kein inner-scroll mehr). */
+.page-main { display: block; min-height: 70vh; }
+
+/* v-tabs-Anmutung (Vuetify-Look, HANDGEROLLT — kein Vuetify im Stack, siehe Docs).
+   Desktop: grow (Tabs füllen die Breite) + Unterstrich-Indikator. Mobile: stacked
+   (vertikal, je als Pille). Genutzt von Inbox-Sub-Nav + Reports-Tabs. */
+.vtabs { display: flex; gap: 0; margin: 8px 0 14px; border-bottom: 1px solid #21262d; }
+.vtab { flex: 1 1 0; display: inline-flex; align-items: center; justify-content: center; gap: 7px; background: transparent; color: #8b949e; border: 0; border-bottom: 2px solid transparent; padding: 10px 12px; font: inherit; font-size: 14px; cursor: pointer; text-decoration: none; white-space: nowrap; transition: color .12s ease, border-color .12s ease; }
+.vtab:hover { color: #c9d1d9; }
+.vtab.active, .vtab.router-link-exact-active { color: #58a6ff; border-bottom-color: #58a6ff; font-weight: 600; }
+.vtab-badge { font-size: 11px; font-weight: 700; border-radius: 999px; padding: 0 6px; background: #3fb950; color: #0d1117; line-height: 1.5; }
+@media (max-width: 640px) {
+  /* Vuetify-"stacked": Icon groß oben, Label klein (60%) darunter, Tabs NEBENEINANDER.
+     Aktiv-Bar UNTEN (border-bottom). Badge ("3") absolut OBEN → ändert die Tab-Höhe
+     nicht, daher gleiche Höhe mit/ohne Badge + Inhalt bottom-ausgerichtet (Austin). */
+  .vtab { flex-direction: column; justify-content: flex-end; gap: 3px; position: relative; padding: 8px 4px; min-height: 50px; border-bottom: 2px solid transparent; }
+  .vtab .ic { font-size: 22px; }
+  .vtab-label { font-size: 60%; line-height: 1.15; text-align: center; }
+  .vtab .vtab-badge { position: absolute; top: 3px; right: 5px; }
+  .vtab.active, .vtab.router-link-exact-active { border-bottom-color: #58a6ff; background: transparent; }
+}
+
+/* Globales Blocker-Banner (jede Seite, aus layouts/default.vue). Rot wie .urgent.
+   Sitzt unter dem Header; rendert nur wenn mind. ein Agent 'blocked' ist. */
+.banner { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 14px 0 4px; padding: 9px 13px; background: #2d1416; border: 1px solid #f8514955; border-left: 3px solid #f85149; border-radius: 8px; }
+.banner-icon { flex: 0 0 auto; font-size: 16px; color: #f85149; }
+.banner-title { flex: 0 0 auto; font-weight: 700; color: #f85149; font-size: 13px; }
+.banner-names { flex: 1; min-width: 0; color: #c9d1d9; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.banner-link { flex: 0 0 auto; background: transparent; color: #f0883e; border: 1px solid #f0883e55; border-radius: 6px; padding: 3px 10px; font: inherit; font-size: 12px; cursor: pointer; text-decoration: none; }
+.banner-link:hover { border-color: #f0883e; background: #2a1d10; }
+
+/* Sub-Seiten-Kopf (Reports/Feedback/Inbox/Bugs/Approvals …): kleiner Titel +
+   Sublabel. Home hat stattdessen Sprintbar/Status, braucht keinen page-head. */
+.page-head { display: flex; align-items: baseline; gap: 10px; margin: 8px 0 2px; flex-wrap: wrap; }
+.page-head h2 { font-size: 16px; color: #e6edf3; margin: 0; }
+.page-head .ph-sub { color: #6e7681; font-size: 12px; }
+
+/* Globaler Markdown-Render für Standalone-Seiten (/bugs, /approvals-Detail). Die
+   .md-Styles in OverlayPanel/sprint-md sind scoped → greifen nur dort; hier die
+   globale Variante (gleiche GitHub-Dark-Optik, kompakt). Token-Farben .hl-* sind
+   bereits global (oben). Innerhalb scoped-Komponenten gewinnt deren höhere Spez. */
+.md { color: #c9d1d9; font-size: 13px; line-height: 1.55; }
+.md h1, .md h2, .md h3, .md h4 { color: #e6edf3; margin: 14px 0 6px; line-height: 1.25; }
+.md h1 { font-size: 18px; }
+.md h2 { font-size: 15px; color: #58a6ff; border-bottom: 1px solid #21262d; padding-bottom: 3px; }
+.md h3 { font-size: 13px; color: #d29922; }
+.md h4 { font-size: 12px; color: #8b949e; text-transform: uppercase; letter-spacing: .04em; }
+.md p { margin: 4px 0; }
+.md ul, .md ol { margin: 4px 0 8px; padding-left: 22px; }
+.md li { margin: 2px 0; }
+.md li > p { margin: 0; }
+.md strong { color: #e6edf3; }
+.md p code, .md li code, .md h1 code, .md h2 code, .md h3 code, .md td code { background: #0d1117; border: 1px solid #30363d; border-radius: 4px; padding: 1px 5px; font-size: 12px; color: #e6edf3; }
+.md .codeblock { background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 10px 12px; margin: 10px 0; overflow-x: auto; font-size: 12px; line-height: 1.5; }
+.md .codeblock code { display: block; background: none; border: 0; padding: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #c9d1d9; white-space: pre; }
+.md hr { border: 0; border-top: 1px dashed #21262d; margin: 12px 0; }
+.md table { border-collapse: collapse; margin: 8px 0; font-size: 12px; }
+.md th, .md td { border: 1px solid #21262d; padding: 4px 8px; text-align: left; }
+.md th { background: #0d1117; color: #e6edf3; }
+

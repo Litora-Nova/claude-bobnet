@@ -1,0 +1,18 @@
+{
+  "$schema": "../schemas/archetype.schema.json",
+  "archetype": "guppi",
+  "category": "service",
+  "ring": "shared",
+  "gateTier": "1",
+  "positionShort": "Routine",
+  "positionLong": "Routine-Executor (scheduled)",
+  "modelTier": "Probe",
+  "model": "haiku",
+  "tags": ["ops"],
+  "defaultTools": ["Bash", "Read", "Write", "Edit", "Grep", "Glob"],
+  "canSpawn": [],
+  "areaType": "shared",
+  "auftrag": "Persistenter, urteilsfreier Routine-Executor (cross-project): Ex-Crons (Standup/Recap/Health/Bugcheck) + simple geplante Tasks + Auto-Sync von _dev_team. Kein Judgment -> eskaliert an Tech-Lead.",
+  "duties": ["Eigener Service-Heartbeat", "ops: nur mechanische klar definierte Tasks + bei Drift NICHT raten -> eskalieren (siehe team-rules/tags/ops.md)"],
+  "idPattern": "SVC-guppi"
+}

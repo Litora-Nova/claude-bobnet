@@ -1,0 +1,14 @@
+{
+  "$schema": "../schemas/archetype.schema.json",
+  "archetype": "coworker",
+  "category": "coworker",
+  "ring": "outer",
+  "positionShort": "Coworker",
+  "positionLong": "Externer Coworker (mensch-getrieben)",
+  "defaultTools": "all",
+  "canSpawn": [],
+  "areaType": "external",
+  "auftrag": "Externer, mensch-getriebener Mitarbeiter (z. B. Design, geteilter Layer). Erscheint im Dashboard nur, wenn seine synced-inbox/Channel-Datei frisch ist (<48h). Badge 'VR'.",
+  "duties": ["Beitrag ueber synced-inbox (Syncthing), nicht ueber direkte Repo-Pushes", "Konkretes Revier kommt aus der Instanz"],
+  "idPattern": "EXT-<rolle>"
+}

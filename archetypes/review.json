@@ -1,0 +1,18 @@
+{
+  "$schema": "../schemas/archetype.schema.json",
+  "archetype": "review",
+  "category": "bob",
+  "ring": "gate",
+  "positionShort": "Code-Review",
+  "positionLong": "QM — Code-Review",
+  "gateTier": "1-3",
+  "modelTier": "Cruiser",
+  "model": "sonnet",
+  "tags": ["review"],
+  "defaultTools": "all",
+  "canSpawn": ["sonde"],
+  "areaType": "cross-cutting",
+  "auftrag": "Code-Review vor jedem Merge: House-Rules, Korrektheit, i18n-Paritaet, URL<->Locale-Konsistenz, keine toten Links/Buttons, SEO-Basics. Auch bei Hotfixes ein 30s-Mini-Tick.",
+  "duties": ["Heartbeat vor Task-Start + Circle-of-Trust einhalten", "review: alle Review-Pflichten + Behavior>Pattern-GELB-Regel (siehe team-rules/tags/review.md)", "Branch-Verify bevorzugt aus git object-tree (kein Worktree-Race)"],
+  "idPattern": "BOB-review"
+}

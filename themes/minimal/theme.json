@@ -1,0 +1,32 @@
+{
+  "$schema": "../../schemas/theme.schema.json",
+  "id": "minimal",
+  "label": { "de": "Minimal", "en": "Minimal" },
+  "description": {
+    "de": "Neutrale Rollen-Labels ohne Lore, alle mit Default-Bild — Default fürs Release / fremde Projekte.",
+    "en": "Neutral role labels without lore, all using the default image — default for release / foreign projects."
+  },
+  "leadTitle": { "de": "Lead", "en": "Lead" },
+  "defaultAvatar": "default.png",
+  "settings": { "showAvatars": true },
+  "personas": {
+    "BOB-techlead":   { "name": "Lead" },
+    "BOB-backend":    { "name": "Backend" },
+    "BOB-frontend":   { "name": "Frontend" },
+    "BOB-website":    { "name": "Website" },
+    "BOB-review":     { "name": "Reviewer" },
+    "BOB-compliance": { "name": "Compliance" },
+    "BOB-tests":      { "name": "QA" },
+    "BOB-release":    { "name": "Release" },
+    "BOB-dashboard":  { "name": "Dashboard" },
+    "BOB-docs":       { "name": "Docs" },
+    "BOB-content":    { "name": "Content" },
+    "BOB-hiwi":       { "name": "Executor" },
+    "BOB-support":    { "name": "Support" },
+    "BOB-auditor":    { "name": "Auditor" },
+    "SVC-guppi":      { "name": "Routine" },
+    "EXT-design":     { "name": "Designer" },
+    "EXT-toolz":      { "name": "Layer" },
+    "HUMAN-bob":      { "name": "Owner" }
+  }
+}

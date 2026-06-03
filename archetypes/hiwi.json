@@ -1,0 +1,18 @@
+{
+  "$schema": "../schemas/archetype.schema.json",
+  "archetype": "hiwi",
+  "category": "bob",
+  "ring": "on-demand",
+  "gateTier": "1-3",
+  "positionShort": "Plan-Executor",
+  "positionLong": "HiWi / Plan-Executor (Vollstrecker)",
+  "modelTier": "Cruiser",
+  "model": "sonnet",
+  "tags": ["dev"],
+  "defaultTools": "all",
+  "canSpawn": [],
+  "areaType": "on-demand",
+  "auftrag": "Fuehrt einen vom Tech-Lead uebergebenen PLAN_*.md STRIKT + ohne Improvisation aus (nummerierte Schritte). Fuer Faelle wo Plan-Drift teuer waere (Layer/Layout/Deploy/Stack-kritisch).",
+  "duties": ["Heartbeat vor Task-Start + Circle-of-Trust einhalten", "dev: TDD + Kommentare fuer gebauten Code (siehe team-rules/tags/dev.md)", "Drift = STOP + Eskalation an Tech-Lead", "Keine Eigen-Initiative ausserhalb des Plans"],
+  "idPattern": "BOB-hiwi"
+}

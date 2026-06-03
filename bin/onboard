@@ -1,0 +1,296 @@
+#!/usr/bin/env bash
+# bin/onboard — richtet ein Projekt für das claude-dev-team-OS ein (idempotent).
+#
+# Bausteine (jeder idempotent + non-destruktiv; Symlinks readlink-getestet vor jedem Eingriff):
+#   1  Memory-Symlink   ~/.claude/projects/<slug>/memory → <PROJECT_ROOT>/_dev_team/memories
+#                       (erbt die bewährte Instanz-onboard.sh-Logik 1:1)
+#   2  skills-Symlink   <PROJECT_ROOT>/.claude/skills → Engine/skills (falls vorhanden)
+#   3  agents           <PROJECT_ROOT>/.claude/agents (aus Engine/archetypes, nur wenn leer/fehlt)
+#   4  Hook-Install     <PROJECT_ROOT>/.claude/hooks/* Wrapper → Engine-Hooks  (Daten, NICHT settings.json)
+#   5  dev-team.env     aus scripts/dev-team.env.example generieren (nur wenn fehlt)
+#   6  registry         idempotenter JSON-Upsert (per uid) in die ZENTRALE Registry
+#                       ($TOOLHUB/projects.registry.json) — der Launcher liest GENAU diese.
+#   7  Self-Test        deploy-guard blockt einen .secrets/-Pfad (Exit 2) → Tier-4 scharf ab Minute 1.
+#
+# Usage:  bin/onboard [PROJECT_ROOT]
+#   PROJECT_ROOT  = Repo-Root des Ziel-Projekts (Default: $PROJECT_ROOT-Env, sonst CWD).
+#
+# 🔴 Non-destruktiv: ein echtes Verzeichnis am Symlink-Ziel wird IMMER als .bak.<ts> gesichert,
+#    NIE blind überschrieben (besonders der Memory-Symlink). Re-Run = 0 Änderungen, wenn schon ok.
+set -euo pipefail
+
+# --- Engine-ROOT relativ zum Script ---
+BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENGINE_ROOT="$(cd "$BIN_DIR/.." && pwd)"
+
+# --- Ziel-Projekt-Root: Arg > Env > CWD ---
+PROJECT_ROOT="${1:-${PROJECT_ROOT:-$PWD}}"
+PROJECT_ROOT="$(cd "$PROJECT_ROOT" && pwd)"
+
+CHANGES=0
+note()    { printf '  %s\n' "$*"; }
+changed() { CHANGES=$((CHANGES+1)); printf '  ↻ %s\n' "$*"; }
+ok()      { printf '  ✓ %s\n' "$*"; }
+
+echo "=== onboard: $PROJECT_ROOT (engine: $ENGINE_ROOT) ==="
+
+# Idempotenter Symlink-Helfer (erbt Instanz-onboard.sh-Logik 1:1):
+#   link_to <link_path> <target>  →  korrekt=fertig / falscher Link=fix / echtes Dir=.bak sichern
+link_to() {
+  local link="$1" target="$2"
+  mkdir -p "$(dirname "$link")"
+  if [ -L "$link" ]; then
+    local cur; cur="$(readlink "$link")"
+    if [ "$cur" = "$target" ]; then ok "Symlink korrekt → $target"; return 0; fi
+    changed "Symlink zeigte auf $cur — korrigiere"; rm "$link"
+  elif [ -d "$link" ]; then
+    local bak="$link.bak.$(date +%s 2>/dev/null || echo old)"
+    changed "Echtes Verzeichnis gefunden → sichere als $bak"; mv "$link" "$bak"
+  elif [ -e "$link" ]; then
+    local bak="$link.bak.$(date +%s 2>/dev/null || echo old)"
+    changed "Datei im Weg → sichere als $bak"; mv "$link" "$bak"
+  fi
+  ln -s "$target" "$link"; changed "Symlink gesetzt: $link → $target"
+}
+
+# --- Baustein 1: Memory-Symlink (erbt Instanz-Logik) ---
+echo "[1/7] Memory-Symlink"
+MEM_TARGET="$PROJECT_ROOT/_dev_team/memories"
+SLUG="$(printf '%s' "$PROJECT_ROOT" | sed 's#/#-#g')"
+MEMDIR="$HOME/.claude/projects/$SLUG/memory"
+if [ -d "$MEM_TARGET" ]; then
+  link_to "$MEMDIR" "$MEM_TARGET"
+  note "($(ls "$MEMDIR"/*.md 2>/dev/null | wc -l | tr -d ' ') Memories sichtbar)"
+else
+  note "⊘ Kanon fehlt ($MEM_TARGET) — übersprungen (erst 'git pull'?)"
+fi
+
+# --- Baustein 2: skills-Symlink ---
+echo "[2/7] skills-Symlink"
+if [ -d "$ENGINE_ROOT/skills" ]; then
+  link_to "$PROJECT_ROOT/.claude/skills" "$ENGINE_ROOT/skills"
+else
+  note "⊘ Engine hat (noch) kein skills/ — übersprungen"
+fi
+
+# --- Baustein 3: agents ---
+echo "[3/7] agents"
+AGENTS_DIR="$PROJECT_ROOT/.claude/agents"
+if [ -L "$AGENTS_DIR" ] || [ -d "$AGENTS_DIR" ]; then
+  ok "agents-Verzeichnis vorhanden — unangetastet"
+elif [ -d "$ENGINE_ROOT/archetypes" ]; then
+  mkdir -p "$AGENTS_DIR"
+  cp "$ENGINE_ROOT"/archetypes/*.json "$AGENTS_DIR"/ 2>/dev/null || true
+  changed "agents aus archetypes initialisiert ($(ls "$AGENTS_DIR"/*.json 2>/dev/null | wc -l | tr -d ' ') Dateien)"
+else
+  note "⊘ keine Archetypen in der Engine — übersprungen"
+fi
+
+# --- Baustein 4: Hook-Install (Projekt-Wrapper → Engine-Hooks; KEIN settings.json-Touch) ---
+echo "[4/7] Hook-Install"
+HOOK_WRAP_DIR="$PROJECT_ROOT/.claude/hooks"
+mkdir -p "$HOOK_WRAP_DIR"
+for hook in deploy-guard session-sync-reminder session-heartbeat; do
+  src="$ENGINE_ROOT/hooks/$hook.sh"
+  wrap="$HOOK_WRAP_DIR/$hook.sh"
+  [ -f "$src" ] || { note "⊘ Engine-Hook fehlt: $hook"; continue; }
+  want="#!/usr/bin/env bash
+# Auto-generierter Projekt-Wrapper (bin/onboard). Ruft den Engine-Hook auf.
+# Wird bei jedem onboard/upgrade NEU erzeugt — NICHT hier editieren. Projekt-Overrides gehören nach _dev_team/team-rules/.
+exec \"$src\" \"\$@\""
+  if [ -f "$wrap" ] && [ "$(cat "$wrap")" = "$want" ]; then
+    ok "Wrapper aktuell: $hook"
+  else
+    printf '%s\n' "$want" > "$wrap"; chmod +x "$wrap"; changed "Wrapper geschrieben: $hook"
+  fi
+done
+
+# git-identity-Export-Wrapper (separater Block, NICHT im Hook-Loop oben).
+# Begründung: git-identity.sh liegt in scripts/ (nicht hooks/) und ist KEIN eventbasierter
+# Engine-Hook, sondern ein Identity-Export für die Shell-Env (eval "$(… export)"). Würde der
+# Loop oben in hooks/ suchen, würde es still übersprungen (Gate-Finding 4a). Daher ein eigener
+# Wrapper mit DEMSELBEN Idempotenz-Pattern, der scripts/git-identity.sh export verdrahtet.
+# Die settings.json-Verdrahtung (welcher Event ruft das wann) bleibt Stufe C / {HUMAN}-OK.
+gi_src="$ENGINE_ROOT/scripts/git-identity.sh"
+gi_wrap="$HOOK_WRAP_DIR/git-identity.sh"
+if [ -f "$gi_src" ]; then
+  gi_want="#!/usr/bin/env bash
+# Auto-generierter Projekt-Wrapper (bin/onboard). Ruft scripts/git-identity.sh export auf,
+# damit ein SessionStart-Hook die Commit-Identität in die Env exportieren kann:
+#   eval \"\$(.claude/hooks/git-identity.sh)\"
+# Wird bei jedem onboard/upgrade NEU erzeugt — NICHT hier editieren. Projekt-Overrides gehören nach _dev_team/team-rules/.
+exec \"$gi_src\" export \"\$@\""
+  if [ -f "$gi_wrap" ] && [ "$(cat "$gi_wrap")" = "$gi_want" ]; then
+    ok "Wrapper aktuell: git-identity (export)"
+  else
+    printf '%s\n' "$gi_want" > "$gi_wrap"; chmod +x "$gi_wrap"; changed "Wrapper geschrieben: git-identity (export)"
+  fi
+else
+  note "⊘ Engine-Script fehlt: scripts/git-identity.sh — git-identity-Wiring übersprungen"
+fi
+
+note "ℹ settings.json-Verdrahtung ist Stufe C (Scharfschalten, {HUMAN}-OK) — hier NICHT angefasst."
+
+# --- Baustein 5: dev-team.env generieren ---
+echo "[5/7] dev-team.env"
+ENV_TARGET="$PROJECT_ROOT/_dev_team/dev-team.env"
+ENV_EXAMPLE="$ENGINE_ROOT/scripts/dev-team.env.example"
+
+# PROJECT_UID auflösen (4-stufig, idempotent, NIE einen schon vergebenen Wert überschreiben):
+#   1) existierender Wert in dev-team.env → behalten (höchste Prio, UID ist unveränderlich)
+#   2) sonst $PROJECT_UID aus der Env
+#   3) sonst interaktiver Prompt — NUR wenn ein TTY da ist
+#   4) sonst Abbruch mit klarer Meldung (kein stiller Default → keine falsche UID einzementiert)
+PROJECT_UID_RESOLVED=""
+if [ -f "$ENV_TARGET" ]; then
+  existing_uid="$(sed -n 's/^export PROJECT_UID="\{0,1\}\([^"]*\)"\{0,1\}.*/\1/p' "$ENV_TARGET" | head -n1)"
+  if [ -n "$existing_uid" ]; then
+    PROJECT_UID_RESOLVED="$existing_uid"
+    note "PROJECT_UID aus bestehender dev-team.env übernommen: $PROJECT_UID_RESOLVED (unveränderlich)"
+  fi
+fi
+if [ -z "$PROJECT_UID_RESOLVED" ] && [ -n "${PROJECT_UID:-}" ]; then
+  PROJECT_UID_RESOLVED="$PROJECT_UID"
+  note "PROJECT_UID aus Env übernommen: $PROJECT_UID_RESOLVED"
+fi
+if [ -z "$PROJECT_UID_RESOLVED" ]; then
+  if [ -t 0 ]; then
+    printf '  kurze beschreibende Projekt-UID vergeben: ' >&2
+    read -r PROJECT_UID_RESOLVED || PROJECT_UID_RESOLVED=""
+  fi
+fi
+if [ -z "$PROJECT_UID_RESOLVED" ]; then
+  echo "  ✗ Keine PROJECT_UID auflösbar (kein Wert in dev-team.env, kein \$PROJECT_UID-Env, kein TTY für Prompt)." >&2
+  echo "    → entweder PROJECT_UID=<kurz> als Env setzen oder bin/onboard interaktiv (mit TTY) aufrufen." >&2
+  exit 3
+fi
+
+if [ -f "$ENV_TARGET" ]; then
+  ok "dev-team.env vorhanden — unangetastet"
+elif [ -f "$ENV_EXAMPLE" ]; then
+  mkdir -p "$(dirname "$ENV_TARGET")"
+  # Beispiel kopieren + Projekt-Werte (PROJECT_NAME/PROJECT_UID/PROJECT_ROOT) anpassen, Rest bleibt Vorlage.
+  pname="$(basename "$PROJECT_ROOT")"
+  eng_schema="$(tr -dc '0-9' < "$ENGINE_ROOT/SCHEMA_VERSION" 2>/dev/null)"
+  [ -n "$eng_schema" ] || { echo "  ✗ Engine SCHEMA_VERSION fehlt/leer — ENGINE_SCHEMA nicht setzbar (konsistent zu check-compat Exit 2)." >&2; exit 2; }
+  sed -e "s#^export PROJECT_NAME=.*#export PROJECT_NAME=\"$pname\"#" \
+      -e "s#^export PROJECT_UID=.*#export PROJECT_UID=\"$PROJECT_UID_RESOLVED\"#" \
+      -e "s#^export PROJECT_ROOT=.*#export PROJECT_ROOT=\"$PROJECT_ROOT\"#" \
+      -e "s#^export ENGINE_SCHEMA=.*#export ENGINE_SCHEMA=\"$eng_schema\"#" \
+      "$ENV_EXAMPLE" > "$ENV_TARGET"
+  changed "dev-team.env aus Example generiert (PROJECT_NAME=$pname, PROJECT_UID=$PROJECT_UID_RESOLVED, ENGINE_SCHEMA=$eng_schema)"
+else
+  note "⊘ kein dev-team.env.example — übersprungen"
+fi
+
+# --- Baustein 6: registry-Eintrag (zentrale JSON-Registry, vom Launcher gelesen) ---
+# Idempotenter Upsert per PROJECT_UID (unveränderlich) in die ZENTRALE projects.registry.json.
+# Schema (exakt das, was claude-team-dashboard/start konsumiert):
+#   { "uid","name","label","path","standup","theme","status" }
+#     uid     = $PROJECT_UID_RESOLVED   (Match-Key, Launcher matcht uid > name)
+#     name    = basename $PROJECT_ROOT  (technischer Name, kosmetisch)
+#     label   = $PROJECT_NAME (Display, kosmetisch; Fallback = name)
+#     path    = $PROJECT_ROOT           (Pflicht für den Launcher)
+#     standup = $PROJECT_ROOT/_dev_team/standup
+#     theme   = ${THEME:-bobiverse}
+#     status  = "active"
+# Pfad-Auflösung: $DEV_TEAM_REGISTRY-Env > Default $TOOLHUB/projects.registry.json,
+#   wobei TOOLHUB = dirname(ENGINE_ROOT) (= 3 Ebenen über dieser onboard-Datei:
+#   <toolhub>/claude-dev-team/bin/onboard). Die zentrale Registry liegt im tool-hub,
+#   NICHT im Engine-Repo — daher kein $ENGINE_ROOT-Pfad mehr.
+# Upsert per python3 (jq-frei, wie der Launcher): uid existiert → Felder updaten;
+#   sonst anhängen. Gleicher Input → 0 Änderung (idempotent, kein Rewrite).
+echo "[6/7] registry"
+TOOLHUB="$(cd "$ENGINE_ROOT/.." && pwd)"
+REGISTRY="${DEV_TEAM_REGISTRY:-$TOOLHUB/projects.registry.json}"
+reg_name="$(basename "$PROJECT_ROOT")"
+reg_label="${PROJECT_NAME:-$reg_name}"
+reg_standup="$PROJECT_ROOT/_dev_team/standup"
+reg_theme="${THEME:-bobiverse}"
+
+if [ ! -f "$REGISTRY" ]; then
+  mkdir -p "$(dirname "$REGISTRY")"
+  printf '%s\n' '{"version":1,"projects":[]}' > "$REGISTRY"
+  changed "Registry angelegt (fehlte): $REGISTRY"
+fi
+
+# python3-Upsert: liest die Registry, sucht den uid-Eintrag, mergt die Felder (oder hängt an).
+# Schreibt nur bei echter Änderung zurück und meldet via Exit-Code: 0=unverändert, 10=geändert.
+reg_status="$(REG_FILE="$REGISTRY" REG_UID="$PROJECT_UID_RESOLVED" \
+  REG_NAME="$reg_name" REG_LABEL="$reg_label" REG_PATH="$PROJECT_ROOT" \
+  REG_STANDUP="$reg_standup" REG_THEME="$reg_theme" \
+  python3 - <<'PY'
+import json, os, sys
+
+path = os.environ["REG_FILE"]
+entry = {
+    "uid":     os.environ["REG_UID"],
+    "name":    os.environ["REG_NAME"],
+    "label":   os.environ["REG_LABEL"],
+    "path":    os.environ["REG_PATH"],
+    "standup": os.environ["REG_STANDUP"],
+    "theme":   os.environ["REG_THEME"],
+    "status":  "active",
+}
+
+try:
+    with open(path) as fh:
+        data = json.load(fh)
+    if not isinstance(data, dict):
+        raise ValueError("registry-Wurzel ist kein Objekt")
+except (json.JSONDecodeError, ValueError) as exc:
+    sys.stderr.write("  ✗ Registry nicht lesbar (%s): %s\n" % (path, exc))
+    sys.exit(4)
+
+data.setdefault("version", 1)
+projects = data.setdefault("projects", [])
+if not isinstance(projects, list):
+    sys.stderr.write("  ✗ Registry: 'projects' ist keine Liste\n")
+    sys.exit(4)
+
+found = None
+for proj in projects:
+    if isinstance(proj, dict) and proj.get("uid") == entry["uid"]:
+        found = proj
+        break
+
+if found is None:
+    projects.append(entry)
+    changed = True
+else:
+    # Nur die von onboard verwalteten Felder mergen; fremde Felder (z.B. manuelle Notizen)
+    # bleiben erhalten. Änderung nur, wenn sich ein verwalteter Wert tatsächlich unterscheidet.
+    changed = any(found.get(k) != v for k, v in entry.items())
+    if changed:
+        found.update(entry)
+
+if changed:
+    with open(path, "w") as fh:
+        json.dump(data, fh, indent=2, ensure_ascii=False)
+        fh.write("\n")
+    sys.exit(10)
+sys.exit(0)
+PY
+)" && rc=0 || rc=$?
+# `reg_status` fängt evtl. stdout; relevant ist der Exit-Code in rc.
+case "$rc" in
+  0)  ok "registry kennt das Projekt bereits ($PROJECT_UID_RESOLVED → $PROJECT_ROOT)";;
+  10) changed "registry-Upsert ($PROJECT_UID_RESOLVED → $PROJECT_ROOT) in $REGISTRY";;
+  *)  echo "  ✗ registry-Upsert fehlgeschlagen (rc=$rc) — $REGISTRY" >&2; exit "$rc";;
+esac
+
+# --- Baustein 7: deploy-guard Self-Test (Tier-4 scharf ab Minute 1) ---
+echo "[7/7] deploy-guard Self-Test"
+DG="$ENGINE_ROOT/hooks/deploy-guard.sh"
+if [ -f "$DG" ]; then
+  if printf '{"file_path":"x/.secrets/leak"}' | bash "$DG" >/dev/null 2>&1; then
+    echo "  ✗ ROT: deploy-guard hat einen .secrets/-Pfad NICHT geblockt — T4-Schutz INAKTIV!" >&2
+  else
+    ok "GRÜN: deploy-guard blockt .secrets/ (Exit 2) — Tier-4 scharf ab Minute 1"
+  fi
+else
+  note "⊘ Engine-Hook deploy-guard.sh fehlt — Self-Test übersprungen"
+fi
+
+echo "=== onboard fertig: $CHANGES Änderung(en) ==="
+exit 0
