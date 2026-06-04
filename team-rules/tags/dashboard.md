@@ -13,6 +13,9 @@
 - **Mitglieder nie per Emoji/Tiergesicht** anzeigen — Anzeige = Bild, Fallback = `default.png`.
 - **Eigener Heartbeat** in das BobNet des Projekts, das gerade bedient wird (via `HEARTBEAT_AGENT` +
   `STANDUP_DIR`, siehe `../heartbeat.md`) — nicht als dessen Lead loggen.
+- **Mensch-Anleitungen gehören vollständig in die Task-Inbox:** Howtos/Schritte, die `{HUMAN}` ausführen
+  soll, rendert man **copy-paste-fähig IN** seine Task-Datei (das Dashboard zeigt sie), NIE als
+  „schau in Datei X"-Verweis.
 
 ## Verweist auf
 

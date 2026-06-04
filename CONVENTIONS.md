@@ -60,3 +60,22 @@ Es gibt **zwei komplementäre Identitäts-Ebenen**, die NICHT verwechselt werden
 
 - **Sync = Git** (`fetch`+`pull`+`push` gegen `origin`). `origin` = die eine Wahrheit; Maschinen
   syncen *über* origin, nicht als direkte Maschinen-Achse. **Push gehört zum Sync** — committen reicht nicht.
+
+## 5. Coordination model — Engine, nicht Beta
+
+> **Die koordinierte Team-Erfahrung kommt aus Engine + Orchestrierungs-Disziplin, NICHT aus einer
+> Peer-Messaging-Beta.** Wer „so wie es läuft" reproduzieren will, braucht die Engine — nicht das Upgrade.
+
+Die Koordination ruht auf zwei Säulen:
+
+- **Engine** — getypte Personas (Archetypen) + Circle-of-Trust (`tiers.md`/`circle-of-trust.md`) +
+  Gates greifen, **weil es Regeln im Kontext sind** (Agent-Definition + `team-rules/` + Brief),
+  kein ambientes System. Darum sind CoT + Working-Style in die Engine gebacken — jeder Agent trägt
+  sie automatisch.
+- **`{TEAM_LEAD}`-Orchestrierung** — getypte Subagents laufen im Lead-Kontext und **berichten an den
+  Lead zurück** (kein Peer-Messaging). Der Lead ist Relay + Integration: plan → Brief je Agent
+  (Rolle · Tier · Task · Guardrails · Heartbeat) → QM-Gate-Sequenz → **Single-Merge-Owner**.
+
+- **Die „Agent Teams"-Beta** (unabhängige Peer-Sessions, die sich Nachrichten schicken + Tasks selbst
+  claimen) ist ein **optionales Upgrade** — smootheres Peer-Handoff, aber experimentell + höhere
+  Token-Kosten. Der Wert ist Engine + Disziplin; die Beta ergänzt nur, sie ist keine Voraussetzung.

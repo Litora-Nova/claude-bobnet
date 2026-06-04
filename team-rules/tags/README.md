@@ -30,6 +30,7 @@ ohne `dev` bauen keinen Produkt-Code und tragen den Tag daher nicht.
 | Tag | Klasse | Was es trägt | Rollen (Beispiel) |
 |---|---|---|---|
 | `dev` | Pflicht-Marker | TDD + Kommentare (konditional, s.o.) | backend, frontend, website, content, hiwi |
+| `hiwi` | Prozess | Plan-Executor-Protokoll (strikte nummerierte PLAN-Ausführung, Drift=STOP, 3-Sektion-Report) | hiwi |
 | `backend` | Area | Rails-/JSON-API-Mechanik, Kontrakte, FSM | backend |
 | `frontend` | Area | Component-/Composable-/Client-Mechanik | frontend |
 | `website` | Area | Marketing-Site / statische Generierung | website |
