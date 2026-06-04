@@ -543,13 +543,15 @@ the default release theme (`minimal`) is neutral.
 **Read the books — seriously.** If you don't know the *Bobiverse* yet, fix that. It is the most
 fun a software-minded person can have with a sci-fi series:
 
-- 📖 **We Are Legion (We Are Bob)** — book 1 of the series · [Amazon][bk1]
-- 🎧 The **audiobooks** (narrated by Ray Porter) are an absolute joy · [Amazon][ab1]
+- 📖 **Books** — start with *We Are Legion (We Are Bob)* · [English][bk-en] · [Deutsch][bk-de]
+- 🎧 **Audiobooks** — narrated by Ray Porter, an absolute joy · [English][ab-en] · [Deutsch][ab-de]
 
 *(Those are affiliate links — a few crumbs go to this engine's author, at no extra cost to you.)*
 
-[bk1]: <AMAZON-AFFILIATE-LINK>
-[ab1]: <AMAZON-AFFILIATE-LINK>
+[bk-en]: https://amzn.to/4ekwFfZ
+[ab-en]: https://amzn.to/4e8tpDs
+[bk-de]: https://amzn.to/3QiS5Rx
+[ab-de]: https://amzn.to/43gfHcv
 
 **Origin.** It started on **2026-05-21**, when the author first installed Claude Code after a talk
 by Boris (the Claude Code lead) — skeptical, terminal-shy, expecting little. The background
