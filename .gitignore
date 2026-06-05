@@ -4,6 +4,10 @@ node_modules/
 .DS_Store
 *.log
 
+# Private Bob-Instanz-Instruktion (Persona / Dev-Kontext) — NIE public.
+# Public-Pendant = CLAUDE.md (generischer Contributor-Guide).
+CLAUDE.local.md
+
 # SCUT-Secrets (telegram_token etc.) — out-of-band, NIE committen.
 # SCUT_SECRETS_DIR defaultet auf <engine-root>/.secrets → mechanischer Schutz vor `git add .`.
 .secrets/
