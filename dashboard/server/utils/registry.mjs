@@ -20,6 +20,9 @@ export function registryPath(env = process.env, cwd = process.cwd()) {
 
 // mtime-gecacht: Registry ändert sich, wenn Projekte (de)registrieren — kein
 // Neustart nötig (always-on Hub), aber auch kein Read pro Request.
+// (Granularitäts-Hinweis, gilt auch für team.ts/theme.ts: auf FS mit 1s-mtime
+// kann ein Sub-Sekunden-Doppel-Edit unentdeckt bleiben — für seltene manuelle
+// Config-Edits akzeptiert, Review-Finding 2026-06-06.)
 let _cache = { path: '', mtimeMs: -1, data: null }
 export function loadRegistry(path = registryPath()) {
   let mtimeMs = 0

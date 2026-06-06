@@ -53,7 +53,8 @@ export default defineEventHandler(async () => {
   const sessions = tmuxSessions()
   const BEATS_PER_PROJECT = 5
 
-  const projects = await Promise.all(listProjects().map(async (p: any) => {
+  const projects = (await Promise.all(listProjects().map(async (p: any) => {
+    try {
     const tenant = tenantFromProject(p)
     const team = teamOf(tenant)
 
@@ -99,7 +100,8 @@ export default defineEventHandler(async () => {
       agents: latestByAgent.map(b => ({ agent: b.agent, status: b.status, ts: b.ts, state: agentActivity(b, now, th) })),
       recentBeats: recent.slice(0, BEATS_PER_PROJECT), // Cross-Projekt-Heartbeat-View
     }
-  }))
+    } catch { return null }   // kaputter Registry-Eintrag (ohne path/standup) → Flotte zeigt den Rest
+  }))).filter((p): p is NonNullable<typeof p> => p !== null)
 
   // Prominenz-Sortierung (blocked zuerst — urgent-jump), Rest in Registry-Reihenfolge.
   const ORDER: Record<string, number> = { blocked: 0, working: 1, running: 2, idle: 3, registered: 4 }

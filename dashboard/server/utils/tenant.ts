@@ -34,7 +34,13 @@ export function envTenant(): Tenant {
 
 // Registry-Eintrag → Tenant (auch für /api/projects nutzbar, ohne Event).
 export function tenantFromProject(p: any): Tenant {
-  const standupDir = resolve(p.standup || resolve(String(p.path || ''), '_dev_team/standup'))
+  // Registry-Regel: jeder Eintrag trägt path (+ optional standup). Fehlt BEIDES,
+  // würde resolve('') still im App-cwd landen (falscher Tenant) — hart scheitern
+  // ist ehrlicher; /api/projects überspringt solche Einträge (Review-Finding).
+  if (!p.standup && !p.path) {
+    throw createError({ statusCode: 500, statusMessage: `Registry-Eintrag ohne path/standup: ${p.uid || p.name || '(unbenannt)'}` })
+  }
+  const standupDir = resolve(p.standup || resolve(String(p.path), '_dev_team/standup'))
   return {
     uid: p.uid || p.name,
     standupDir,
