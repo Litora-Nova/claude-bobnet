@@ -42,19 +42,57 @@ specifics live in the project instance:
 - **`archetypes/*.json`** — supply each `id`'s default display `category`
   (read from the engine's archetype layer; `NUXT_ARCHETYPES_DIR` to relocate).
 - **Themes** — name/avatar/bio per persona, keyed by the same stable `id`. Active
-  theme: `NUXT_THEME` > `team.config.theme` > engine default. Switching themes
-  changes only appearance, never structure.
+  theme: in tenant mode `registry theme` > `team.config.theme` > engine default; in
+  env mode `NUXT_THEME` > `team.config.theme` > engine default (see **Multi-tenant**).
+  Switching themes changes only appearance, never structure.
 
 Relevant `NUXT_*` env (all optional, sensible defaults):
 
 | Env | Purpose | Default |
 |---|---|---|
-| `NUXT_STANDUP_DIR` | Where the per-agent `<Agent>.log` files + Markdown live | `../standup` |
-| `NUXT_TEAM_CONFIG` | Explicit path to `team.config.json` | `<standupDir>/team.config.json` |
-| `NUXT_THEME` | Active theme id | `team.config.theme` |
+| `NUXT_STANDUP_DIR` | Where the per-agent `<Agent>.log` files + Markdown live (env mode) | `../standup` |
+| `NUXT_TEAM_CONFIG` | Explicit path to `team.config.json` (env mode) | `<standupDir>/team.config.json` |
+| `NUXT_THEME` | Active theme id (env mode only — ignored in tenant mode) | `team.config.theme` |
 | `NUXT_THEMES_DIR` | Where theme folders live | `../themes` |
 | `NUXT_ARCHETYPES_DIR` | Where archetype JSON lives | `../archetypes` |
+| `NUXT_REGISTRY` | Explicit path to `projects.registry.json` | `<cwd>/../../projects.registry.json` |
+| `NUXT_ACTIVITY_WORKING_MIN` | Minutes a `busy` beat counts as **working** | `10` |
+| `NUXT_ACTIVITY_RUNNING_MIN` | Minutes any beat keeps a project **running** | `60` |
+| `NUXT_TMUX_PROBE` | `1` opts into the tmux session-name probe (off by default) | — |
 | `NUXT_ALLOWED_HOSTS` | Extra Vite-allowed hosts (comma-separated) | — |
+
+## Multi-tenant — one hub, many projects
+
+One dashboard can host every registered project Bobiverse, one project at a time per
+request:
+
+- **Tenant mode** — add `?project=<uid>` and the dashboard reads that project from
+  `projects.registry.json` (its stand-up dir, theme, label, icon, responsibility). An
+  unknown `uid` returns **404**.
+- **Env mode (unchanged)** — without `?project` the dashboard behaves exactly as before
+  (single project from `NUXT_STANDUP_DIR` / `NUXT_TEAM_CONFIG`), so an existing setup
+  keeps working with no registry.
+
+The registry path is `NUXT_REGISTRY`, or `projects.registry.json` next to the engine.
+Registry, team config and theme are read with an mtime cache, so projects can register
+and edit configs **without restarting** the always-on hub.
+
+**Fleet view (`/bobiverse`).** Stacks all registered projects with each one's activity
+and latest heartbeats — a cross-project view of who is working in parallel. Click a
+project to switch the dashboard onto its team **without a restart** (a `bobnet-project`
+cookie + reactive live queries). The optional `icon` field on a registry entry (a web
+URL or path) is shown next to the project; without it the project's initial label is
+used. (Favicon auto-discovery is follow-up issue #21.)
+
+**Activity status.** Per project, derived from heartbeat freshness: **working** (fresh
+`busy` ≤ `NUXT_ACTIVITY_WORKING_MIN`, default 10) · **running** (any beat ≤
+`NUXT_ACTIVITY_RUNNING_MIN`, default 60) · **idle** · **registered** (known, no logs
+yet). **`blocked`** is a sticky special status — a blocked agent stays prominent until
+resolved. An optional, opt-in tmux probe (`NUXT_TMUX_PROBE=1`) can lift a project to
+`running` when a matching session is live.
+
+The PWA manifest is generated per active project (its title; `BobNet` if none), so an
+installed dashboard reflects the project you switched to.
 
 ## How it works
 
