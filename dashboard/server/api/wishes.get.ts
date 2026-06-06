@@ -1,7 +1,8 @@
 import { promises as fs } from 'node:fs'
-import { resolve, join } from 'node:path'
+import { join } from 'node:path'
 import { render, frontmatter } from '../utils/md'
-import { roleOf } from '../utils/team'
+import { tenantOf } from '../utils/tenant'
+import { teamOf } from '../utils/team'
 
 // Liest Wünsche (standup/wishes/YYYY-MM-DD-<slug>.md, Frontmatter
 // author/target/status/priority/created — siehe standup/wishes/README.md).
@@ -29,7 +30,7 @@ function titleOf(body: string, file: string): string {
   return m ? m[1].replace(/^Wunsch\s*·\s*/i, '').trim() : file.replace(/\.md$/, '')
 }
 
-function meta(raw: string, file: string): WishMeta {
+function meta(raw: string, file: string, roleOf: (n: string) => string): WishMeta {
   const { data, body } = frontmatter(raw)
   const author = data.author || ''
   const target = data.target || ''
@@ -47,16 +48,16 @@ function meta(raw: string, file: string): WishMeta {
 }
 
 export default defineEventHandler(async (event) => {
-  const cfg = useRuntimeConfig()
-  const root = resolve(process.cwd(), cfg.standupDir as string)
-  const dir = join(root, 'wishes')
+  const tenant = tenantOf(event)
+  const team = teamOf(tenant)
+  const dir = join(tenant.standupDir, 'wishes')
 
   let files: string[] = []
   try { files = await fs.readdir(dir) } catch { /* Ordner fehlt noch */ }
   const names = files.filter(f => /\.md$/.test(f) && f !== 'README.md')
 
   const wishes = await Promise.all(
-    names.map(async f => meta(await fs.readFile(join(dir, f), 'utf8').catch(() => ''), f))
+    names.map(async f => meta(await fs.readFile(join(dir, f), 'utf8').catch(() => ''), f, team.roleOf))
   )
 
   // priority desc, dann created desc (= neuere zuerst innerhalb gleicher Prio).
@@ -70,7 +71,7 @@ export default defineEventHandler(async (event) => {
   if (q && names.includes(q)) {
     const raw = await fs.readFile(join(dir, q), 'utf8').catch(() => '')
     const { body } = frontmatter(raw)
-    current = { ...meta(raw, q), html: render(body) }
+    current = { ...meta(raw, q, team.roleOf), html: render(body) }
   }
 
   return { wishes, current }

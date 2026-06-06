@@ -1,6 +1,7 @@
 import { promises as fs } from 'node:fs'
-import { resolve, join } from 'node:path'
-import { AGENTS, GROUPS, PO } from '../utils/team'
+import { join } from 'node:path'
+import { tenantOf } from '../utils/tenant'
+import { teamOf } from '../utils/team'
 
 // Der PO (oder jedes Mitglied) trägt seinen Status selbst übers Dashboard ein.
 // Schreibt eine Heartbeat-Zeile in standup/<Agent>.log — gleiches Format wie standup/log.sh.
@@ -10,12 +11,13 @@ import { AGENTS, GROUPS, PO } from '../utils/team'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
+  const tenant = tenantOf(event)
+  const { AGENTS, GROUPS, PO } = teamOf(tenant)
   const agent = String(body?.agent || PO).replace(/[^A-Za-z0-9_-]/g, '') || PO
   const status = ['busy', 'idle', 'blocked', 'done'].includes(body?.status) ? body.status : 'busy'
   const msg = String(body?.msg || '').replace(/[\r\n]+/g, ' ').trim().slice(0, 200)
 
-  const cfg = useRuntimeConfig()
-  const dir = resolve(process.cwd(), cfg.standupDir as string)
+  const dir = tenant.standupDir
   // Europe/Berlin (Memory timezone-europe-berlin). sv-SE → "YYYY-MM-DD HH:MM:SS".
   const stamp = new Date().toLocaleString('sv-SE', { timeZone: 'Europe/Berlin', hour12: false })
   const logTs = stamp.slice(0, 16) // "YYYY-MM-DD HH:MM" — Format wie log.sh

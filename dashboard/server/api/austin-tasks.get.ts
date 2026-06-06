@@ -1,7 +1,8 @@
 import { promises as fs } from 'node:fs'
-import { resolve, join } from 'node:path'
+import { join } from 'node:path'
 import { render } from '../utils/md'
-import { roleOf } from '../utils/team'
+import { tenantOf } from '../utils/tenant'
+import { teamOf } from '../utils/team'
 
 // Liest Austins „Tasks mit Details" aus standup/austin.tasks.md.
 //
@@ -41,7 +42,7 @@ const DONE_TITLE_RE = /(?:✅|\bENTSCHIEDEN\b|\bARCHIV\b|\bDONE\b)/i
 // Tasks darunter sind alle done (Austin's manuelles „weg in den Schrank").
 const ARCHIV_RE = /^---\s*\n+###\s+ARCHIV:/m
 
-function parseTasks(raw: string): Array<{
+function parseTasks(raw: string, roleOf: (n: string) => string): Array<{
   id: number; title: string; author: string; authorRole: string;
   done: boolean; archived: boolean; html: string; body: string
 }> {
@@ -81,10 +82,10 @@ function parseTasks(raw: string): Array<{
   return tasks.map((t, i) => ({ ...t, id: i }))
 }
 
-export default defineEventHandler(async () => {
-  const cfg = useRuntimeConfig()
-  const dir = resolve(process.cwd(), cfg.standupDir as string)
-  const raw = await fs.readFile(join(dir, 'austin.tasks.md'), 'utf8').catch(() => '')
-  const tasks = parseTasks(raw)
+export default defineEventHandler(async (event) => {
+  const tenant = tenantOf(event)
+  const team = teamOf(tenant)
+  const raw = await fs.readFile(join(tenant.standupDir, 'austin.tasks.md'), 'utf8').catch(() => '')
+  const tasks = parseTasks(raw, team.roleOf)
   return { tasks }
 })

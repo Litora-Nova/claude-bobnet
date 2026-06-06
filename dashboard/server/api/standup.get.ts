@@ -1,8 +1,9 @@
 import { promises as fs } from 'node:fs'
 import { resolve, join } from 'node:path'
-import { TEAM, RETIRED, categoryOf, parentOf } from '../utils/team'
+import { tenantOf } from '../utils/tenant'
+import { teamOf } from '../utils/team'
 import type { Category } from '../utils/team'
-import { displayNameOf, bioOf, themeMeta } from '../utils/theme'
+import { themeOf } from '../utils/theme'
 import { render } from '../utils/md'
 
 type Beat = { ts: string; status: string; msg: string; epoch: number }
@@ -43,9 +44,11 @@ function displayTs(ts: string): string {
   return iso ? iso[1] : ts
 }
 
-export default defineEventHandler(async () => {
-  const cfg = useRuntimeConfig()
-  const dir = resolve(process.cwd(), cfg.standupDir as string)
+export default defineEventHandler(async (event) => {
+  const tenant = tenantOf(event)
+  const team = teamOf(tenant)
+  const theme = themeOf(tenant, team)
+  const dir = tenant.standupDir
 
   let files: string[] = []
   try { files = await fs.readdir(dir) } catch { /* Ordner fehlt noch */ }
@@ -53,7 +56,7 @@ export default defineEventHandler(async () => {
   const agents: Agent[] = []
   for (const f of files.filter(f => f.endsWith('.log'))) {
     const name = f.replace(/\.log$/, '')
-    if (RETIRED.has(name)) continue
+    if (team.RETIRED.has(name)) continue
     if (name === 'releases') continue          // Bender-Release-Logbuch, kein Agent
     const path = join(dir, f)
     const stat = await fs.stat(path).catch(() => null)
@@ -63,7 +66,7 @@ export default defineEventHandler(async () => {
     const last3 = lines.slice(-3).reverse().map(l => parseLine(l, mtimeMs))
     // ts auf HH:MM normalisieren (kompatibel zur bestehenden UI).
     for (const b of last3) b.ts = displayTs(b.ts)
-    const meta = TEAM[name] || { role: '', order: 99 }
+    const meta = team.TEAM[name] || { role: '', order: 99 }
     agents.push({ name, role: meta.role, order: meta.order, latest: last3[0] || null, history: last3 })
   }
   // Roster-Mitglieder ohne Log trotzdem zeigen — mit zwei Sonderfällen:
@@ -72,10 +75,12 @@ export default defineEventHandler(async () => {
   //     (≤ 48 h = "aktiv connected"). Pseudo-Heartbeat aus mtime.
   //   - Interne ohne Log: leeres Card wie bisher.
   const EXT_FRESH_MS = 48 * 60 * 60 * 1000
-  for (const [name, meta] of Object.entries(TEAM)) {
+  for (const [name, meta] of Object.entries(team.TEAM)) {
     if (agents.some(a => a.name === name)) continue
     if (meta.external && meta.channel) {
-      const chPath = resolve(process.cwd(), meta.channel)
+      // Channel-Pfad: Tenant-Modus relativ zum standup-Dir des Projekts; Env-Modus
+      // wie bisher relativ zum App-cwd (backward-kompatibel zu Alt-Configs).
+      const chPath = resolve(tenant.uid ? tenant.standupDir : process.cwd(), meta.channel)
       const st = await fs.stat(chPath).catch(() => null)
       if (!st) continue                            // Datei weg → nicht zeigen
       const age = Date.now() - st.mtimeMs
@@ -94,12 +99,12 @@ export default defineEventHandler(async () => {
   // Theme-Enrichment (Schicht ②): Anzeigename/Emoji/Bio aus dem aktiven Theme,
   // gekeyt auf den stabilen Roster-Namen. `name` bleibt der Routing-/Log-Key.
   for (const a of agents) {
-    a.displayName = displayNameOf(a.name)
-    a.bio = bioOf(a.name)
-    a.external = !!TEAM[a.name]?.external
-    a.id = TEAM[a.name]?.id                 // stabiler Join-Key (Helfer-Icon-Wahl, Theme-Debug)
-    a.category = categoryOf(a.name)        // bob | service | coworker | helper | human
-    a.parent = parentOf(a.name)            // Eltern-Agent (nur Helfer), sonst null
+    a.displayName = theme.displayNameOf(a.name)
+    a.bio = theme.bioOf(a.name)
+    a.external = !!team.TEAM[a.name]?.external
+    a.id = team.TEAM[a.name]?.id            // stabiler Join-Key (Helfer-Icon-Wahl, Theme-Debug)
+    a.category = team.categoryOf(a.name)    // bob | service | coworker | helper | human
+    a.parent = team.parentOf(a.name)        // Eltern-Agent (nur Helfer), sonst null
   }
   agents.sort((a, b) => a.order - b.order)
 
@@ -111,5 +116,5 @@ export default defineEventHandler(async () => {
   // konsistente Listen/Headings/Code-Spans im "md"-CSS-Block.
   const sprintHtml = sprint ? render(sprint) : ''
 
-  return { agents, theme: themeMeta(), sprint, sprintHtml, updatedAt: new Date().toISOString() }
+  return { agents, theme: theme.meta, sprint, sprintHtml, updatedAt: new Date().toISOString() }
 })

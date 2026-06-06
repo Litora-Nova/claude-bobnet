@@ -1,11 +1,11 @@
 import { promises as fs } from 'node:fs'
-import { resolve, join } from 'node:path'
+import { join } from 'node:path'
+import { tenantOf } from '../utils/tenant'
 
 // Liest den Team-Inbox (standup/_inbox.md) und liefert die letzten Zeilen.
 // Format pro Zeile: "HH:MM | @Agent | msg" (siehe notify.post.ts).
-export default defineEventHandler(async () => {
-  const cfg = useRuntimeConfig()
-  const dir = resolve(process.cwd(), cfg.standupDir as string)
+export default defineEventHandler(async (event) => {
+  const dir = tenantOf(event).standupDir
 
   const raw = await fs.readFile(join(dir, '_inbox.md'), 'utf8').catch(() => '')
   const items = raw.split('\n').map(l => l.trim()).filter(Boolean).map((line, id) => {

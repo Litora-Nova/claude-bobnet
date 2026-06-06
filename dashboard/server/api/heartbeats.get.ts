@@ -1,5 +1,6 @@
 import { promises as fs } from 'node:fs'
-import { resolve, join } from 'node:path'
+import { join } from 'node:path'
+import { tenantOf } from '../utils/tenant'
 
 // Liefert die letzten N Heartbeats EINES Agents (standup/<agent>.log), neueste
 // zuerst — für den Inbox-"Meine Page"-Index (Austins letzte 42). Die standup-API
@@ -34,8 +35,7 @@ export default defineEventHandler(async (event) => {
   const agent = String(q.agent || 'Austin').replace(/[^A-Za-z0-9_-]/g, '') || 'Austin'
   const limit = Math.min(Math.max(parseInt(String(q.limit || '42'), 10) || 42, 1), 200)
 
-  const cfg = useRuntimeConfig()
-  const dir = resolve(process.cwd(), cfg.standupDir as string)
+  const dir = tenantOf(event).standupDir
   const path = join(dir, `${agent}.log`)
   const stat = await fs.stat(path).catch(() => null)
   const mtimeMs = stat?.mtimeMs ?? Date.now()

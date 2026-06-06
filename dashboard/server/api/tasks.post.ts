@@ -1,13 +1,13 @@
 import { promises as fs } from 'node:fs'
-import { resolve, join } from 'node:path'
+import { join } from 'node:path'
+import { tenantOf } from '../utils/tenant'
 
 // Austins Tasks bearbeiten: { action: 'toggle'|'remove', id } | { action: 'add', text }
 // Schreibt zurück nach standup/austin.tasks.md (Checkbox-Format bleibt erhalten).
 // toggle schaltet zyklisch durch die drei Zustände: "[ ]" → "[~]" → "[x]" → "[ ]".
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
-  const cfg = useRuntimeConfig()
-  const dir = resolve(process.cwd(), cfg.standupDir as string)
+  const dir = tenantOf(event).standupDir
   const path = join(dir, 'austin.tasks.md')
   const raw = await fs.readFile(path, 'utf8').catch(() => '# Austins Tasks (Product Owner)\n')
 
