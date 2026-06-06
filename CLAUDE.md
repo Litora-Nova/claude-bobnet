@@ -68,6 +68,11 @@ This engine ships publicly and white-label. Keep it that way:
   everywhere.
 - Default release theme is **`minimal`**; any persona-flavored theme is an **optional flavor**, not
   the engine's identity. Do not bake a specific persona into archetypes, schemas, or scripts.
+- **Documented exception — README credits (PO decision 2026-06-06):** the Product Owner may
+  *deliberately* name themselves (and their public profiles) in the README credits block.
+  Self-attribution is the PO's call, not a leak — the compliance gate marks exactly those
+  credit lines as ACCEPTED instead of failing them. The exception covers **only** the PO's
+  own self-mention in the credits; it extends to no other person, file, or identifier.
 
 ## 6. Coordination model (one line)
 
