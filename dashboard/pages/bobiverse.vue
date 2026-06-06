@@ -37,7 +37,8 @@ const initial = (p: any) => (p.label || p.name || '?').slice(0, 1).toUpperCase()
         <img v-if="p.icon" :src="p.icon" class="planet-icon" :alt="p.label" />
         <span v-else class="planet-initial">{{ initial(p) }}</span>
         <div class="planet-id">
-          <span class="planet-label">{{ p.title || p.label }}<span v-if="active === p.uid" class="active-tag" title="aktives Projekt">aktiv</span></span>
+          <!-- Leerzeichen vor dem Badge: trennt den A11y-Namen ("… Stand-up aktiv" statt "…Stand-upaktiv") -->
+          <span class="planet-label">{{ p.title || p.label }} <span v-if="active === p.uid" class="active-tag" title="aktives Projekt">aktiv</span></span>
           <span class="planet-meta">{{ p.uid }} · PO {{ p.po }}<template v-if="p.responsibility"> · {{ p.responsibility }}</template></span>
         </div>
         <span class="act-pill" :class="act(p.activity).cls">{{ act(p.activity).label }}</span>
