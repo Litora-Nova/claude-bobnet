@@ -5,6 +5,7 @@ import { listProjects } from '../utils/registry.mjs'
 import { tenantFromProject } from '../utils/tenant'
 import { teamOf } from '../utils/team'
 import { agentActivity, projectActivity, thresholdsFrom } from '../utils/activity.mjs'
+import { parseTail, teamTz } from '../utils/beats.mjs'
 
 // Bobiverse-Übersicht (#9 + #10): ALLE registrierten Projekte aus der Registry,
 // je Projekt der Aktivitäts-Status (registered/running/working/idle + blocked
@@ -16,27 +17,9 @@ import { agentActivity, projectActivity, thresholdsFrom } from '../utils/activit
 // mindestens auf 'running'). Default AUS — heartbeat-only bleibt portabel.
 
 type Beat = { ts: string; status: string; msg: string; epoch: number; agent: string }
-
-// Parser konsistent zu standup.get.ts: "YYYY-MM-DD HH:MM | status | msg"
-// (alt "HH:MM | …" → Datum aus mtime). epoch (UTC ms) ist der Sort-Key.
-function parseLine(line: string, fileMtimeMs: number, agent: string): Beat {
-  const [tsRaw, status, ...rest] = line.split('|').map(s => s.trim())
-  const ts = tsRaw || ''
-  let epoch = fileMtimeMs, disp = ts
-  const iso = ts.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}):(\d{2})$/)
-  if (iso) {
-    epoch = Date.UTC(+iso[1].slice(0, 4), +iso[1].slice(5, 7) - 1, +iso[1].slice(8, 10), +iso[2], +iso[3])
-    disp = `${iso[2]}:${iso[3]}`
-  } else {
-    const hm = ts.match(/^(\d{2}):(\d{2})$/)
-    if (hm) {
-      const d = new Date(fileMtimeMs)
-      epoch = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), +hm[1], +hm[2])
-      if (epoch > fileMtimeMs + 60_000) epoch -= 86_400_000
-    }
-  }
-  return { ts: disp, status: status || '', msg: rest.join(' | '), epoch, agent }
-}
+// Zeilen-Parsing zentral in server/utils/beats.mjs: ISO-Stamps über die
+// Team-Zeitzone (DEV_TEAM_TZ), datumslose Alt-Zeilen nur als LETZTE Zeile
+// mtime-geankert, sonst stale (epoch 0 → sinkt im Sort, nie „frisch").
 
 // tmux-Sessions EINMAL pro Request listen (nur bei aktivierter Probe).
 function tmuxSessions(): string[] | null {
@@ -50,6 +33,7 @@ function tmuxSessions(): string[] | null {
 export default defineEventHandler(async () => {
   const now = Date.now()
   const th = thresholdsFrom(process.env)
+  const tz = teamTz()
   const sessions = tmuxSessions()
   const BEATS_PER_PROJECT = 5
 
@@ -72,7 +56,8 @@ export default defineEventHandler(async () => {
       const raw = await fs.readFile(path, 'utf8').catch(() => '')
       const lines = raw.split('\n').map(l => l.trim()).filter(Boolean)
       if (!lines.length) continue
-      const beats = lines.slice(-BEATS_PER_PROJECT).map(l => parseLine(l, stat?.mtimeMs ?? now, agent))
+      const beats: Beat[] = parseTail(lines, stat?.mtimeMs ?? now, { tz, limit: BEATS_PER_PROJECT })
+        .map(p => ({ ts: p.time, status: p.status, msg: p.msg, epoch: p.epoch, agent }))
       latestByAgent.push(beats[beats.length - 1])
       recent.push(...beats)
     }

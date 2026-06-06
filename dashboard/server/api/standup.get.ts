@@ -4,50 +4,21 @@ import { tenantOf } from '../utils/tenant'
 import { teamOf } from '../utils/team'
 import type { Category } from '../utils/team'
 import { themeOf } from '../utils/theme'
+import { parseTail, teamTz } from '../utils/beats.mjs'
 import { render } from '../utils/md'
 
 type Beat = { ts: string; status: string; msg: string; epoch: number }
 type Agent = { name: string; id?: string; displayName?: string; bio?: string; external?: boolean; category?: Category; parent?: string | null; role: string; order: number; latest: Beat | null; history: Beat[] }
 
-// Akzeptiert zwei Formate (Wechsel 28.05. wg. sort-Bug):
-//   alt:  "HH:MM | status | msg"            → Datum aus mtime der Datei
-//   neu:  "YYYY-MM-DD HH:MM | status | msg" → Datum direkt aus dem Eintrag
-// `ts` bleibt für die Anzeige die HH:MM-Form; `epoch` (UTC ms) ist der echte
-// Sort-Key. Für ältere History-Zeilen ohne Datum ist epoch nur grob (mtime
-// der Datei), aber das ist Anzeige — sortiert wird auf `latest.epoch`.
-function parseLine(line: string, fileMtimeMs: number): Beat {
-  const [tsRaw, status, ...rest] = line.split('|').map(s => s.trim())
-  const ts = tsRaw || ''
-  let epoch = fileMtimeMs
-  // ISO-Form?
-  const iso = ts.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}):(\d{2})$/)
-  if (iso) {
-    epoch = Date.UTC(+iso[1].slice(0, 4), +iso[1].slice(5, 7) - 1, +iso[1].slice(8, 10), +iso[2], +iso[3])
-  } else {
-    // alt: HH:MM — Datum aus mtime nehmen, Uhrzeit aus Eintrag.
-    const hm = ts.match(/^(\d{2}):(\d{2})$/)
-    if (hm) {
-      const d = new Date(fileMtimeMs)
-      epoch = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), +hm[1], +hm[2])
-      // Wenn die zusammengesetzte Zeit > mtime ist, ist sie wahrscheinlich
-      // vom Vortag (Heartbeat um 23:59, mtime jetzt 00:05 nächsten Tag).
-      if (epoch > fileMtimeMs + 60_000) epoch -= 86_400_000
-    }
-  }
-  return { ts, status: status || '', msg: rest.join(' | '), epoch }
-}
-
-// Anzeige-Form fürs Frontend: bei ISO-Datum nur die Uhrzeit zeigen
-// (Kompatibilität zur bestehenden UI, die `HH:MM` erwartet).
-function displayTs(ts: string): string {
-  const iso = ts.match(/^\d{4}-\d{2}-\d{2}[ T](\d{2}:\d{2})$/)
-  return iso ? iso[1] : ts
-}
+// Zeilen-Parsing zentral in server/utils/beats.mjs (geteilt mit heartbeats/
+// projects): ISO-Stamps über die Team-Zeitzone (DEV_TEAM_TZ), datumslose
+// Alt-Zeilen nur als LETZTE Zeile mtime-geankert, sonst stale — siehe dort.
 
 export default defineEventHandler(async (event) => {
   const tenant = tenantOf(event)
   const team = teamOf(tenant)
   const theme = themeOf(tenant, team)
+  const tz = teamTz()
   const dir = tenant.standupDir
 
   let files: string[] = []
@@ -63,9 +34,9 @@ export default defineEventHandler(async (event) => {
     const mtimeMs = stat?.mtimeMs ?? Date.now()
     const raw = await fs.readFile(path, 'utf8').catch(() => '')
     const lines = raw.split('\n').map(l => l.trim()).filter(Boolean)
-    const last3 = lines.slice(-3).reverse().map(l => parseLine(l, mtimeMs))
-    // ts auf HH:MM normalisieren (kompatibel zur bestehenden UI).
-    for (const b of last3) b.ts = displayTs(b.ts)
+    // ts = HH:MM-Anzeigeform (kompatibel zur bestehenden UI), epoch = Sort-Key.
+    const last3: Beat[] = parseTail(lines, mtimeMs, { tz, limit: 3 })
+      .reverse().map(p => ({ ts: p.time, status: p.status, msg: p.msg, epoch: p.epoch }))
     const meta = team.TEAM[name] || { role: '', order: 99 }
     agents.push({ name, role: meta.role, order: meta.order, latest: last3[0] || null, history: last3 })
   }
