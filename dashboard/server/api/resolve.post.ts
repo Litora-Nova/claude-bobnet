@@ -1,5 +1,6 @@
 import { promises as fs } from 'node:fs'
-import { resolve, join } from 'node:path'
+import { join } from 'node:path'
+import { tenantOf } from '../utils/tenant'
 
 // Markiert einen Blocker dauerhaft als von Austin erledigt → er verschwindet aus
 // der Dringend-Liste, auch wenn der (schlafende) Agent nie ein neues "done" postet.
@@ -10,8 +11,7 @@ export default defineEventHandler(async (event) => {
   const blocker = String(body?.blocker || '').replace(/[\r\n|]+/g, ' ').trim().slice(0, 200)
   if (!agent || !blocker) return { ok: false }
 
-  const cfg = useRuntimeConfig()
-  const dir = resolve(process.cwd(), cfg.standupDir as string)
+  const dir = tenantOf(event).standupDir
   await fs.appendFile(join(dir, '_resolved.md'), `${agent} | ${blocker}\n`)
   return { ok: true }
 })

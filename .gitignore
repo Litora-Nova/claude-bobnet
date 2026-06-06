@@ -23,3 +23,4 @@ dashboard/team.config.json
 # Theme-Avatare: nur generische Hacker-Maske public, named lokal/privat
 themes/*/avatars/*.png
 !themes/*/avatars/default.png
+.playwright-mcp/

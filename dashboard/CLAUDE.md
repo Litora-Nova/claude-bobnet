@@ -18,9 +18,15 @@ two consistent.
   = header-nav + footer, `pages/*.vue` = one route each. Shared live data + central
   polling: `composables/useLive.ts`.
 - **Server routes:** `server/api/*.ts` (read the heartbeat logs + Markdown from the
-  stand-up directory) and `server/routes/theme-avatar/[name].get.ts` (theme-aware
-  avatar delivery). No database, no runtime external deps — the source is purely the
+  stand-up directory; tenant-scoped — see below), `server/api/projects.get.ts` (the
+  tenant-neutral fleet view), `server/routes/theme-avatar/[name].get.ts` (theme-aware
+  avatar delivery) and `server/routes/manifest.webmanifest.get.ts` (dynamic PWA
+  manifest). No database, no runtime external deps — the source is purely the
   per-agent heartbeat logs plus a few Markdown files in the stand-up directory.
+- **Tenant layer:** `server/utils/tenant.ts` (resolve a request to a project),
+  `server/utils/registry.mjs` (read `projects.registry.json`), `server/utils/team.ts`
+  (`teamOf(tenant)`), `server/utils/theme.ts` (`themeOf(tenant, team)`),
+  `server/utils/activity.mjs` (the project activity rollup). See **Multi-tenant** below.
 
 ## Three display classes (HARD: avatars are always an image)
 
@@ -70,19 +76,90 @@ instance:
 - **`archetypes/*.json`** — supply each `id`'s default display `category` (read from
   the engine's archetype layer; `NUXT_ARCHETYPES_DIR` to relocate).
 - **Themes** — name / avatar / bio per persona, keyed by the same stable `id`. Active
-  theme: `NUXT_THEME` > `team.config.theme` > engine default. Switching themes changes
-  only appearance, never structure — and **never** introduces an emoji avatar.
+  theme depends on the mode (see **Multi-tenant**): tenant mode chains `registry theme`
+  > `team.config.theme` > engine default; env mode chains `NUXT_THEME` >
+  `team.config.theme` > engine default. Switching themes changes only appearance, never
+  structure — and **never** introduces an emoji avatar.
 
 Relevant `NUXT_*` env (all optional, sensible defaults):
 
 | Env | Purpose | Default |
 |---|---|---|
-| `NUXT_STANDUP_DIR` | Where the per-agent `<Agent>.log` files + Markdown live | `../standup` |
-| `NUXT_TEAM_CONFIG` | Explicit path to `team.config.json` | `<standupDir>/team.config.json` |
-| `NUXT_THEME` | Active theme id | `team.config.theme` |
-| `NUXT_THEMES_DIR` | Where theme folders live | `../themes` |
+| `NUXT_STANDUP_DIR` | Where the per-agent `<Agent>.log` files + Markdown live (env mode) | `../standup` |
+| `NUXT_TEAM_CONFIG` | Explicit path to `team.config.json` (env mode) | `<standupDir>/team.config.json` |
+| `NUXT_THEME` | Active theme id (env mode only — ignored in tenant mode) | `team.config.theme` |
+| `NUXT_THEMES_DIR` | Where theme folders live (one dir for all tenants) | `../themes` |
 | `NUXT_ARCHETYPES_DIR` | Where archetype JSON lives | `../archetypes` |
+| `NUXT_REGISTRY` | Explicit path to `projects.registry.json` | `<cwd>/../../projects.registry.json` |
+| `NUXT_ACTIVITY_WORKING_MIN` | Minutes a `busy` beat counts as **working** | `10` |
+| `NUXT_ACTIVITY_RUNNING_MIN` | Minutes any beat keeps a project **running** | `60` |
+| `NUXT_TMUX_PROBE` | `1` opts into the tmux session-name probe (off by default) | — |
 | `NUXT_ALLOWED_HOSTS` | Extra Vite-allowed hosts (comma-separated) | — |
+
+## Multi-tenant (one hub, many project Bobiverses)
+
+The dashboard serves **one project at a time per request**, but can host the whole
+fleet from a single instance. Every API request is resolved to a tenant by
+`tenantOf(event)` (`server/utils/tenant.ts`):
+
+- **Tenant mode** — request carries `?project=<uid>` → the entry is looked up in
+  `projects.registry.json` and supplies `standup` dir, `theme`, `label`, `icon`,
+  `responsibility`. Unknown `uid` → **404** (never a silent fallback onto another
+  team).
+- **Env mode (backward-compatible)** — **no** `?project` param → exactly the previous
+  single-tenant behavior from `NUXT_STANDUP_DIR` / `NUXT_TEAM_CONFIG`. A project run
+  without a registry keeps working unchanged.
+
+The `uid` is the immutable namespace (registry rule); names/personas are display only.
+Registry, team config and theme are each **mtime-cached** — projects can (de)register
+and edit configs without restarting the always-on hub, but without a read per request.
+
+- **Registry** (`server/utils/registry.mjs`) — path resolution `NUXT_REGISTRY` >
+  `<cwd>/../../projects.registry.json` (the hub runs in `<engine>/dashboard`, the
+  registry sits next to the engine — same resolution as `bin/start`). `projectByUid`
+  matches on `uid`, falling back to `name` only while an entry has no `uid` yet.
+- **Theme priority** (`server/utils/theme.ts`, `themeIdOf`) — tenant mode: `registry
+  theme` > `team.config.theme` > `bobiverse`; **`NUXT_THEME` is ignored in tenant
+  mode** (it would force one theme on every tenant). Env mode unchanged: `NUXT_THEME`
+  > `team.config.theme` > `bobiverse`.
+
+### Fleet view — `/bobiverse` + `/api/projects`
+
+`pages/bobiverse.vue` (nav `mdi:orbit`) stacks **all** registered projects with each
+one's activity status and its latest heartbeats (a cross-project view — you see who is
+working in parallel). `/api/projects` is deliberately **tenant-neutral** (the fleet,
+not the active project). A click switches the dashboard onto that team **without a
+restart**: it sets the `bobnet-project` cookie (`composables/useProject.ts`) and the
+live fetches in `composables/useLive.ts` re-query the same stable keys against the new
+tenant (`useProjectQuery()` is reactive on the cookie).
+
+### Activity semantics (`server/utils/activity.mjs`)
+
+Pure functions (kept `.mjs` so they are node-testable). Per agent, from heartbeat
+freshness: **working** (fresh `busy` ≤ `workingMin`) · **running** (any beat ≤
+`runningMin`, session present but no fresh work) · **idle** (only `idle`/`done` or
+stale). The project rollup adds **registered** (project known, no logs yet).
+**`blocked`** is a sticky special status: a `blocked` last beat stays prominent and
+age-independent (urgent-jump) until resolved — it must not get lost in the four-step
+scale. Thresholds are `NUXT_ACTIVITY_WORKING_MIN` (10) / `NUXT_ACTIVITY_RUNNING_MIN`
+(60). The optional tmux probe (`NUXT_TMUX_PROBE=1`, opt-in) lifts a project to at
+least `running` when a session name contains the project's `uid`/`name` (a heuristic;
+heartbeat-only is the portable default).
+
+### Dynamic manifest
+
+`server/routes/manifest.webmanifest.get.ts` replaces the old static
+`public/manifest.webmanifest`: it reads the active tenant from the `bobnet-project`
+cookie (env tenant if absent) and serves a per-tenant `name` / `short_name`
+(`team.config` title, falling back to the tenant label, finally `'BobNet'`). Icons /
+colors / display are unchanged. It is sent `Cache-Control: private` (tenant-dependent,
+must not be shared across users).
+
+### Registry `icon` field
+
+Each registry entry may carry an optional `icon` (a web URL or path) shown next to the
+project in the fleet view; without it the UI falls back to the project's initial label.
+(Favicon auto-discovery is the follow-up in issue #21.)
 
 ## Heartbeat-fed (one file per agent → no write conflicts)
 
