@@ -16,7 +16,7 @@ const DEFAULT_AVATAR = '/avatars/default.png'
 <template>
   <div class="me-card">
     <div class="ava" v-if="showAvatar !== false">
-      <img v-if="!fail" :src="`/theme-avatar/${encodeURIComponent(agent.name)}`" :alt="displayName" @error="fail = true" />
+      <img v-if="!fail" :src="avatarUrl(agent.name)" :alt="displayName" @error="fail = true" />
       <img v-else :src="DEFAULT_AVATAR" :alt="displayName" />
       <span class="sdot" :style="{ background: dot(agent.latest?.status) }" :title="agent.latest?.status || 'unbekannt'"></span>
     </div>

@@ -25,7 +25,7 @@ const aliveLabel = computed(() => alive.value ? 'alive' : 'dead')
 <template>
   <NuxtLink class="svc" :class="{ dead: !alive }" :to="`/team/${agent.name}`" :title="`${displayName} — ${aliveLabel}${agent.latest?.msg ? ' · ' + agent.latest.msg : ''}`">
     <span v-if="showAvatar" class="svc-ava">
-      <img v-if="!fail" :src="`/theme-avatar/${encodeURIComponent(agent.name)}`" :alt="displayName" @error="fail = true" />
+      <img v-if="!fail" :src="avatarUrl(agent.name)" :alt="displayName" @error="fail = true" />
       <img v-else :src="DEFAULT_AVATAR" :alt="displayName" />
     </span>
     <span class="svc-dot" :style="{ background: aliveColor }"></span>

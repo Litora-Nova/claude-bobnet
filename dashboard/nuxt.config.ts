@@ -64,6 +64,8 @@ export default defineNuxtConfig({
         'mdi:book-information-variant', 'mdi:heart-pulse', 'mdi:email-outline',
         // Phase F (category-driven Display): Service-Leiste + Helfer-Badges.
         'mdi:server-network', 'mdi:spider', 'mdi:satellite-variant', 'mdi:robot-outline',
+        // Multi-tenant (#9): Bobiverse-Übersicht (Nav + Intro).
+        'mdi:orbit',
       ],
     },
   },
