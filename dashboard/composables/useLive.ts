@@ -2,11 +2,16 @@
 // EINEN Cache (kein Doppel-Fetch trotz mehrerer Aufrufer). Zentrales Polling
 // lebt im Layout (immer gemountet) und frischt die Keys via refreshNuxtData([…]).
 // Mutationen (Status posten, Task adden …) rufen danach selbst refreshNuxtData(key).
-export const useStandup = () => useFetch('/api/standup', { key: 'standup' })
-export const useTasks = () => useFetch('/api/tasks', { key: 'tasks' })
-export const useInbox = () => useFetch('/api/inbox', { key: 'inbox' })
-export const useQa = () => useFetch('/api/qa', { key: 'qa' })
-export const useAustinTasks = () => useFetch('/api/austin-tasks', { key: 'austinTasks' })
+//
+// Multi-tenant (#9): alle Quellen hängen reaktiv am ?project-Query (useProject) —
+// Projekt-Switch refetcht dieselben Keys gegen den neuen Tenant, OHNE Neustart.
+export const useStandup = () => useFetch('/api/standup', { key: 'standup', query: useProjectQuery() })
+export const useTasks = () => useFetch('/api/tasks', { key: 'tasks', query: useProjectQuery() })
+export const useInbox = () => useFetch('/api/inbox', { key: 'inbox', query: useProjectQuery() })
+export const useQa = () => useFetch('/api/qa', { key: 'qa', query: useProjectQuery() })
+export const useAustinTasks = () => useFetch('/api/austin-tasks', { key: 'austinTasks', query: useProjectQuery() })
+// Bobiverse-Übersicht (#9/#10): tenant-NEUTRAL — bewusst OHNE ?project-Query.
+export const useProjects = () => useFetch('/api/projects', { key: 'projects' })
 
 // Blockierte Agents (letzter Heartbeat = 'blocked'), abzüglich bereits als Task
 // übernommener (Owner+Text) oder dauerhaft aufgelöster — identische Logik wie

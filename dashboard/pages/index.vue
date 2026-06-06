@@ -20,7 +20,7 @@ const dot = (s?: string) => COLORS[s || ''] || '#6e7681'
 const DEFAULT_AVATAR = '/avatars/default.png'    // Anonymous-/Hacker-Maske, NIE Emoji
 const fallback = reactive(new Set<string>())     // Namen, deren Theme-Avatar nicht lud
 const onImgError = (name: string) => fallback.add(name)
-const avatarSrc = (name: string) => `/theme-avatar/${encodeURIComponent(name)}`
+const avatarSrc = (name: string) => avatarUrl(name)   // tenant-aware (#9): ?project=<uid> wenn aktiv
 const displayName = (a: any) => a.displayName || a.name
 // Theme-Setting: Bilder anzeigen ja/nein (Default ja). false = nur Name (nie Emoji).
 const showAvatars = computed(() => ((data.value as any)?.theme?.settings?.showAvatars) !== false)

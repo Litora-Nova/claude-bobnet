@@ -7,7 +7,16 @@ const route = useRoute()
 const demoMode = computed(() => route.query.demo === '1')
 // app-bar: Projektname (Demo-Mode anonymisiert) + aktueller Seitentitel statt
 // statischem "Stand-up". Projektname ist Link zur Team-Startseite.
-const brandName = computed(() => demoMode.value ? 'Team' : ((useRuntimeConfig().public.brand as string) || 'Stand-up'))
+// Multi-tenant (#9): aktives Projekt → Titel/Brand aus /api/projects (Titel-Switch
+// pro Tenant, zur Laufzeit); ohne aktives Projekt der Env-Brand wie bisher.
+const activeProject = useActiveProject()
+const { data: projectsData } = useProjects()
+const activeEntry = computed(() => ((projectsData.value as any)?.projects || []).find((p: any) => p.uid === activeProject.value) || null)
+const brandName = computed(() => {
+  if (demoMode.value) return 'Team'
+  if (activeEntry.value) return activeEntry.value.title || activeEntry.value.label
+  return (useRuntimeConfig().public.brand as string) || 'Stand-up'
+})
 
 // Geteilte Live-Quellen (stabile Keys → ein Cache für Layout + Seiten).
 const { data: standup } = await useStandup()
@@ -33,7 +42,7 @@ let fast: ReturnType<typeof setInterval> | undefined
 let slow: ReturnType<typeof setInterval> | undefined
 onMounted(() => {
   fast = setInterval(() => refreshNuxtData(['standup', 'tasks', 'inbox']), 3000)
-  slow = setInterval(() => refreshNuxtData(['qa', 'austinTasks']), 10000)
+  slow = setInterval(() => refreshNuxtData(['qa', 'austinTasks', 'projects']), 10000)
 })
 onBeforeUnmount(() => { if (fast) clearInterval(fast); if (slow) clearInterval(slow) })
 
@@ -57,6 +66,7 @@ async function postStatus() {
 // (Approvals/Briefings/Messages/Tasks); Briefing-Badge + Block-! hängen an Inbox.
 const NAV = [
   { to: '/', label: 'Team', icon: 'mdi:account-group', cls: 'nav-home' },
+  { to: '/bobiverse', label: 'Bobiverse', icon: 'mdi:orbit' },
   { to: '/reports', label: 'Reports', icon: 'mdi:file-document-outline' },
   { to: '/docs', label: 'Docs', icon: 'mdi:book-information-variant' },
   { to: '/bugs', label: 'Bugs', icon: 'mdi:bug-outline' },

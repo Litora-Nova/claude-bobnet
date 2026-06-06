@@ -1,12 +1,12 @@
 import { promises as fs } from 'node:fs'
-import { resolve, join } from 'node:path'
+import { join } from 'node:path'
+import { tenantOf } from '../utils/tenant'
 
 // Liest Austins Task-Liste (standup/austin.tasks.md) + die erledigten Blocker
 // (standup/_resolved.md). Task-Format: "- [ ] @Bill Text" → owner=Bill (optional).
 // Drei Zustände: "[ ]" offen → "[~]" mach ich grad → "[x]" fertig.
-export default defineEventHandler(async () => {
-  const cfg = useRuntimeConfig()
-  const dir = resolve(process.cwd(), cfg.standupDir as string)
+export default defineEventHandler(async (event) => {
+  const dir = tenantOf(event).standupDir
 
   const raw = await fs.readFile(join(dir, 'austin.tasks.md'), 'utf8').catch(() => '')
   const tasks = raw.split('\n')

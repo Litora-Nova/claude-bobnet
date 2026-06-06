@@ -1,5 +1,6 @@
 import { promises as fs } from 'node:fs'
-import { resolve, join } from 'node:path'
+import { join } from 'node:path'
+import { tenantOf } from '../utils/tenant'
 import { render, frontmatter } from '../utils/md'
 
 // Liest Q&A-Einträge (standup/qa/YYYY-MM-DD-<slug>.md, Frontmatter
@@ -55,9 +56,7 @@ function meta(raw: string, file: string): QaMeta {
 }
 
 export default defineEventHandler(async (event) => {
-  const cfg = useRuntimeConfig()
-  const root = resolve(process.cwd(), cfg.standupDir as string)
-  const dir = join(root, 'qa')
+  const dir = join(tenantOf(event).standupDir, 'qa')
 
   let files: string[] = []
   try { files = await fs.readdir(dir) } catch { /* Ordner fehlt noch */ }

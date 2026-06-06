@@ -1,7 +1,8 @@
 import { promises as fs } from 'node:fs'
-import { resolve, join } from 'node:path'
+import { join } from 'node:path'
 import { render } from '../utils/md'
-import { roleOf } from '../utils/team'
+import { tenantOf } from '../utils/tenant'
+import { teamOf } from '../utils/team'
 
 // Liest ALLE Markdown-Files in standup/feedback/ und rendert sie zu HTML.
 //
@@ -22,7 +23,7 @@ const DATED_RE = /^(\d{4}-\d{2}-\d{2})-(.+)\.md$/
 
 // Vor dem Render Agent-Sektionen mit Rolle annotieren:
 //   `## @Bill ✅`  →  `## @Bill · Backend + Infra ✅`
-function annotateAgents(md: string): string {
+function annotateAgents(md: string, roleOf: (n: string) => string): string {
   return md.replace(/^(##\s+@(\w+))([ \t]+(?:✅|⏳[^\n]*))?$/gm, (m, head, name, suffix = '') => {
     const role = roleOf(name)
     return role ? `${head} · ${role}${suffix}` : m
@@ -91,7 +92,7 @@ function meta(raw: string, file: string) {
 // Tabellen, Code-Blöcke) statt nur Inline-Mini-Render im Client. Austin-Wunsch:
 // „Markdown→HTML im Feedback" — Listen/Aufzählungen kamen vorher als roher
 // Text raus, weil der inline()-Renderer im Client nur **bold**/`code`/<br> kann.
-function byQuestion(raw: string): Record<string, Array<{ agent: string; role: string; answer: string; html: string }>> {
+function byQuestion(raw: string, roleOf: (n: string) => string): Record<string, Array<{ agent: string; role: string; answer: string; html: string }>> {
   const out: Record<string, Array<{ agent: string; role: string; answer: string; html: string }>> = { '(a)': [], '(b)': [], '(c)': [] }
   const parts = raw.split(/^##\s+@(\w+)[^\n]*\n/gm)
   for (let i = 1; i < parts.length; i += 2) {
@@ -110,9 +111,9 @@ function byQuestion(raw: string): Record<string, Array<{ agent: string; role: st
 }
 
 export default defineEventHandler(async (event) => {
-  const cfg = useRuntimeConfig()
-  const root = resolve(process.cwd(), cfg.standupDir as string)
-  const dir = join(root, 'feedback')
+  const tenant = tenantOf(event)
+  const team = teamOf(tenant)
+  const dir = join(tenant.standupDir, 'feedback')
 
   let files: string[] = []
   try { files = await fs.readdir(dir) } catch { /* Ordner fehlt noch */ }
@@ -131,7 +132,7 @@ export default defineEventHandler(async (event) => {
   if (q && names.includes(q)) {
     const raw = await fs.readFile(join(dir, q), 'utf8').catch(() => '')
     const m = meta(raw, q)
-    current = { ...m, html: render(annotateAgents(raw)), byQuestion: m.kind === 'round' ? byQuestion(raw) : {} }
+    current = { ...m, html: render(annotateAgents(raw, team.roleOf)), byQuestion: m.kind === 'round' ? byQuestion(raw, team.roleOf) : {} }
   }
 
   return { rounds, current }

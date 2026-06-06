@@ -1,6 +1,7 @@
 import { promises as fs } from 'node:fs'
-import { resolve, join } from 'node:path'
+import { join } from 'node:path'
 import { render } from '../utils/md'
+import { tenantOf } from '../utils/tenant'
 
 // Liest Abschlussberichte (standup/report-*.md) und rendert sie zu HTML.
 // Markdown-Renderer in server/utils/md.ts (shared mit feedback/wishes).
@@ -48,8 +49,7 @@ function meta(raw: string, file: string) {
 }
 
 export default defineEventHandler(async (event) => {
-  const cfg = useRuntimeConfig()
-  const dir = resolve(process.cwd(), cfg.standupDir as string)
+  const dir = tenantOf(event).standupDir
 
   let files: string[] = []
   try { files = await fs.readdir(dir) } catch { /* Ordner fehlt noch */ }

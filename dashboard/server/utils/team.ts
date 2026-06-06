@@ -1,13 +1,15 @@
 // Team-Definition (Single Source of Truth fürs Grid) — geladen aus team.config.json.
 // Universelle Engine: die KONKRETE Team-Liste lebt NICHT hier, sondern in der
-// Projekt-Instanz (team.config.json neben den Heartbeat-Logs). Lokalisiert via
-// NUXT_TEAM_CONFIG oder <standupDir>/team.config.json. Fehlt sie → leeres Team
-// (Grid zeigt dann nur die vorhandenen <Agent>.log-Files ohne Rollen).
+// Projekt-Instanz (team.config.json neben den Heartbeat-Logs).
 //
-// Genutzt von standup.get.ts + bob.get.ts (Grid/Detail, TEAM), heartbeat.post.ts
-// (@-Mentions/PO via AGENTS/GROUPS/PO), feedback/wishes/austin-tasks/approvals (roleOf).
-import { readdirSync, readFileSync } from 'node:fs'
+// Multi-tenant (#9): KEINE Modul-Globals mehr — der Team-Kontext wird pro Tenant
+// aufgelöst (`teamOf(tenant)`) und mtime-gecacht (Config-Änderung ohne Neustart
+// sichtbar, kein Read pro Request). Die Archetyp-Map (Engine-Ebene, tenant- und
+// theme-unabhängig) bleibt global. Fehlende Config → leeres Team (Grid zeigt dann
+// nur die vorhandenen <Agent>.log-Files ohne Rollen).
+import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { resolve } from 'node:path'
+import type { Tenant } from './tenant'
 
 // Display-Kategorie einer Entitaet (Archetyp-Schema `category`). Steuert, WO im
 // Dashboard sie erscheint: bob=Team-Grid (Roster) · service=Service-Leiste (eigene
@@ -25,48 +27,31 @@ export type TeamConfig = {
   title?: string
   shortTitle?: string
   demoTitle?: string
-  theme?: string            // aktives Theme (Default bobiverse); per NUXT_THEME ueberschreibbar
+  theme?: string            // aktives Theme; Vorrang-Kette siehe theme.ts
   po?: { name: string; role?: string; id?: string }
   members: TeamMember[]
   retired?: string[]
 }
 
-function locate(): string {
-  if (process.env.NUXT_TEAM_CONFIG) return resolve(process.env.NUXT_TEAM_CONFIG)
-  const dir = process.env.NUXT_STANDUP_DIR || process.env.STANDUP_DIR || '../standup'
-  return resolve(process.cwd(), dir, 'team.config.json')
+// Der komplette Team-Kontext EINES Tenants — alles, was vorher Modul-Global war.
+export type TeamCtx = {
+  config: TeamConfig
+  TEAM: Record<string, TeamMember>
+  RETIRED: Set<string>
+  PO: string
+  AGENTS: string[]
+  GROUPS: Record<string, string[]>
+  roleOf: (name: string) => string
+  categoryOf: (name: string) => Category
+  parentOf: (name: string) => string | null
 }
 
-let _cfg: TeamConfig | null = null
-function load(): TeamConfig {
-  if (_cfg) return _cfg
-  try { _cfg = JSON.parse(readFileSync(locate(), 'utf8')) as TeamConfig }
-  catch { _cfg = { members: [] } }
-  if (!_cfg.members) _cfg.members = []
-  return _cfg
-}
-
-export const config = (): TeamConfig => load()
-
-// TEAM: Record<name, member> inkl. PO (order 0).
-export const TEAM: Record<string, TeamMember> = (() => {
-  const c = load()
-  const out: Record<string, TeamMember> = {}
-  if (c.po) out[c.po.name] = { name: c.po.name, role: c.po.role || '', order: 0 }
-  for (const m of c.members) out[m.name] = m
-  return out
-})()
-
-export const RETIRED = new Set<string>(load().retired || [])
-export const PO = load().po?.name || 'Austin'
-export const roleOf = (name: string): string => TEAM[name]?.role || ''
-
-// --- Display-Kategorie (category-driven, KEIN Hardcode) --------------------
-// Override-Kette: team.config member.category > Archetyp (via id→idPattern) > 'bob'.
-// Der Archetyp liefert die Default-Kategorie; die Instanz darf sie pro Member
-// ueberschreiben. PO ist immer 'human'. Unbekanntes → 'bob' (Team-Member-Default:
-// ein Eintrag im Roster ist konservativer als ihn unsichtbar in einer Service-/
-// Helper-Spur verschwinden zu lassen).
+// --- Archetyp-Map (global, Engine-Ebene) ------------------------------------
+// id → category, aufgebaut aus allen archetypes/*.json. Zwei Match-Klassen:
+//   - exakt:   idPattern ohne Platzhalter (z. B. "BOB-dashboard") → exact-Map
+//   - praefix: idPattern mit "<…>"-Platzhalter (z. B. "RMR-<nnn>", "HUMAN-<rolle>")
+//              → der Teil vor dem ersten "<" ist das Praefix ("RMR-", "HUMAN-").
+// Lookup zuerst exakt, dann laengster passender Praefix.
 const VALID_CATS: ReadonlySet<string> = new Set(['bob', 'service', 'coworker', 'helper', 'human'])
 
 function archetypesDir(): string {
@@ -74,11 +59,6 @@ function archetypesDir(): string {
   return resolve(process.cwd(), '../archetypes')
 }
 
-// id → category, aufgebaut aus allen archetypes/*.json. Zwei Match-Klassen:
-//   - exakt:   idPattern ohne Platzhalter (z. B. "BOB-dashboard") → exact-Map
-//   - praefix: idPattern mit "<…>"-Platzhalter (z. B. "RMR-<nnn>", "HUMAN-<rolle>")
-//              → der Teil vor dem ersten "<" ist das Praefix ("RMR-", "HUMAN-").
-// Lookup zuerst exakt, dann laengster passender Praefix.
 type ArcheMap = { exact: Record<string, Category>; prefixes: Array<{ prefix: string; category: Category }> }
 let _archeMap: ArcheMap | null = null
 function archeMap(): ArcheMap {
@@ -112,27 +92,58 @@ function categoryFromId(id: string | undefined): Category | null {
   return null
 }
 
-export function categoryOf(name: string): Category {
-  const c = load()
-  if (c.po && name === c.po.name) return (c.po as any).category && VALID_CATS.has((c.po as any).category) ? (c.po as any).category : 'human'
-  const member = TEAM[name]
-  if (member?.category && VALID_CATS.has(member.category)) return member.category   // Instanz-Override
-  return categoryFromId(member?.id) || 'bob'                                        // Archetyp → Default
-}
+// --- per-Tenant Team-Kontext (mtime-gecacht) ---------------------------------
+function buildCtx(config: TeamConfig): TeamCtx {
+  const TEAM: Record<string, TeamMember> = {}
+  if (config.po) TEAM[config.po.name] = { name: config.po.name, role: config.po.role || '', order: 0 }
+  for (const m of config.members) TEAM[m.name] = m
 
-// parent eines Helfers (fuer Badge-Rendering am Eltern-Roster-Member); sonst null.
-export const parentOf = (name: string): string | null => TEAM[name]?.parent || null
-
-// @-Mention-Auflösung: AGENTS = interne (nicht-externe) Mitglieder.
-export const AGENTS: string[] = load().members.filter(m => !m.external).map(m => m.name)
-// GROUPS: 'team' = alle internen; weitere Gruppen aus members[].groups (z. B. 'dev').
-export const GROUPS: Record<string, string[]> = (() => {
-  const g: Record<string, string[]> = { team: AGENTS.slice() }
-  for (const m of load().members) {
+  const AGENTS = config.members.filter(m => !m.external).map(m => m.name)
+  const GROUPS: Record<string, string[]> = { team: AGENTS.slice() }
+  for (const m of config.members) {
     for (const grp of (m.groups || [])) {
       if (grp === 'team') continue
-      ;(g[grp] ||= []).push(m.name)
+      ;(GROUPS[grp] ||= []).push(m.name)
     }
   }
-  return g
-})()
+
+  // Override-Kette: team.config member.category > Archetyp (via id→idPattern) > 'bob'.
+  // PO ist immer 'human'. Unbekanntes → 'bob' (Roster ist konservativer als unsichtbar).
+  const categoryOf = (name: string): Category => {
+    if (config.po && name === config.po.name) {
+      const poCat = (config.po as any).category
+      return poCat && VALID_CATS.has(poCat) ? poCat : 'human'
+    }
+    const member = TEAM[name]
+    if (member?.category && VALID_CATS.has(member.category)) return member.category   // Instanz-Override
+    return categoryFromId(member?.id) || 'bob'                                        // Archetyp → Default
+  }
+
+  return {
+    config,
+    TEAM,
+    RETIRED: new Set<string>(config.retired || []),
+    PO: config.po?.name || 'Austin',
+    AGENTS,
+    GROUPS,
+    roleOf: (name) => TEAM[name]?.role || '',
+    categoryOf,
+    parentOf: (name) => TEAM[name]?.parent || null,
+  }
+}
+
+const _ctxCache = new Map<string, { mtimeMs: number; ctx: TeamCtx }>()
+
+export function teamOf(tenant: Tenant): TeamCtx {
+  const path = tenant.teamConfigPath
+  let mtimeMs = 0
+  try { mtimeMs = statSync(path).mtimeMs } catch { /* fehlt → leeres Team (mtime 0) */ }
+  const hit = _ctxCache.get(path)
+  if (hit && hit.mtimeMs === mtimeMs) return hit.ctx
+  let config: TeamConfig
+  try { config = JSON.parse(readFileSync(path, 'utf8')) as TeamConfig } catch { config = { members: [] } }
+  if (!config.members) config.members = []
+  const ctx = buildCtx(config)
+  _ctxCache.set(path, { mtimeMs, ctx })
+  return ctx
+}

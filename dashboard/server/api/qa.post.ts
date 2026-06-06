@@ -1,5 +1,6 @@
 import { promises as fs } from 'node:fs'
-import { resolve, join } from 'node:path'
+import { join } from 'node:path'
+import { tenantOf } from '../utils/tenant'
 import { frontmatter } from '../utils/md'
 
 // Q&A schreiben:
@@ -50,9 +51,7 @@ function splitQA(md: string): { question: string; answer: string } {
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
-  const cfg = useRuntimeConfig()
-  const root = resolve(process.cwd(), cfg.standupDir as string)
-  const dir = join(root, 'qa')
+  const dir = join(tenantOf(event).standupDir, 'qa')
   await fs.mkdir(dir, { recursive: true })
 
   if (body?.action === 'dismiss' || body?.action === 'undismiss') {
