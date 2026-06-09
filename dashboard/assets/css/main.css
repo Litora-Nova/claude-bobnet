@@ -17,6 +17,10 @@ h1 { font-size: 21px; margin: 0; color: #e6edf3; display: inline-flex; align-ite
   box-shadow: 0 0 0 0 rgba(63,185,80,.5); animation: hub-breathe 2.4s ease-in-out infinite; transition: color .15s, border-color .15s, background .15s; }
 .hub-btn:hover { color: #56d364; border-color: #3fb950; background: #112a1a; }
 .hub-ic { font-size: 16px; flex: 0 0 auto; }
+/* Icon-only (PO 2026-06-09): inaktiver Zustand zeigt NUR das orbit-Icon (kompakter
+   Header). Atem/Glow-Animation bleibt (sie hängt an .hub-btn, nicht entfernt) = Live-
+   Signal. Symmetrisches Padding + kein gap → runde Pille. Label ist im Markup ausgeblendet. */
+.hub-btn.icon-only { gap: 0; padding: 4px 8px; }
 .hub-btn.is-active { color: #0d1117; background: #3fb950; border-color: #3fb950; }
 .hub-btn.is-active .hub-ic, .hub-btn.is-active .hub-label { color: #0d1117; }
 /* Flotten-Status: blockiert → roter Atem + rote Akzente (auch im aktiven Zustand). */

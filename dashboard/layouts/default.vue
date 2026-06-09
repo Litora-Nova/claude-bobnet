@@ -111,12 +111,16 @@ const pageTitle = computed(() => {
         <span class="title-pulse" title="live"></span>
         <!-- Bobiverse-Hub-Button (#28): prominent vorn beim Live-Puls, mit Atem-/
              Pulse-Effekt + orbit-Icon. Atem rot, wenn ein Projekt blockiert ist,
-             sonst grün. Aktiv = wir SIND auf /bobiverse (Fleet-Mode). -->
-        <NuxtLink to="/bobiverse" class="hub-btn" :class="{ blocked: fleetBlocked, 'is-active': fleetMode }" title="Bobiverse — alle Bob-Netze (Flotte)" aria-label="Bobiverse-Flotte">
+             sonst grün. Aktiv = wir SIND auf /bobiverse (Fleet-Mode). PO 2026-06-09:
+             inaktiv = icon-only (kompakter Header), der Atem/Glow bleibt als Live-
+             Signal; aktiv = gefüllt + Label "Bobiverse" (wie bisher is-active). -->
+        <NuxtLink to="/bobiverse" class="hub-btn" :class="{ blocked: fleetBlocked, 'is-active': fleetMode, 'icon-only': !fleetMode }" title="Bobiverse — alle Bob-Netze (Flotte)" aria-label="Bobiverse-Flotte">
           <Icon name="mdi:orbit" class="hub-ic" />
-          <span class="hub-label">Bobiverse</span>
+          <span v-if="fleetMode" class="hub-label">Bobiverse</span>
         </NuxtLink>
-        <NuxtLink to="/" class="brand">{{ brandName }}</NuxtLink>
+        <!-- Per-Tenant-Brand im Fleet-Mode ausblenden (PO 2026-06-09): die Flotten-
+             übersicht hat kein einzelnes aktives Projekt → der Tenant-Name ist dort sinnlos. -->
+        <NuxtLink v-if="!fleetMode" to="/" class="brand">{{ brandName }}</NuxtLink>
         <span v-if="pageTitle" class="title-sep">·</span>
         <span v-if="pageTitle" class="page-name">{{ pageTitle }}</span>
       </h1>
@@ -127,9 +131,11 @@ const pageTitle = computed(() => {
         <button class="burger" :class="{ open: burgerOpen }" @click="burgerOpen = !burgerOpen" :title="burgerOpen ? 'Menü schließen' : 'Menü öffnen'" aria-label="Menü">
           <span class="bars"></span><span v-if="totalOpenBadge" class="burger-badge">{{ totalOpenBadge }}</span>
         </button>
-        <!-- Fleet-Mode: tenant-scoped Links gedimmt + inert (auf /bobiverse zeigt das
-             Dashboard die Flotte, nicht einen Tenant). Zurück über Projektkarte. -->
-        <nav class="head-actions" :class="{ 'menu-open': burgerOpen, 'fleet-dim': fleetMode }">
+        <!-- Fleet-Mode: tenant-scoped Links gedimmt (KEIN display:none, PO bestätigt) +
+             echtes inert (auf /bobiverse zeigt das Dashboard die Flotte, nicht einen
+             Tenant). :inert (PO/Riker 2026-06-09) nimmt die gedimmten Links auch für
+             Tastatur/Screenreader aus dem Fokus-/A11y-Baum — vorher nur maus-inert. -->
+        <nav class="head-actions" :class="{ 'menu-open': burgerOpen, 'fleet-dim': fleetMode }" :inert="fleetMode">
           <NuxtLink v-for="n in NAV" :key="n.to" :to="n.to" class="ghost nav-link" :class="n.cls">
             <Icon :name="n.icon" class="nav-ic" />
             <span>{{ n.label }}</span>
@@ -173,6 +179,8 @@ const pageTitle = computed(() => {
     <!-- page-main: min-height 70vh → kurze Seiten füllen den Viewport (kein inner-scroll). -->
     <main class="page-main"><slot /></main>
 
-    <footer class="footer-status" :title="(standup as any)?.updatedAt || ''">live · {{ clock }}</footer>
+    <!-- Nur die Uhrzeit (PO 2026-06-09): der "live"-Indikator ist redundant — das
+         Atem-/Live-Signal trägt jetzt der Hub-Button oben. -->
+    <footer class="footer-status" :title="(standup as any)?.updatedAt || ''">{{ clock }}</footer>
   </div>
 </template>
