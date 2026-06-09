@@ -3,7 +3,14 @@
 // Sub-Nav (v-tabs) + die gewählte Unterseite. Index (/inbox) = letzte 42 Heartbeats.
 const { data: standup } = await useStandup()
 const { data: austinTasks } = await useAustinTasks()
-const { data: approvals } = await useFetch('/api/approvals', { key: 'approvals' })
+// Tenant-aware (#13): ?project mitschicken UND den Cache-Key projekt-abhängig
+// machen (sonst leakt approvals über Tenants — der Server fällt sonst auf das
+// Launcher-Projekt zurück). Key analog zur projekt-abhängigen Quelle.
+const apprProject = useActiveProject()
+const { data: approvals } = await useFetch('/api/approvals', {
+  key: () => `approvals-${apprProject.value || 'env'}`,
+  query: useProjectQuery(),
+})
 
 const me = computed(() => ((standup.value as any)?.agents || []).find((a: any) => a.name === 'Austin')
   || { name: 'Austin', role: 'Product Owner / Vision (2-legger)', latest: null })

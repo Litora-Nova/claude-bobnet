@@ -2,9 +2,14 @@
 // Geteilte Heartbeat-Liste (letzte N Logs eines Agents, neueste zuerst). Genutzt
 // vom Inbox-Index (Austin) und der Bob-Detail-Seite. Quelle: /api/heartbeats.
 const props = defineProps<{ agent: string; limit?: number }>()
+// Tenant-aware (#13): heartbeats.get.ts ist tenantOf-gescoped → ohne ?project
+// liest die Liste die Logs des Launcher-Projekts statt des aktiven Tenants.
+// ?project reaktiv in den Query mergen + in den Cache-Key (sonst Cross-Tenant-
+// Bleed beim Projekt-Switch, da der Key bisher nur am Agent-Namen hing).
+const hbProject = useActiveProject()
 const { data } = await useFetch('/api/heartbeats', {
-  key: `hb-${props.agent}`,
-  query: { agent: props.agent, limit: props.limit || 42 },
+  key: () => `hb-${props.agent}-${hbProject.value || 'env'}`,
+  query: computed(() => ({ agent: props.agent, limit: props.limit || 42, ...(hbProject.value ? { project: hbProject.value } : {}) })),
 })
 const COLORS: Record<string, string> = { busy: '#3fb950', idle: '#8b949e', blocked: '#f85149', done: '#58a6ff' }
 const dot = (s?: string) => COLORS[s || ''] || '#6e7681'

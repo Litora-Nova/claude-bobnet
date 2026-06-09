@@ -1,7 +1,14 @@
 <script setup lang="ts">
 // /bugs — rendert standup/_bugs.md (Produkt-Bug-/QM-Log). Read-only-Ansicht.
 useHead({ title: 'Bugs · Stand-up' })
-const { data } = await useFetch('/api/bugs', { key: 'bugs' })
+// Tenant-aware (#13): bugs.get.ts ist tenantOf-gescoped → ohne ?project zeigt
+// die Bug-Seite das Launcher-Projekt. Reaktiver ?project + projekt-abhängiger
+// Cache-Key (sonst Cross-Tenant-Bleed beim Projekt-Switch ohne Neustart).
+const bugsProject = useActiveProject()
+const { data } = await useFetch('/api/bugs', {
+  key: () => `bugs-${bugsProject.value || 'env'}`,
+  query: useProjectQuery(),
+})
 </script>
 
 <template>
