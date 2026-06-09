@@ -1,0 +1,137 @@
+#!/usr/bin/env bash
+# bin/who-owns <query> — Zuständigkeits-Query über die Registry (FR#7).
+#
+# Beantwortet „who owns <X>?" gegen projects.registry.json: matcht <X> (ein Pfad,
+# eine Komponente oder ein Stichwort) gegen das maschinen-lesbare `owns[]`-Feld,
+# `responsibility` (Prosa), `path`, `name`/`label`/`uid` — und liefert den/die
+# zuständigen Bob(s) + Scope. Die Registry ist damit ein abfragbares Zuständigkeits-
+# Verzeichnis, nicht nur eine Launcher-Liste.
+#
+# Auflösung wie bin/start: ENGINE_ROOT = bin/.. , TOOLHUB = ENGINE_ROOT/.. ,
+# REGISTRY = $BOBNET_REGISTRY (override) | $NUXT_REGISTRY | TOOLHUB/projects.registry.json.
+#
+# Usage:
+#   who-owns <query>        z.B.  who-owns dashboard/server   |  who-owns deployment
+#   who-owns --list         alle Projekte + responsibility + owns
+#   who-owns --self-test    mktemp-Fixtures, prüft die Match-Logik (kein echter Effekt)
+#
+# Exit: 0 = Treffer (oder --list/--self-test ok) · 1 = kein Treffer · 2 = Registry fehlt.
+set -uo pipefail
+
+BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENGINE_ROOT="$(cd "$BIN_DIR/.." && pwd)"
+TOOLHUB="$(cd "$ENGINE_ROOT/.." && pwd)"
+REGISTRY="${BOBNET_REGISTRY:-${NUXT_REGISTRY:-$TOOLHUB/projects.registry.json}}"
+
+command -v python3 >/dev/null 2>&1 || { echo "who-owns: python3 benötigt." >&2; exit 2; }
+
+# Match-Engine (gemeinsam für query + --self-test); REGISTRY-Pfad via $1.
+run_query() { # run_query <registry> <query>
+  python3 - "$1" "$2" <<'PY'
+import json, sys, os
+reg, query = sys.argv[1], sys.argv[2]
+try:
+    d = json.load(open(reg))
+except Exception as e:
+    print(f"who-owns: Registry nicht lesbar ({reg}): {e}", file=sys.stderr); sys.exit(2)
+projects = d.get("projects", [])
+q = query.strip()
+ql = q.lower()
+
+def norm(p): return p.strip("/").lower()
+
+scored = []  # (rank, why, project)  — kleinerer rank = besserer Treffer
+for p in projects:
+    owns = [o for o in p.get("owns", []) if isinstance(o, str)]
+    # 1) Pfad-Match auf owns[] (präzisester): query liegt UNTER einem owns-Eintrag,
+    #    oder ein owns-Eintrag liegt unter der query — längster gemeinsamer Präfix gewinnt.
+    best = None
+    for o in owns:
+        no, nq = norm(o), norm(q)
+        if nq == no or nq.startswith(no + "/") or no.startswith(nq + "/"):
+            score = -len(no)  # längerer (spezifischerer) owns-Pfad zuerst
+            if best is None or score < best[0]:
+                best = (score, f"owns '{o}'")
+    if best:
+        scored.append((0, best[1], p)); continue
+    # 2) Pfad-Match auf das Projekt-`path` (Repo-Root)
+    pp = norm(p.get("path", ""))
+    if pp and (norm(q) == pp or norm(q).startswith(pp + "/")):
+        scored.append((1, f"path '{p.get('path')}'", p)); continue
+    # 3) Stichwort: substring in responsibility / owns / name / label / uid
+    hay = " | ".join([p.get("responsibility",""), " ".join(owns),
+                      p.get("name",""), p.get("label",""), p.get("uid","")]).lower()
+    if ql and ql in hay:
+        scored.append((2, "keyword", p)); continue
+
+scored.sort(key=lambda x: x[0])
+if not scored:
+    print(f'who owns "{q}"?  → kein Treffer in der Registry.')
+    sys.exit(1)
+
+print(f'who owns "{q}"?')
+for rank, why, p in scored:
+    uid = p.get("uid","?"); label = p.get("label", p.get("name","?"))
+    resp = p.get("responsibility","").strip()
+    line = f"  → {uid}  ({label})  [via {why}]"
+    print(line)
+    if resp:
+        print(f"      {resp}")
+sys.exit(0)
+PY
+}
+
+list_all() { # list_all <registry>
+  python3 - "$1" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1]))
+for p in d.get("projects", []):
+    print(f"{p.get('uid','?'):12} {p.get('label', p.get('name',''))}")
+    if p.get("responsibility"): print(f"   resp:  {p['responsibility']}")
+    if p.get("owns"):           print(f"   owns:  {', '.join(p['owns'])}")
+PY
+}
+
+self_test() {
+  local tmp; tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' RETURN
+  cat > "$tmp/reg.json" <<'JSON'
+{ "version": 1, "projects": [
+  { "uid": "acme", "name": "acme-app", "label": "Acme App", "path": "/x/acme",
+    "standup": "/x/acme/standup", "responsibility": "Produkt + Deployment",
+    "owns": ["acme-app/backend", "acme-app/frontend"] },
+  { "uid": "engine", "name": "engine", "label": "Engine", "path": "/x/engine",
+    "standup": "/x/engine/standup", "responsibility": "Shared engine + CI",
+    "owns": ["engine/scripts", "engine/dashboard"] }
+] }
+JSON
+  local pass=0 fail=0
+  check() { # check <desc> <query> <expect-substring|"__none__">
+    local out; out="$(run_query "$tmp/reg.json" "$2" 2>/dev/null)"; local rc=$?
+    if [ "$3" = "__none__" ]; then
+      if [ "$rc" = 1 ]; then printf '  ✓ %s\n' "$1"; pass=$((pass+1)); else printf '  ✗ %s (erwartete kein Treffer)\n' "$1"; fail=$((fail+1)); fi
+    else
+      if echo "$out" | grep -q "$3"; then printf '  ✓ %s\n' "$1"; pass=$((pass+1)); else printf '  ✗ %s (fehlt: %s)\n      %s\n' "$1" "$3" "$out"; fail=$((fail+1)); fi
+    fi
+  }
+  echo "who-owns --self-test"
+  check "owns-Pfad exakt"            "engine/scripts"          "engine"
+  check "owns-Pfad Unterpfad"        "engine/dashboard/server" "engine"
+  check "owns spezifischer gewinnt"  "acme-app/backend"        "acme"
+  check "project-path-Match"         "/x/acme/irgendwas"       "acme"
+  check "keyword responsibility"     "Deployment"             "acme"
+  check "keyword CI"                 "CI"                     "engine"
+  check "kein Treffer"               "voellig-fremd-xyz"      "__none__"
+  printf '── %d ✓ / %d ✗\n' "$pass" "$fail"
+  [ "$fail" = 0 ]
+}
+
+case "${1:-}" in
+  ""|-h|--help) sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 0;;
+  --self-test)  self_test; exit $?;;
+  --list)
+    [ -f "$REGISTRY" ] || { echo "who-owns: Registry fehlt: $REGISTRY" >&2; exit 2; }
+    list_all "$REGISTRY"; exit 0;;
+  *)
+    [ -f "$REGISTRY" ] || { echo "who-owns: Registry fehlt: $REGISTRY" >&2; exit 2; }
+    run_query "$REGISTRY" "$1"; exit $?;;
+esac
