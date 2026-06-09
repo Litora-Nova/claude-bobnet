@@ -3,9 +3,11 @@ body { margin: 0; background: #0d1117; color: #c9d1d9; font: 14px/1.5 ui-monospa
 .wrap { max-width: 1140px; margin: 0 auto; padding: 28px 24px; }
 header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; position: relative; }
 h1 { font-size: 21px; margin: 0; color: #e6edf3; display: inline-flex; align-items: center; gap: 9px; }
-/* Live-Pulse-Dot direkt im Titel (statt Kaffeetassen-Emoji, Austin 2026-05-30 23:21).
-   Signalisiert "läuft live" prominent oben links, nicht mehr als kleine Pille rechts. */
-.title-pulse { display: inline-block; width: 11px; height: 11px; border-radius: 50%; background: #3fb950; box-shadow: 0 0 0 0 rgba(63,185,80,.55); animation: p 1.6s ease-in-out infinite; flex: 0 0 auto; }
+/* Live-Pulse-Dot (statt Kaffeetassen-Emoji, Austin 2026-05-30 23:21). Signalisiert
+   "läuft live" — sitzt jetzt im Footer neben der fetch-Zeit (PO 2026-06-09), darum
+   footer-tauglich klein (8px) statt der 11px für den 21px-h1. Vertikale Mitte zur
+   11px-Monospace-Zeile besorgt der Footer via inline-flex + align-items:center. */
+.title-pulse { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #3fb950; box-shadow: 0 0 0 0 rgba(63,185,80,.55); animation: p 1.6s ease-in-out infinite; flex: 0 0 auto; }
 /* Bobiverse-Hub-Button (#28): prominenter Button GANZ vorn im Header, beim Live-Puls.
    Greift dessen Live-/Atem-Charakter auf — sanft pulsierender grüner Glow-Ring (Breathing),
    orbit-Icon + Label, klar als Button erkennbar (Pille, Rahmen, Hover hebt). Atem wird
@@ -53,10 +55,12 @@ h1 { font-size: 21px; margin: 0; color: #e6edf3; display: inline-flex; align-ite
    (keine Inbox/Docs/… für die ganze Flotte) → gedimmt + inert. Layout bleibt stabil
    (kein Springen), der Hub-Button + die Projektkarten führen weiter. */
 .head-actions.fleet-dim .nav-link { opacity: .35; pointer-events: none; filter: saturate(.4); }
-/* Footer-Status: live-Label + Uhrzeit landen unten (Austin-Wish 02:2x).
-   Visuell zurückhaltend: zentrierter grauer Text, kleine Schrift, dezenter
-   Top-Border als Trenner zur sprint-Section darüber. */
-.footer-status { margin: 24px 0 8px; padding: 10px 0 4px; border-top: 1px solid #21262d; text-align: center; color: #6e7681; font-size: 11px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+/* Footer-Status: Live-Pulse + Uhrzeit landen unten (Austin-Wish 02:2x; Dot-Umzug
+   PO 2026-06-09). Visuell zurückhaltend: zentriert (jetzt via justify-content, da
+   inline-flex text-align nicht mehr greift), grauer Text, kleine Schrift, dezenter
+   Top-Border als Trenner zur sprint-Section darüber. inline-flex + align-items:center
+   + gap setzt den 8px-Pulse sauber in die vertikale Mitte der Textzeile. */
+.footer-status { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 24px 0 8px; padding: 10px 0 4px; border-top: 1px solid #21262d; color: #6e7681; font-size: 11px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 @keyframes p { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
 .ghost { background: #161b22; color: #c9d1d9; border: 1px solid #30363d; border-radius: 6px; padding: 5px 12px; font: inherit; cursor: pointer; }
 .ghost:hover { border-color: #58a6ff; color: #e6edf3; }

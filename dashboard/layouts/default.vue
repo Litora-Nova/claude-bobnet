@@ -108,7 +108,6 @@ const pageTitle = computed(() => {
   <div class="wrap">
     <header>
       <h1>
-        <span class="title-pulse" title="live"></span>
         <!-- Bobiverse-Hub-Button (#28): prominent vorn beim Live-Puls, mit Atem-/
              Pulse-Effekt + orbit-Icon. Atem rot, wenn ein Projekt blockiert ist,
              sonst grün. Aktiv = wir SIND auf /bobiverse (Fleet-Mode). PO 2026-06-09:
@@ -179,8 +178,9 @@ const pageTitle = computed(() => {
     <!-- page-main: min-height 70vh → kurze Seiten füllen den Viewport (kein inner-scroll). -->
     <main class="page-main"><slot /></main>
 
-    <!-- Nur die Uhrzeit (PO 2026-06-09): der "live"-Indikator ist redundant — das
-         Atem-/Live-Signal trägt jetzt der Hub-Button oben. -->
-    <footer class="footer-status" :title="(standup as any)?.updatedAt || ''">{{ clock }}</footer>
+    <!-- Letzte fetch-Zeit + Live-Pulse (PO 2026-06-09): der Live-Indikator sitzt
+         jetzt bewusst HIER unten direkt neben der fetch-Zeit. Der Hub-Button oben
+         trägt das Atem-/Live-Signal weiterhin separat. -->
+    <footer class="footer-status" :title="(standup as any)?.updatedAt || ''"><span class="title-pulse" title="live"></span> {{ clock }}</footer>
   </div>
 </template>
