@@ -10,6 +10,9 @@ export const useTasks = () => useFetch('/api/tasks', { key: 'tasks', query: useP
 export const useInbox = () => useFetch('/api/inbox', { key: 'inbox', query: useProjectQuery() })
 export const useQa = () => useFetch('/api/qa', { key: 'qa', query: useProjectQuery() })
 export const useAustinTasks = () => useFetch('/api/austin-tasks', { key: 'austinTasks', query: useProjectQuery() })
+// Plan (#30): GOAL.md + ROADMAP.md aus dem Projekt-Root. tenant-reaktiv wie die
+// anderen Quellen — stabiler Key 'plan' (zentraler Slow-Poll im Layout).
+export const usePlan = () => useFetch('/api/plan', { key: 'plan', query: useProjectQuery() })
 // Bobiverse-Übersicht (#9/#10): tenant-NEUTRAL — bewusst OHNE ?project-Query.
 export const useProjects = () => useFetch('/api/projects', { key: 'projects' })
 

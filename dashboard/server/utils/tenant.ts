@@ -15,6 +15,7 @@ import { projectByUid } from './registry.mjs'
 export type Tenant = {
   uid: string | null            // null = Env-Fallback-Modus (Modus B)
   standupDir: string            // absolut
+  projectRoot: string           // absolut — Repo-Root (wo README/GOAL/ROADMAP liegen)
   teamConfigPath: string        // absolut
   themeId: string | null        // Theme aus der Registry (nur Modus A), sonst null
   label?: string
@@ -29,7 +30,10 @@ export function envTenant(): Tenant {
   const teamConfigPath = process.env.NUXT_TEAM_CONFIG
     ? resolve(process.env.NUXT_TEAM_CONFIG)
     : resolve(standupDir, 'team.config.json')
-  return { uid: null, standupDir, teamConfigPath, themeId: null }
+  // Projekt-Root liegt eine Ebene über standup (GOAL.md/ROADMAP.md liegen wie
+  // README.md im Repo-Root, nicht im standup-Dir — PO-Entscheid #30).
+  const projectRoot = resolve(standupDir, '..')
+  return { uid: null, standupDir, projectRoot, teamConfigPath, themeId: null }
 }
 
 // Registry-Eintrag → Tenant (auch für /api/projects nutzbar, ohne Event).
@@ -41,9 +45,14 @@ export function tenantFromProject(p: any): Tenant {
     throw createError({ statusCode: 500, statusMessage: `Registry-Eintrag ohne path/standup: ${p.uid || p.name || '(unbenannt)'}` })
   }
   const standupDir = resolve(p.standup || resolve(String(p.path), '_dev_team/standup'))
+  // Projekt-Root (#30): der Registry-`path` ist das Repo-Root (wo GOAL.md/ROADMAP.md
+  // wie README.md liegen). Nur-`standup`-Einträge ohne path → eine Ebene über standup
+  // (gleiche Heuristik wie Env-Modus).
+  const projectRoot = p.path ? resolve(String(p.path)) : resolve(standupDir, '..')
   return {
     uid: p.uid || p.name,
     standupDir,
+    projectRoot,
     teamConfigPath: resolve(standupDir, 'team.config.json'),
     themeId: p.theme || null,
     label: p.label || p.name,
