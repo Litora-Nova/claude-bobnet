@@ -8,8 +8,8 @@ h1 { font-size: 21px; margin: 0; color: #e6edf3; display: inline-flex; align-ite
    footer-tauglich klein (8px) statt der 11px für den 21px-h1. Vertikale Mitte zur
    11px-Monospace-Zeile besorgt der Footer via inline-flex + align-items:center. */
 .title-pulse { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #3fb950; box-shadow: 0 0 0 0 rgba(63,185,80,.55); animation: p 1.6s ease-in-out infinite; flex: 0 0 auto; }
-/* Bobiverse-Hub-Button (#28): prominenter Button GANZ vorn im Header, beim Live-Puls.
-   Greift dessen Live-/Atem-Charakter auf — sanft pulsierender grüner Glow-Ring (Breathing),
+/* Bobiverse-Hub-Button (#28): prominenter Button GANZ vorn im Header (Brand links daneben).
+   Trägt selbst das Live-/Atem-Signal — sanft pulsierender grüner Glow-Ring (Breathing),
    orbit-Icon + Label, klar als Button erkennbar (Pille, Rahmen, Hover hebt). Atem wird
    ROT, sobald ein Projekt blockiert ist (.blocked) — Flotten-Status auf einen Blick.
    .is-active (= wir sind auf /bobiverse) macht ihn voll-gefüllt = "du bist in der Flotte". */

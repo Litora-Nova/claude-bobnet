@@ -108,7 +108,7 @@ const pageTitle = computed(() => {
   <div class="wrap">
     <header>
       <h1>
-        <!-- Bobiverse-Hub-Button (#28): prominent vorn beim Live-Puls, mit Atem-/
+        <!-- Bobiverse-Hub-Button (#28): prominent vorn im Header, mit Atem-/
              Pulse-Effekt + orbit-Icon. Atem rot, wenn ein Projekt blockiert ist,
              sonst grün. Aktiv = wir SIND auf /bobiverse (Fleet-Mode). PO 2026-06-09:
              inaktiv = icon-only (kompakter Header), der Atem/Glow bleibt als Live-
