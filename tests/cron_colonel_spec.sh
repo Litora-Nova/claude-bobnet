@@ -8,7 +8,7 @@
 #     • meldet via BESTEHENDES scut.sh:  ✗/Exit≠0 → 🔴 urgent ; nur-⚠ → 🟡 mid (wenn COLONEL_WARN_PING=1),
 #       sonst still,
 #     • Exit-Code spiegelt colonel.sh (0 = ✓/⊘, 1 = ✗-Bruch); fehlt colonel.sh → Exit 1 + urgent.
-#   KEINE crontab-Aktivierung (Live-Cron = Austin/T4). Baut scut/colonel NICHT neu — referenziert sie.
+#   KEINE crontab-Aktivierung (Live-Cron = human/T4). Baut scut/colonel NICHT neu — referenziert sie.
 #
 # Black-Box: Stub-colonel (steuerbarer Exit/Zähler via Env) + Stub-scut (loggt Calls statt Telegram)
 #   + Wegwerf-standup in mktemp -d. NIE echtes colonel/scut/Telegram/standup angefasst.
