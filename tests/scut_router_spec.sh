@@ -51,7 +51,7 @@ ev() { printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" "$5" "$6"; }
 
 # ── 1) Gerichtet @Agent im Kontext-Bobiverse → Kontext-Inbox ──────────────────────────────
 it "gerichtet @Bill (Kontext alpha) → landet in alpha/_inbox.md mit @Bill"
-ev telegram 1 "$NOW" Austin "@Bill" "bitte API-Key rotieren" | route >/dev/null 2>&1
+ev telegram 1 "$NOW" Owner "@Bill" "bitte API-Key rotieren" | route >/dev/null 2>&1
 file_has "$ALPHA_INBOX" "@Bill"
 file_has "$ALPHA_INBOX" "bitte API-Key rotieren"
 
@@ -87,7 +87,7 @@ cat > "$TMP/registry-dry.json" <<JSON
   {"uid":"dry","name":"dry","label":"Dry","path":"$TMP/dry","standup":"$TMP/dry/_dev_team/standup","theme":"bobiverse","status":"active"}
 ]}
 JSON
-dryout="$(ev telegram 9 "$NOW" Austin "@Cid" "dry-run probe" \
+dryout="$(ev telegram 9 "$NOW" Owner "@Cid" "dry-run probe" \
   | env DEV_TEAM_REGISTRY="$TMP/registry-dry.json" CONTEXT_UID="dry" SCUT_ROUTER_DRYRUN=1 bash "$ROUTER" 2>/dev/null)"
 contains "$dryout" "ROUTE"
 contains "$dryout" "@Cid"
@@ -107,7 +107,7 @@ it "fehlende Registry-Datei → kein Crash (rc==0), nichts in echte Files geschr
 ok bash -c 'printf "telegram\t1\t'"$NOW"'\tx\t@Bill\thi\n" | env DEV_TEAM_REGISTRY="'"$TMP/none.json"'" CONTEXT_UID="alpha" bash "'"$ROUTER"'"'
 
 it "Text mit Sonderzeichen (Pipe, Klammern) bleibt erhalten, kein Crash"
-ev telegram 7 "$NOW" Austin "@Bill" "deploy? (staging|prod) check" | route >/dev/null 2>&1
+ev telegram 7 "$NOW" Owner "@Bill" "deploy? (staging|prod) check" | route >/dev/null 2>&1
 file_has "$ALPHA_INBOX" "deploy? (staging|prod) check"
 
 # ── 7) Usage / Self-Test-Modi ─────────────────────────────────────────────────────────────

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/git_identity_spec.sh — Behavior-Spec für scripts/git-identity.sh.
 #
-# SPEC-Quelle: team-rules/commits.md (Kanon Austin 2026-06-02) + Script-Header.
+# SPEC-Quelle: team-rules/commits.md (Kanon PO 2026-06-02) + Script-Header.
 # Format:  <Name> (<Projekt-Display> <role>) <DEV_TEAM_EMAIL>   (ohne role: "<Name> (<Display>) <Email>")
 # Resolution: NAME=theme.personas[id].name · ROLE=positionLabel(i18n)→archetype.positionLong→"" ·
 #             DISPLAY=dev-team.env PROJECT_NAME · EMAIL=DEV_TEAM_EMAIL (Default team@litora-nova.com).
