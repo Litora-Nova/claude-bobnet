@@ -21,6 +21,10 @@ Verbindliche Regeln für das Team-OS. Gelten projekt- und themen-übergreifend.
 - **Quelle/Kanon der konkreten IDs:** die `archetypes/*.json` (`idPattern`) + die
   `team.config.json` der Instanz. Neue Rollen → neue beschreibende id, kein Durchnummerieren.
 - **In Logs/Heartbeats/Tasks** immer den Namen ODER die id verwenden, nie einen generischen Platzhalter.
+- **Rolle = kanonische UID · Persona = Theme-Display.** Die Rolle (Archetyp-Slug) ist die Wahrheit, an
+  der UID/Branch/Log/Routing hängen; der Persona-Name (Bob, Bill, …) ist **nur** Flavor des Themes
+  (`themes/<id>/theme.json`), user-überschreibbar, **nie** struktur-tragend. Der vollständige
+  Rollen-Kanon (Voll-Roster + UID-Schema + Sonder-Mechanik) steht in [`team-rules/roster.md`](team-rules/roster.md).
 
 ### 1a. Zwei id-Ebenen — Archetyp-id vs. Spawn-UID (Plan §9)
 
