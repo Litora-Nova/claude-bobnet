@@ -72,20 +72,30 @@ async function postStatus() {
 // Schlanke Haupt-Nav (Austin 2026-06-01): nur Team · Reports · Docs · Bugs · Inbox.
 // Reports = Tabs (Sprints/Feedback/Wünsche). Inbox = Hub mit Unterseiten
 // (Approvals/Briefings/Messages/Tasks); Briefing-Badge + Block-! hängen an Inbox.
+// /bobiverse ist NICHT mehr Teil der NAV — es ist der prominente Hub-Button vorn
+// im Header (siehe Template, beim Live-Puls). Alle NAV-Links sind TENANT-scoped.
 const NAV = [
   { to: '/', label: 'Team', icon: 'mdi:account-group', cls: 'nav-home' },
-  { to: '/bobiverse', label: 'Bobiverse', icon: 'mdi:orbit' },
   { to: '/plan', label: 'Plan', icon: 'mdi:flag-checkered', badge: 'goal' },
   { to: '/reports', label: 'Reports', icon: 'mdi:file-document-outline' },
   { to: '/docs', label: 'Docs', icon: 'mdi:book-information-variant' },
   { to: '/bugs', label: 'Bugs', icon: 'mdi:bug-outline' },
   { to: '/inbox', label: 'Inbox', icon: 'mdi:inbox-arrow-down', badge: 'briefing' },
 ]
+// Fleet-Mode (#28): auf /bobiverse zeigt das Dashboard die GANZE Flotte, nicht
+// einen Tenant — die tenant-scoped Nav-Links (Inbox/Docs/…) ergeben dort keinen
+// Sinn → gedimmt + inert. Klick auf eine Projektkarte wechselt Tenant + zurück
+// auf / (Team), dann sind die Links wieder aktiv.
+const fleetMode = computed(() => route.path === '/bobiverse')
+// Flotten-Status für den Atem des Hub-Buttons (#28-Bonus): rot pulsierend, sobald
+// IRGENDEIN Projekt blockiert ist (tenant-neutrale Quelle useProjects), sonst grün.
+const fleetBlocked = computed(() => ((projectsData.value as any)?.projects || []).some((p: any) => p.activity === 'blocked'))
 // Dynamischer Seitentitel für die app-bar. Unterpfade von /reports bzw. /inbox
 // (Tabs/Subpages) zeigen den Parent-Namen.
 const pageTitle = computed(() => {
   const hit = NAV.find(n => n.to === route.path)
   if (hit) return hit.label
+  if (route.path === '/bobiverse') return 'Bobiverse'   // Hub-Button (nicht mehr in NAV)
   if (route.path.startsWith('/reports')) return 'Reports'
   if (route.path.startsWith('/inbox')) return 'Inbox'
   // Bob-Detail: Name des Bobs als Header-Titel (Austin 2026-06-01).
@@ -99,6 +109,13 @@ const pageTitle = computed(() => {
     <header>
       <h1>
         <span class="title-pulse" title="live"></span>
+        <!-- Bobiverse-Hub-Button (#28): prominent vorn beim Live-Puls, mit Atem-/
+             Pulse-Effekt + orbit-Icon. Atem rot, wenn ein Projekt blockiert ist,
+             sonst grün. Aktiv = wir SIND auf /bobiverse (Fleet-Mode). -->
+        <NuxtLink to="/bobiverse" class="hub-btn" :class="{ blocked: fleetBlocked, 'is-active': fleetMode }" title="Bobiverse — alle Bob-Netze (Flotte)" aria-label="Bobiverse-Flotte">
+          <Icon name="mdi:orbit" class="hub-ic" />
+          <span class="hub-label">Bobiverse</span>
+        </NuxtLink>
         <NuxtLink to="/" class="brand">{{ brandName }}</NuxtLink>
         <span v-if="pageTitle" class="title-sep">·</span>
         <span v-if="pageTitle" class="page-name">{{ pageTitle }}</span>
@@ -110,7 +127,9 @@ const pageTitle = computed(() => {
         <button class="burger" :class="{ open: burgerOpen }" @click="burgerOpen = !burgerOpen" :title="burgerOpen ? 'Menü schließen' : 'Menü öffnen'" aria-label="Menü">
           <span class="bars"></span><span v-if="totalOpenBadge" class="burger-badge">{{ totalOpenBadge }}</span>
         </button>
-        <nav class="head-actions" :class="{ 'menu-open': burgerOpen }">
+        <!-- Fleet-Mode: tenant-scoped Links gedimmt + inert (auf /bobiverse zeigt das
+             Dashboard die Flotte, nicht einen Tenant). Zurück über Projektkarte. -->
+        <nav class="head-actions" :class="{ 'menu-open': burgerOpen, 'fleet-dim': fleetMode }">
           <NuxtLink v-for="n in NAV" :key="n.to" :to="n.to" class="ghost nav-link" :class="n.cls">
             <Icon :name="n.icon" class="nav-ic" />
             <span>{{ n.label }}</span>

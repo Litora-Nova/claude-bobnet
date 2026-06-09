@@ -35,7 +35,7 @@ export default defineEventHandler(async () => {
   const th = thresholdsFrom(process.env)
   const tz = teamTz()
   const sessions = tmuxSessions()
-  const BEATS_PER_PROJECT = 5
+  const BEATS_PER_PROJECT = 3   // #29: PO — 5 war zu viel, 3 reicht in der Übersicht
 
   const projects = (await Promise.all(listProjects().map(async (p: any) => {
     try {
@@ -84,13 +84,19 @@ export default defineEventHandler(async () => {
       activity,                                        // registered|running|working|idle|blocked
       agents: latestByAgent.map(b => ({ agent: b.agent, status: b.status, ts: b.ts, state: agentActivity(b, now, th) })),
       recentBeats: recent.slice(0, BEATS_PER_PROJECT), // Cross-Projekt-Heartbeat-View
+      latestBeatEpoch: recent[0]?.epoch ?? 0,          // #29: jüngster Beat → Aktualitäts-Sort
     }
     } catch { return null }   // kaputter Registry-Eintrag (ohne path/standup) → Flotte zeigt den Rest
   }))).filter((p): p is NonNullable<typeof p> => p !== null)
 
-  // Prominenz-Sortierung (blocked zuerst — urgent-jump), Rest in Registry-Reihenfolge.
-  const ORDER: Record<string, number> = { blocked: 0, working: 1, running: 2, idle: 3, registered: 4 }
-  projects.sort((a, b) => (ORDER[a.activity] ?? 9) - (ORDER[b.activity] ?? 9))
+  // Aktualitäts-Sortierung (#29, PO): blocked-Projekte bleiben prominent zuerst
+  // (urgent-jump, Auflage C), DANN alle übrigen nach jüngstem Beat absteigend
+  // (neueste Aktivität oben). Sort-Key ~ (blocked ? 0 : 1, -latestBeatEpoch).
+  projects.sort((a, b) => {
+    const ba = a.activity === 'blocked' ? 0 : 1, bb = b.activity === 'blocked' ? 0 : 1
+    if (ba !== bb) return ba - bb
+    return (b.latestBeatEpoch ?? 0) - (a.latestBeatEpoch ?? 0)
+  })
 
   return { projects, probe: sessions !== null, updatedAt: new Date().toISOString() }
 })
