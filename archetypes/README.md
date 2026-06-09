@@ -16,18 +16,26 @@
 | `dashboard` | service | outer | — | Cruiser | Garfield (`BOB-dashboard`) |
 | `docs` | bob | outer | — | Cruiser | Homer (`BOB-docs`) |
 | `content` | bob | outer | — | Cruiser | Bridget (`BOB-content`) |
-| `hiwi` | bob | on-demand | — | Cruiser | Mario (`BOB-hiwi`) |
-| `support` | bob | outer | — | Cruiser | *(reserviert: Howard)* |
+| `hiwi` | bob | on-demand | 1–3 | Cruiser | Mario (`BOB-hiwi`) — Routinen-/Runbook-Executor |
+| `explainer` | bob | outer | 1 | Cruiser | Howard (`BOB-explainer`) — read-only App-Explainer |
+| `support` | bob | outer | 1 | Cruiser | *(reserviert)* — Ticket-Triage |
 | `marketing` | bob | outer | — | Cruiser | *(geplant)* |
-| `process-auditor` | bob | gate | prozess | Cruiser | *(Colonel Butterworth)* |
-| `guppi` | service | shared | — | Probe | GUPPI (`SVC-guppi`) |
+| `plan-judge` | service | gate | goal | HEAVEN | Anek (`SVC-plan-judge`) — Hüter des GOAL |
+| `process-auditor` | service | gate | prozess | Cruiser | *(Colonel Butterworth)* |
+| `guppi` | service | shared | — | Probe | GUPPI (`SVC-guppi`) — Routine + Concierge |
 | `coworker` | coworker | outer | — | — | Henry / Tim (`EXT-*`) |
 | `human` | human | core | — | — | Austin (`HUMAN-bob`) |
 | `roamer` | helper | on-demand | — | Probe | ROAMER 🕷️ (ephemer, kein Roster) |
 | `sonde` | helper | on-demand | — | Probe | Sonde 🛰️ (ephemer, kein Roster) |
 
 **Neu in Phase 2:** `support`, `marketing`, `process-auditor` (Butterworth). **Helper** (`roamer`/`sonde`)
-+ **service** (`guppi`) erscheinen nicht im Roster-Grid — sie sind ephemer bzw. laufen als Badge/Daemon.
++ **service** (`guppi`/`plan-judge`) erscheinen nicht im Roster-Bauer-Grid — sie sind ephemer bzw. laufen
+als Badge/Daemon/Event-getriggert.
+
+**Roster-Kanon (PO-bestätigt):** der vollständige Folder-Bobiverse-Roster + UID-Schema + die
+besondere Mechanik von `plan-judge` (Anek), `hiwi` (Mario, Routinen-Executor), `guppi` (Concierge) und
+`explainer` (Howard) stehen in [`../team-rules/roster.md`](../team-rules/roster.md). **Howard ist jetzt der
+read-only `explainer`** (löst die Support-Kollision); `support` bleibt Ticket-Triage (Persona reserviert).
 
 Die `id` (z. B. `BOB-techlead`) verbindet Archetyp ↔ Theme-Persona ↔ Instanz — siehe [`schemas/README.md`](../schemas/README.md).
 
@@ -49,8 +57,9 @@ Jeder Archetyp trägt jetzt zusätzlich (additiv, `gateTier` unangetastet):
 **Tag-Map (Stand Phase C):** backend `{backend,dev,db,api}` · frontend `{frontend,js,dev,i18n}` ·
 website `{website,js,dev,i18n,seo}` · content `{content,i18n,dev}` · hiwi `{dev}` ·
 review `{review}` · compliance `{compliance}` · tests `{tests}` · release `{release}` ·
-dashboard `{dashboard,js,dev}` · docs `{docs}` · support `{docs}` · marketing `{content,i18n,seo}` ·
-process-auditor `{process}` · techlead `{docs}` · guppi `{ops}` · roamer/sonde `{}` (ephemer).
+dashboard `{dashboard,js,dev}` · docs `{docs}` · support `{docs}` · explainer `{docs}` ·
+marketing `{content,i18n,seo}` · process-auditor `{process}` · plan-judge `{goal}` · techlead `{docs}` ·
+guppi `{ops}` · roamer/sonde `{}` (ephemer).
 
 **Spawn-UID vs. Archetyp-id:** die `idPattern` hier (`BOB-backend`) ist die themen-unabhängige
 Persona-Bindung. Die **Spawn-Instanz** im BobNet bekommt zusätzlich eine projekt-präfixierte UID
