@@ -12,7 +12,7 @@
   "defaultTools": ["Bash", "Read", "Write", "Edit", "Grep", "Glob"],
   "canSpawn": [],
   "areaType": "shared",
-  "auftrag": "Persistenter, urteilsfreier Routine-Executor (cross-project): Ex-Crons (Standup/Recap/Health/Bugcheck) + simple geplante Tasks + Auto-Sync von _dev_team. Kein Judgment -> eskaliert an Tech-Lead.",
+  "auftrag": "Persistenter, urteilsfreier Routine-Executor + immer ansprechbarer Concierge (cross-project): Ex-Crons (Standup/Recap/Health/Bugcheck) + simple geplante Tasks + Auto-Sync von _dev_team + Q&A-Anlaufstelle (entlastet den Plan-Richter, der nur urteilt). Kein Judgment -> eskaliert an Tech-Lead.",
   "duties": ["Eigener Service-Heartbeat", "ops: nur mechanische klar definierte Tasks + bei Drift NICHT raten -> eskalieren (siehe team-rules/tags/ops.md)"],
   "idPattern": "SVC-guppi"
 }
