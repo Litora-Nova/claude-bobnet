@@ -1,0 +1,87 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://litora-nova.com/claude-bobnet/schemas/registry.schema.json",
+  "title": "Registry (Bobiverse-Zustaendigkeits-Verzeichnis)",
+  "description": "Validiert projects.registry.json — das Verzeichnis aller registrierten Bobiverses, konsumiert vom (multi-tenant) BobNet-Dashboard + Launcher (bin/start). Die echte Datei ist gitignored/maschinen-spezifisch (lokale Pfade); dieses Schema macht den Vertrag explizit (FR#7). Registriert wird per ORDNERNAME (`name`, eindeutig im BobNet); `uid` = immutabler Namespace + Lookup-Key (Launcher/Tenant keyen darauf, NIE auf den Namen).",
+  "type": "object",
+  "required": ["version", "projects"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Registry-Format-Version (int). Heute 1. Wird erhoeht, wenn sich das Top-Level-Format inkompatibel aendert — NICHT bei additiven Projekt-Feldern."
+    },
+    "_note": {
+      "type": "string",
+      "description": "Freitext-Kommentar/Doku am Datei-Anfang (kein JSON-Comment-Support). Optional."
+    },
+    "projects": {
+      "type": "array",
+      "description": "Alle registrierten Bobiverses. Konsument filtert z. B. auf status==='active'.",
+      "items": { "$ref": "#/definitions/project" }
+    }
+  },
+  "definitions": {
+    "project": {
+      "type": "object",
+      "description": "Ein registriertes Bobiverse (ein Projekt-Ordner mit eigenem fuehrenden Bob).",
+      "required": ["uid", "name", "path", "standup"],
+      "additionalProperties": false,
+      "properties": {
+        "uid": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$",
+          "description": "Immutabler Namespace + Primaerer Lookup-Key. Launcher (bin/start <uid>) + Tenant-Resolution (?project=<uid>) keyen hierauf, NIE auf den Namen. Einmal vergeben, nie aendern (sonst brechen Sessions/Logs/Referenzen)."
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "= Ordnername (eindeutig im BobNet). Registry-Regel: registriert wird per Ordnername. Fallback-Lookup-Key solange ein Eintrag (noch) keine uid traegt (projectByUid)."
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Absoluter (oder ~-Pfad im Template) Pfad zum Projekt-Ordner. Vom Launcher genutzt."
+        },
+        "standup": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Pfad zum Stand-up-/Heartbeat-Verzeichnis (<Agent>.log + Markdown). Quelle der Dashboard-Activity."
+        },
+        "label": {
+          "type": "string",
+          "description": "Menschlicher Anzeigename (frei, mutabel — egal fuer die Maschine). Hart kurz halten (~15 Zeichen, Layout). Fehlt er, faellt die UI auf name/Initiale zurueck."
+        },
+        "theme": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$",
+          "description": "Aktives Theme-Slug (= themes/<id>/). Hoechste Tenant-Theme-Prioritaet (registry > team.config > engine-default)."
+        },
+        "status": {
+          "enum": ["active", "paused", "archived"],
+          "description": "Registry-Lifecycle des Projekts (statisch, im Gegensatz zur runtime-abgeleiteten Activity working/running/idle). active = wird gefuehrt; paused = pausiert; archived = abgeschlossen/Backup. Heute real genutzt: active."
+        },
+        "responsibility": {
+          "type": "string",
+          "description": "Aufgabengebiet/Revier in Prosa (FR#7 — abfragbar 'who owns X'). Menschlich/grob; maschinen-genaue Owner-Pfade stehen in `owns`."
+        },
+        "icon": {
+          "type": "string",
+          "description": "Optionales Projekt-Icon (Web-URL oder Pfad), in der Fleet-View neben dem Projekt gezeigt. Fehlt es, faellt die UI auf die Label-Initiale zurueck (Austin-Wunsch 2026-06-06)."
+        },
+        "owns": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true,
+          "description": "NEU (FR#7): konkrete Pfade/Komponenten, die dieses Projekt ownt — die maschinen-lesbare Seite von `responsibility` fuer die spaetere 'who owns X'-Query (bin/, Wave 2). Optional, additiv."
+        },
+        "parent": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$",
+          "description": "NEU (FR#8-ready): uid des Eltern-Bobiverse, wenn dieses Projekt ein Sub-Folder-Bob ist. Optional; Top-Level-Projekte lassen es weg."
+        }
+      }
+    }
+  }
+}
