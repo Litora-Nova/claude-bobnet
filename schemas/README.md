@@ -19,7 +19,7 @@ Theme-Persona ─────────┴──►  id  ◄──── BOB-t
 (BOB-techlead)
 ```
 
-> **HARTE Regel (Austin):** BobNet zeigt Team-Mitglieder **ausschließlich als Bild, NIE als Emoji**
+> **HARTE Regel (PO):** BobNet zeigt Team-Mitglieder **ausschließlich als Bild, NIE als Emoji**
 > (auch nicht als Fallback/Option). Persona ohne Avatar → `defaultAvatar` (`default.png`).
 
 - **`id`** (z. B. `BOB-techlead`) ist **stabil + aufgabenbasiert** — ein Member lässt sich

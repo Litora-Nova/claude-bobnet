@@ -6,7 +6,7 @@
 > (Daten) editieren, nicht im Script.** Projekt-Override: gleichnamiges File unter
 > `_dev_team/team-rules/commits.md` (Engine = Fallback).
 
-## Kanon (Austin 2026-06-02, final)
+## Kanon (PO 2026-06-02, final)
 
 Jeder Commit eines Agenten trägt **eine Commit-Identität mit einer geteilten Team-Email**:
 
@@ -30,9 +30,9 @@ Garfield (Claude-tools BobNet Architect) <team@litora-nova.com>
 Bill (Acme Inc Backend + Infra) <team@litora-nova.com>
 ```
 
-## Author vs. `Co-Authored-By:`-Trailer — KONTEXTABHÄNGIG (Austin 2026-06-02, geklärt)
+## Author vs. `Co-Authored-By:`-Trailer — KONTEXTABHÄNGIG (PO 2026-06-02, geklärt)
 
-Austin hat es präzisiert: **es ist nicht entweder/oder, sondern hängt davon ab, wer committet:**
+Der PO hat es präzisiert: **es ist nicht entweder/oder, sondern hängt davon ab, wer committet:**
 
 | Situation | Mechanik | Wer steht wo |
 |---|---|---|
@@ -81,7 +81,7 @@ IDENT    "<NAME> (<DISPLAY> <ROLE>) <EMAIL>"   bzw. ohne ROLE: "<NAME> (<DISPLAY
   ```
   Danach trägt jeder `git commit` die Agenten-Identität. Wird typischerweise vom SessionStart-Hook
   bzw. `bin/onboard` Baustein 4 verdrahtet (parallel zu `session-heartbeat`).
-- **Trailer-Modus** (falls Austin so entscheidet):
+- **Trailer-Modus** (falls der PO so entscheidet):
   ```bash
   COMMIT_IDENTITY_MODE=trailer scripts/git-identity.sh trailer   # gibt die Co-Authored-By-Zeile aus
   ```

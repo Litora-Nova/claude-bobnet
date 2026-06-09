@@ -2,7 +2,7 @@
 
 > Laufen auf der LXC (Host/User aus `dev-team.env`), Zeit = **Europe/Berlin** (`CRON_TZ`).
 > Skripte: `standup/cron/`. Sammel-Log: `~/cron.log`. Verwaltung: `crontab -l` / `crontab -e`.
-> **Report-only / Staging — KEINE Prod-/Deploy-Aktion** (Tier-4 = Austin, siehe `TEAM.md` / Memory `circle-of-trust-tiers`).
+> **Report-only / Staging — KEINE Prod-/Deploy-Aktion** (Tier-4 = Mensch, siehe `TEAM.md` / Memory `circle-of-trust-tiers`).
 
 ## Übersicht
 | Zeit (Berlin) | Job | Typ | Output | SCUT |
@@ -32,7 +32,7 @@ bash ~/Sites/<project>/standup/cron/cron-health.sh   # manueller Test (jeder Job
 ## Verwandte Daemons (kein cron, laufen in tmux)
 - **`scut` (tmux):** `scut-poll.sh` = SCUT-Inbound (Telegram → `_inbox.md` + inject `acme_bob`).
 - **`bobnet` (tmux):** BobNet-Dashboard `:3030`.
-- **Outbound-Helfer:** `standup/scut.sh "<kurz>" [info|mid|urgent]` (Bob → Austin).
+- **Outbound-Helfer:** `standup/scut.sh "<kurz>" [info|mid|urgent]` (Bob → Mensch).
 
 ## Mechanik-Notizen
 - `claude -p` **braucht `</dev/null`** in Skripten (liest sonst stdin und frisst Folge-Zeilen). Lädt Bobs Persona + Memories.

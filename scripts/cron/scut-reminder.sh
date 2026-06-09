@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# scut-reminder.sh <tag> <message> [level] — SCUT-Ping an Austin + entfernt danach
+# scut-reminder.sh <tag> <message> [level] — SCUT-Ping an den Menschen + entfernt danach
 # die eigene crontab-Zeile (Einmal-Reminder; Zeile endet auf "# <tag>").
 set -uo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"; ROOT="$(cd "$DIR/../.." && pwd)"

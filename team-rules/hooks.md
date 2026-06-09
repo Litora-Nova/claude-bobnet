@@ -12,7 +12,7 @@
 
 | Hook | Trigger | Zweck | Regel-Quelle (Daten/Env) | aktiv? |
 |---|---|---|---|---|
-| `deploy-guard.sh` | PreToolUse (Edit\|Write\|MultiEdit) | Blockt Edits an Deploy-/Production-/Secret-Pfaden (Tier-4, Austin-only). Exit 2 = Block. | `team-rules/deploy-guard.paths` (Fallback: eingebaute Defaults) | ⊘ gebaut, NICHT verdrahtet (Stufe C) |
+| `deploy-guard.sh` | PreToolUse (Edit\|Write\|MultiEdit) | Blockt Edits an Deploy-/Production-/Secret-Pfaden (Tier-4, human-only). Exit 2 = Block. | `team-rules/deploy-guard.paths` (Fallback: eingebaute Defaults) | ⊘ gebaut, NICHT verdrahtet (Stufe C) |
 | `session-sync-reminder.sh` | SessionStart | Rendert den State-Sync-Reminder (Branch-Check + fetch/pull/push über die Repos). | `team-rules/sync.md` (`REMINDER:`-Block) + Env `PROJECT_NAME`, `CANONICAL_BRANCH`, `DEV_TEAM_REPOS` | ⊘ gebaut, NICHT verdrahtet (Stufe C) |
 | `session-heartbeat.sh` | SessionStart | Schreibt einen Heartbeat des arbeitenden Agents (`log.sh $AGENT busy session-start`) ins BobNet der Kollab-Instanz. Default-Agent = Lead; shared Services setzen `HEARTBEAT_AGENT`. Fail-safe, blockt nie. | Env `HEARTBEAT_AGENT` (Default `TEAM_LEAD`) + `STANDUP_DIR` aus `dev-team.env` + `team-rules/heartbeat.md` → `scripts/log.sh` | ⊘ gebaut, NICHT verdrahtet (Stufe C) |
 
@@ -20,7 +20,7 @@
 
 > Alle drei Hooks sind in W3 **gebaut + `bash -n`-sauber**, aber bewusst NICHT in die
 > `.claude/settings.json` des Live-Projekts verdrahtet — das ist **Stufe C** (Scharfschalten,
-> braucht Austin-OK). `bin/onboard` (Baustein 4 „Hook-Install") übernimmt die Verdrahtung beim
+> braucht human-OK). `bin/onboard` (Baustein 4 „Hook-Install") übernimmt die Verdrahtung beim
 > Onboard eines Projekts.
 
 ## Konventionen (für jeden Hook)
@@ -41,5 +41,5 @@
 3. **Script** unter `hooks/<name>.sh` anlegen: `dev-team.env` sourcen → `team-rules/`-Daten lesen →
    Mechanik ausführen. Den fail-safe-/stdin-Vertrag oben einhalten. `bash -n hooks/<name>.sh` prüfen.
 4. **Verdrahten** passiert über `bin/onboard` (Baustein „Hook-Install") bzw. einen Projekt-Wrapper
-   unter `.claude/hooks/` — NICHT manuell am Live-Projekt (das ist ein Scharfschalt-Schritt, Tier-3/Austin-OK).
+   unter `.claude/hooks/` — NICHT manuell am Live-Projekt (das ist ein Scharfschalt-Schritt, Tier-3/human-OK).
 5. Registry-Status auf ✓ setzen, sobald verdrahtet.

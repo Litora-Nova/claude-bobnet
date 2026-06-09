@@ -7,13 +7,13 @@
 # scripts/scut.sh, NICHT neu gebaut. Colonel selbst ist die Mechanik (ein Lauf = ein Report);
 # dieses Script ist nur das WANN (der Scheduler-Eintrag, siehe colonel.sh Header "Schedule-Mechanik").
 #
-# ── Vorgeschlagene crontab-Zeile (NICHT hier installiert — Live-Cron = Austins T4-Checkpoint) ──────
+# ── Vorgeschlagene crontab-Zeile (NICHT hier installiert — Live-Cron = T4-Checkpoint des Menschen) ──────
 #   Alle 45 min (PLAN: "alle 30–60 min gedacht"), Zeit = Europe/Berlin (CRON_TZ), Sammel-Log ~/cron.log:
 #
 #     */45 * * * * $HOME/Sites/<engine>/scripts/cron/cron-colonel.sh >> ~/cron.log 2>&1
 #
 #   (Pfad an den Engine-Root anpassen; analog den anderen cron/-Jobs. crontab-Aktivierung macht
-#    Austin via `crontab -e` — siehe scripts/cron/README.md "Verwaltung".)
+#    der Mensch via `crontab -e` — siehe scripts/cron/README.md "Verwaltung".)
 #
 # ── Env (geerbt aus dev-team.env, falls auffindbar — sonst Defaults) ───────────────────────────────
 #   DEV_TEAM_ENV      expliziter Pfad zur dev-team.env (Override). Sonst Auto-Suche (s.u.).

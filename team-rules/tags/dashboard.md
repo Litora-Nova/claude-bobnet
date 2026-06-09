@@ -5,7 +5,7 @@
 ## Pflichten
 
 - **`standup/` read-only lesen, NUR die eigene Heartbeat-Datei schreiben.** Geteilte standup-Files
-  (`austin.tasks.md`, `_*.md`) NIE direkt editieren — Findings an den Tech-Lead, der pflegt zentral.
+  (`<owner>.tasks.md`, `_*.md`) NIE direkt editieren — Findings an den Tech-Lead, der pflegt zentral.
   (Append-Loop/Content-Collapse-Korruption-Lehre 2026-05-31.)
 - **Format-Probleme im eigenen Parser fixen, nicht in fremden Dateien.**
 - **UID-Prefix ausblenden:** im Dashboard wird der `<PROJECT_UID>-`-Prefix der Agent-id für die Anzeige
