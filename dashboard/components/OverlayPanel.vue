@@ -17,6 +17,15 @@
 // inbox/briefings.vue) — kein Overlay/Modal mehr, daher kein Schließen-/Dashboard-Button.
 const props = defineProps<{ kind: 'reports' | 'feedback' | 'wishes' | 'qa' | 'tasks' }>()
 
+// Tenant-aware (#13/#25): ALLE Calls hier laufen imperativ über $fetch — der
+// GET load() (reports/feedback/wishes/qa/austin-tasks) UND die POSTs (wishes ×2,
+// qa). Die Server-Endpoints sind tenantOf-gescoped → ohne aktiven ?project liest
+// load() aus dem Launcher-Projekt (FALSCHER Tenant) und die POSTs schreiben dort
+// hin. projectParam() ist eine Snapshot-Funktion auf das reaktive Query: jeder
+// Call (auch der 5s-Polling-load) liest das AKTUELL aktive Projekt zur Laufzeit.
+const projectQuery = useProjectQuery()
+const projectParam = () => projectQuery.value   // {} oder { project }
+
 const ENDPOINTS: Record<string, string> = {
   reports: '/api/report',
   feedback: '/api/feedback',
@@ -135,13 +144,13 @@ async function load(file?: string) {
   // vom Server (Austin 02:35: Wünsche + Briefing zeigten alte Daten — der
   // Server lieferte frisch, der Browser cachte). Polling 5s siehe onMounted.
   data.value = await $fetch(ENDPOINTS[props.kind], {
-    params: file ? { file } : {},
+    params: { ...(file ? { file } : {}), ...projectParam() },
     cache: 'no-store',
   })
 }
 
 async function toggleStatus(file: string) {
-  await $fetch('/api/wishes', { method: 'POST', body: { action: 'toggle-status', file } })
+  await $fetch('/api/wishes', { method: 'POST', query: projectParam(), body: { action: 'toggle-status', file } })
   // ggf. im Detail bleiben: erneut laden inkl. file
   const f = data.value?.current?.file
   await load(f)
@@ -151,7 +160,7 @@ async function toggleStatus(file: string) {
 // (Kein localStorage — Austin nutzt das Dashboard auf mehreren Geräten, daher
 //  Server-persistiert.)
 async function qaDismiss(file: string, dismiss: boolean) {
-  await $fetch('/api/qa', { method: 'POST', body: { action: dismiss ? 'dismiss' : 'undismiss', file } })
+  await $fetch('/api/qa', { method: 'POST', query: projectParam(), body: { action: dismiss ? 'dismiss' : 'undismiss', file } })
   await load()
 }
 
@@ -186,6 +195,7 @@ async function submitWish() {
   try {
     await $fetch('/api/wishes', {
       method: 'POST',
+      query: projectParam(),
       body: {
         action: 'add',
         author: fAuthor.value, target: fTarget.value,

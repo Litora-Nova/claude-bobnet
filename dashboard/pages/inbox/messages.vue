@@ -6,12 +6,19 @@ useHead({ title: 'Inbox · Messages · Stand-up' })
 
 const { data: inbox } = await useInbox()
 
+// Tenant-aware (#13): die GET-Quelle (useInbox) hängt schon am ?project. Der
+// POST notify.post.ts ist serverseitig tenantOf-gescoped → ohne ?project landet
+// die Nachricht im Launcher-_inbox.md statt im aktiven Tenant. projectParam() =
+// Snapshot auf das reaktive Query (imperatives $fetch).
+const projectQuery = useProjectQuery()
+const projectParam = () => projectQuery.value   // {} oder { project }
+
 const postTarget = ref('Bob')
 const postMsg = ref('')
 async function postToTeam() {
   const msg = postMsg.value.trim()
   if (!msg) return
-  await $fetch('/api/notify', { method: 'POST', body: { agent: postTarget.value, msg } })
+  await $fetch('/api/notify', { method: 'POST', query: projectParam(), body: { agent: postTarget.value, msg } })
   postMsg.value = ''
   refreshNuxtData('inbox')
 }
