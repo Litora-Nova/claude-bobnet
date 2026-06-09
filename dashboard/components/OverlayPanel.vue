@@ -21,10 +21,9 @@ const props = defineProps<{ kind: 'reports' | 'feedback' | 'wishes' | 'qa' | 'ta
 // GET load() (reports/feedback/wishes/qa/austin-tasks) UND die POSTs (wishes ×2,
 // qa). Die Server-Endpoints sind tenantOf-gescoped → ohne aktiven ?project liest
 // load() aus dem Launcher-Projekt (FALSCHER Tenant) und die POSTs schreiben dort
-// hin. projectParam() ist eine Snapshot-Funktion auf das reaktive Query: jeder
+// hin. projectParam() ist eine Snapshot-Funktion auf das aktive Projekt: jeder
 // Call (auch der 5s-Polling-load) liest das AKTUELL aktive Projekt zur Laufzeit.
-const projectQuery = useProjectQuery()
-const projectParam = () => projectQuery.value   // {} oder { project }
+const projectParam = useProjectParam()   // () => {} oder { project }
 
 const ENDPOINTS: Record<string, string> = {
   reports: '/api/report',

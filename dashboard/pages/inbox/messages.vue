@@ -9,9 +9,8 @@ const { data: inbox } = await useInbox()
 // Tenant-aware (#13): die GET-Quelle (useInbox) hängt schon am ?project. Der
 // POST notify.post.ts ist serverseitig tenantOf-gescoped → ohne ?project landet
 // die Nachricht im Launcher-_inbox.md statt im aktiven Tenant. projectParam() =
-// Snapshot auf das reaktive Query (imperatives $fetch).
-const projectQuery = useProjectQuery()
-const projectParam = () => projectQuery.value   // {} oder { project }
+// Snapshot auf das aktive Projekt (imperatives $fetch).
+const projectParam = useProjectParam()   // () => {} oder { project }
 
 const postTarget = ref('Bob')
 const postMsg = ref('')

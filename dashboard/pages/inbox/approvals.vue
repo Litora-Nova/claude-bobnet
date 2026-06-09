@@ -10,7 +10,7 @@ useHead({ title: 'Approvals · Stand-up' })
 // Cache-Bleed (der GET 'approvals' war projekt-unabhängig gecacht).
 const project = useActiveProject()
 const projectQuery = useProjectQuery()   // reaktiv für die useFetch-GET
-const projectParam = () => projectQuery.value   // {} oder { project } für $fetch
+const projectParam = useProjectParam()   // () => {} oder { project } für $fetch
 const { data, refresh } = await useFetch('/api/approvals', {
   key: () => `approvals-${project.value || 'env'}`,
   query: projectQuery,

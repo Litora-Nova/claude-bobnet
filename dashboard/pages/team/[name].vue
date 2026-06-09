@@ -13,9 +13,10 @@ const agent = computed(() => ((standup.value as any)?.agents || []).find((a: any
 // standup-Dir des Tenants) → ohne ?project zeigt die Detailseite die Position aus
 // dem Launcher-Projekt. ?project reaktiv in Query + Cache-Key.
 const bobProject = useActiveProject()
+const projectParam = useProjectParam()
 const { data: bob } = await useFetch('/api/bob', {
   key: () => `bob-${name}-${bobProject.value || 'env'}`,
-  query: computed(() => ({ name, ...(bobProject.value ? { project: bobProject.value } : {}) })),
+  query: computed(() => ({ name, ...projectParam() })),
 })
 
 const tab = ref<'hb' | 'info'>('hb')

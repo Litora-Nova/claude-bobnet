@@ -12,8 +12,7 @@ const blocked = useBlocked()
 // schreibenden Calls hier (heartbeat/notify/resolve/tasks) sind serverseitig
 // tenantOf-gescoped → ohne ?project landen sie im Launcher-Projekt statt im
 // aktiven Tenant. Darum jeden POST mit dem aktiven Projekt-Query versehen.
-const projectQuery = useProjectQuery()
-const projectParam = () => projectQuery.value   // {} oder { project }
+const projectParam = useProjectParam()   // () => {} oder { project }
 
 type Task = { id: number; state: 'open' | 'doing' | 'done'; done: boolean; text: string; owner: string }
 const newTask = ref('')
