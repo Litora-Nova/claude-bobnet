@@ -68,7 +68,7 @@
         },
         "icon": {
           "type": "string",
-          "description": "Optionales Projekt-Icon (Web-URL oder Pfad), in der Fleet-View neben dem Projekt gezeigt. Fehlt es, faellt die UI auf die Label-Initiale zurueck (Austin-Wunsch 2026-06-06)."
+          "description": "Optionales Projekt-Icon (Web-URL oder Pfad), in der Fleet-View neben dem Projekt gezeigt. Fehlt es, faellt die UI auf die Label-Initiale zurueck."
         },
         "owns": {
           "type": "array",
