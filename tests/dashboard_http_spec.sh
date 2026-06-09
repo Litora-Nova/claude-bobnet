@@ -28,12 +28,27 @@ if ! command -v curl >/dev/null 2>&1; then
   printf '  ⊘ SKIP: curl nicht installiert (CI-sicher grün)\n'
   summary; exit $?
 fi
-# Server-Liveness-Probe: erreichbar, wenn die Wurzel einen HTTP-Status liefert.
-if ! curl -sS -m "$CURL_TIMEOUT" -o /dev/null "$BASE/" 2>/dev/null; then
-  it "Dev-Server unter $BASE erreichbar — sonst SKIP grün"
-  printf '  ⊘ SKIP: kein Dev-Server unter %s (Gate bleibt grün; nur-lesende Live-Spec)\n' "$BASE"
-  summary; exit $?
-fi
+# Server-Liveness-Probe: BRAUCHBAR ist der Server nur, wenn die Wurzel einen
+# NUTZBAREN HTTP-Status liefert (2xx/3xx). curl rc==0 allein genügt NICHT — bei
+# HTTP 5xx (kaputter/verwaister Dev-Server) bekäme curl ja auch eine Antwort und
+# rc==0; die Live-Spec liefe dann gegen einen defekten Server und kippte das Gate
+# fälschlich ROT. Daher den HTTP-Code prüfen:
+#   000      → kein Server erreichbar     → SKIP grün (Gate bleibt grün)
+#   2xx/3xx  → brauchbarer Server da       → weiter, Spec läuft
+#   sonst    → kaputt/verwaist (4xx/5xx)   → SKIP grün (Gate bleibt grün, mit Hinweis)
+PROBE_CODE="$(curl -sS -m "$CURL_TIMEOUT" -o /dev/null -w '%{http_code}' "$BASE/" 2>/dev/null)"
+case "$PROBE_CODE" in
+  2??|3??)
+    : ;; # brauchbarer Server — weiter
+  000|"")
+    it "Dev-Server unter $BASE erreichbar — sonst SKIP grün"
+    printf '  ⊘ SKIP: kein Dev-Server unter %s (Gate bleibt grün; nur-lesende Live-Spec)\n' "$BASE"
+    summary; exit $? ;;
+  *)
+    it "Dev-Server unter $BASE brauchbar (HTTP 2xx/3xx) — sonst SKIP grün"
+    printf '  ⊘ SKIP: Dev-Server unter %s antwortet HTTP %s (kaputt/verwaist) — kein brauchbarer Server, Gate bleibt grün\n' "$BASE" "$PROBE_CODE"
+    summary; exit $? ;;
+esac
 
 # Helfer (nur lesende GETs)
 body()   { curl -sS -m "$CURL_TIMEOUT" "$BASE$1" 2>/dev/null; }
