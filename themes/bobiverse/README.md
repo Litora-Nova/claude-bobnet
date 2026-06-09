@@ -12,7 +12,7 @@ strings/{de,en}   Flavor-Glossar (BobNet, ROAMER, Sonde, GUPPI, SCUT …)
 members/          (optional) reichere Per-Member-Lore als <id>.md — derzeit ungenutzt (Bio in theme.json)
 ```
 
-**HARTE Regel (Austin):** BobNet zeigt Mitglieder **ausschließlich als Bild, NIE als Emoji** —
+**HARTE Regel (PO):** BobNet zeigt Mitglieder **ausschließlich als Bild, NIE als Emoji** —
 auch nicht als Fallback/Option. **Ohne eigenes Avatar-PNG** (Butterworth, GUPPI) kommt
 `defaultAvatar` (`default.png`, Anonymous-/Hacker-Maske).
 **Quelle der Persona-Daten:** `theme.json` (in diesem Repo). Der ausführliche Roster + das

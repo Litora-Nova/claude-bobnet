@@ -37,7 +37,7 @@
     "label": { "$ref": "#/definitions/i18n", "description": "Anzeige-Name des Themes." },
     "description": { "$ref": "#/definitions/i18n" },
     "leadTitle": { "$ref": "#/definitions/i18n", "description": "Wie der Orchestrator-/Tech-Lead-Titel in diesem Theme heisst." },
-    "defaultAvatar": { "type": "string", "default": "default.png", "description": "PFLICHT pro Theme: Fallback-BILD (in avatars/) fuer Personas ohne eigenes Avatar + unbekannte Mitglieder. Die Datei MUSS in themes/<id>/avatars/ existieren (erst die Anonymous-/Hacker-Maske; austauschbar). HARTE Regel (Austin): BobNet zeigt Team-Mitglieder AUSSCHLIESSLICH als Bild — NIE als Emoji, auch nicht als Option. Wer Emoji-Faces will, baut sein eigenes Theme/Tool." },
+    "defaultAvatar": { "type": "string", "default": "default.png", "description": "PFLICHT pro Theme: Fallback-BILD (in avatars/) fuer Personas ohne eigenes Avatar + unbekannte Mitglieder. Die Datei MUSS in themes/<id>/avatars/ existieren (erst die Anonymous-/Hacker-Maske; austauschbar). HARTE Regel (PO): BobNet zeigt Team-Mitglieder AUSSCHLIESSLICH als Bild — NIE als Emoji, auch nicht als Option. Wer Emoji-Faces will, baut sein eigenes Theme/Tool." },
     "settings": {
       "type": "object",
       "description": "Theme-Anzeige-Einstellungen (erweiterbar — 'andere settings' duerfen frei hinzukommen).",

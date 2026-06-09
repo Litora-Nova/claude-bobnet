@@ -5,7 +5,7 @@
 #
 # Env:
 #   STANDUP_DIR     Basis (Default: Verzeichnis dieses Scripts) — qa/ darunter
-#   QA_ASKED_BY     Frontmatter asked_by (Default: Austin)
+#   QA_ASKED_BY     Frontmatter asked_by (Default: Owner)
 #   QA_ANSWERED_BY  Frontmatter answered_by + Body-Label (Default: Bob)
 set -euo pipefail
 
@@ -18,7 +18,7 @@ fi
 Q="$1"; A="$2"
 DIR="${STANDUP_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
 QA_DIR="$DIR/qa"
-ASKED_BY="${QA_ASKED_BY:-Austin}"
+ASKED_BY="${QA_ASKED_BY:-Owner}"
 ANSWERED_BY="${QA_ANSWERED_BY:-Bob}"
 mkdir -p "$QA_DIR"
 

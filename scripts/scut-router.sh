@@ -9,7 +9,7 @@
 #     channel      Herkunfts-Channel (telegram|email|github|teams)
 #     external_id  channel-eigene ID (Dedup/Offset) — vom Channel verwaltet, hier nur durchgereicht
 #     ts_epoch     Unix-Timestamp des Events (für Alter/Frische)
-#     sender       wer hat's geschickt (Channel-Identität, z.B. "Austin", "github:user")
+#     sender       wer hat's geschickt (Channel-Identität, z.B. "owner", "github:user")
 #     target       Routing-Ziel ODER leer:
 #                    "@<Agent>"   → gerichtet an einen Agenten im KONTEXT-Bobiverse
 #                    "[<uid>]"    → gerichtet an ein Projekt-Bobiverse (Registry-uid)
@@ -201,7 +201,7 @@ JSON
   #           [beta]@Cid (beides) · ungerichtet (→ Review-Queue alpha)
   local events
   events="$(printf '%s\n' \
-    "telegram	1	$now	Austin	@Bill	bitte API-Key rotieren" \
+    "telegram	1	$now	owner	@Bill	bitte API-Key rotieren" \
     "email	2	$now	extern	[beta]	Vertrag liegt bei" \
     "github	3	$now	user	[beta]@Cid	PR review?" \
     "teams	4	$now	chef	$(printf '')	wer kann das mal anschauen")"

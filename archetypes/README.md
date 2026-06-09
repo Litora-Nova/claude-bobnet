@@ -24,7 +24,7 @@
 | `process-auditor` | service | gate | prozess | Cruiser | *(Colonel Butterworth)* |
 | `guppi` | service | shared | — | Probe | GUPPI (`SVC-guppi`) — Routine + Concierge |
 | `coworker` | coworker | outer | — | — | Henry / Tim (`EXT-*`) |
-| `human` | human | core | — | — | Austin (`HUMAN-bob`) |
+| `human` | human | core | — | — | Owner (`HUMAN-bob`) |
 | `roamer` | helper | on-demand | — | Probe | ROAMER 🕷️ (ephemer, kein Roster) |
 | `sonde` | helper | on-demand | — | Probe | Sonde 🛰️ (ephemer, kein Roster) |
 

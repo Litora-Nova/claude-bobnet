@@ -11,7 +11,7 @@ Avatar, Bio und i18n-Strings — gekeyt über die stabile Archetyp-`id`. **Der T
 | `formal` | Professionelle/öffentliche Kontexte — sachliche Berufstitel | nur `default.png` (alle) | nein |
 | `custom` | Projekt-eigenes Theme unter `<projekt>/_dev_team/theme/` | — | — |
 
-**HARTE Regel (Austin):** BobNet zeigt Team-Mitglieder **ausschließlich als Bild, NIE als Emoji**
+**HARTE Regel (PO):** BobNet zeigt Team-Mitglieder **ausschließlich als Bild, NIE als Emoji**
 (auch nicht als Fallback/Option). Ohne eigenen Avatar → `defaultAvatar` (`default.png`,
 Anonymous-/Hacker-Maske). `minimal`/`formal` nutzen für alle dasselbe Default-Bild.
 
