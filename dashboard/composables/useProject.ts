@@ -10,6 +10,15 @@ export const useProjectQuery = () => {
   return computed(() => (active.value ? { project: active.value } : {}))
 }
 
+// Snapshot-Variante (#17) für imperatives $fetch: ein Getter, der bei JEDEM
+// Aufruf das AKTUELL aktive Projekt liest ({} oder { project }). Pendant zum
+// reaktiven useProjectQuery() (für useFetch `query:`). Wichtig: reaktiv (Ref im
+// query) vs. Snapshot (Getter pro $fetch-Call) NICHT verwechseln.
+export const useProjectParam = () => {
+  const active = useActiveProject()
+  return () => (active.value ? { project: active.value } : {})
+}
+
 // Avatar-URL tenant-aware. Bild-only-Regel unberührt: der Server liefert IMMER
 // ein Bild (Persona → Theme-Default → statisches default.png im Client-Fallback).
 export const avatarUrl = (name: string): string => {

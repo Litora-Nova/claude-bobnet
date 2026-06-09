@@ -57,10 +57,10 @@ watch(showStatusForm, v => localStorage.setItem('showStatus', v ? '1' : '0'))
 // Tenant-aware (#13): die globale Status-Box hängt auf JEDER Seite → höchstes
 // Write-Volumen. heartbeat.post.ts ist serverseitig tenantOf-gescoped; ohne
 // ?project landet Austins Status im Launcher-Projekt statt im aktiven Tenant.
-const statusProjectQuery = useProjectQuery()
+const projectParam = useProjectParam()
 async function postStatus() {
   if (!myMsg.value.trim()) return
-  await $fetch('/api/heartbeat', { method: 'POST', query: statusProjectQuery.value, body: { agent: 'Austin', status: myStatus.value, msg: myMsg.value.trim() } })
+  await $fetch('/api/heartbeat', { method: 'POST', query: projectParam(), body: { agent: 'Austin', status: myStatus.value, msg: myMsg.value.trim() } })
   myMsg.value = ''
   refreshNuxtData('standup')
 }

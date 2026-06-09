@@ -8,6 +8,7 @@ Archetypen, Themes und (später) `team.config` + Sprint-Lifecycle.
 | `archetype.schema.json` | `archetypes/*.json` — *was* eine Rolle tut (universal) | ① Struktur |
 | `theme.schema.json` | `themes/<id>/theme.json` — *wie* eine Rolle erscheint (Flavor) | ② Theme |
 | `team.config.schema.json` | `<projekt>/_dev_team/standup/team.config.json` (Phase 3/4) | ③ Instanz |
+| `registry.schema.json` | `projects.registry.json` — das Bobiverse-Zuständigkeits-Verzeichnis (Hub-Root, gitignored), konsumiert von Dashboard + Launcher (FR#7) | Hub |
 
 ## Join-Modell (die `id` ist der Dreh- und Angelpunkt)
 
