@@ -4,7 +4,17 @@
 // Click-Expand für den Body; Antrags-Form im Footer. Quelle: /api/approvals.
 useHead({ title: 'Approvals · Stand-up' })
 
-const { data, refresh } = await useFetch('/api/approvals', { key: 'approvals' })
+// Tenant-aware (#13): aktiver ?project muss an ALLE Calls (GET liste/detail UND
+// POST decide/add), sonst fällt der Server auf das Launcher-Projekt zurück und
+// das Panel zeigt/schreibt fremde Tenants. useFetch-key projekt-abhängig, sonst
+// Cache-Bleed (der GET 'approvals' war projekt-unabhängig gecacht).
+const project = useActiveProject()
+const projectQuery = useProjectQuery()   // reaktiv für die useFetch-GET
+const projectParam = () => projectQuery.value   // {} oder { project } für $fetch
+const { data, refresh } = await useFetch('/api/approvals', {
+  key: () => `approvals-${project.value || 'env'}`,
+  query: projectQuery,
+})
 
 type Filter = 'pending' | 'all' | 'decided'
 const filter = ref<Filter>('pending')
@@ -29,13 +39,13 @@ async function toggle(file: string) {
   if (s.has(file)) { s.delete(file); expanded.value = s; return }
   s.add(file); expanded.value = s
   if (bodies[file] === undefined) {
-    const res = await $fetch('/api/approvals', { params: { file }, cache: 'no-store' }) as any
+    const res = await $fetch('/api/approvals', { params: { file, ...projectParam() }, cache: 'no-store' }) as any
     bodies[file] = res?.current?.html || '<p class="muted">— kein Detailtext —</p>'
   }
 }
 
 async function decide(file: string, decision: 'approved' | 'rejected') {
-  await $fetch('/api/approvals', { method: 'POST', body: { action: 'decide', file, decision } })
+  await $fetch('/api/approvals', { method: 'POST', query: projectParam(), body: { action: 'decide', file, decision } })
   delete bodies[file]            // Body neu laden falls offen (decided-Stempel etc.)
   await refresh()
 }
@@ -52,7 +62,7 @@ async function submitRequest() {
   if (!fTitle.value.trim() || fBusy.value) return
   fBusy.value = true
   try {
-    await $fetch('/api/approvals', { method: 'POST', body: { action: 'add', requested_by: fReq.value, kind: fKind.value, title: fTitle.value.trim(), body: fBody.value.trim() } })
+    await $fetch('/api/approvals', { method: 'POST', query: projectParam(), body: { action: 'add', requested_by: fReq.value, kind: fKind.value, title: fTitle.value.trim(), body: fBody.value.trim() } })
     fTitle.value = ''; fBody.value = ''; formOpen.value = false
     await refresh()
   } finally { fBusy.value = false }
