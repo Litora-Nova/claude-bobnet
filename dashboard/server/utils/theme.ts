@@ -10,7 +10,7 @@
 //                          jedem Tenant dasselbe Theme aufzwingen)
 //   Modus B (Env):        NUXT_THEME > team.config.theme > "bobiverse"  (wie bisher)
 //
-// HARTE REGEL (Austin): Team-Mitglieder werden im BobNet AUSSCHLIESSLICH als Bild
+// HARTE REGEL (PO): Team-Mitglieder werden im BobNet AUSSCHLIESSLICH als Bild
 // angezeigt — NIE als Emoji, auch nicht als Fallback/Option. Fehlt ein Avatar →
 // defaultAvatar (Anonymous-/Hacker-Maske). KEIN emoji-Feld.
 import { readFileSync, statSync } from 'node:fs'

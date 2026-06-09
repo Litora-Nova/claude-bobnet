@@ -4,7 +4,7 @@
 // vollen busy/idle/blocked/done-Skala — ein Dienst ist nur "laeuft" oder "down".
 // alive = frischer Heartbeat (<= aliveMs, Default 4h, gleiche Schwelle wie das
 // Grid-"inaktiv"). nowRef kommt vom Aufrufer (updatedAt der API → kein
-// Hydration-Mismatch). HARTE Regel (Austin): Avatar = Bild, NIE Emoji — laedt das
+// Hydration-Mismatch). HARTE Regel (PO): Avatar = Bild, NIE Emoji — laedt das
 // Theme-Bild nicht, kommt das statische Default-Bild (Anonymous-/Hacker-Maske).
 const props = withDefaults(defineProps<{ agent: any; nowRef?: number; aliveMs?: number; showAvatar?: boolean }>(), {
   nowRef: 0,

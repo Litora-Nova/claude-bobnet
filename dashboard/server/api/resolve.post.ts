@@ -2,7 +2,7 @@ import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
 import { tenantOf } from '../utils/tenant'
 
-// Markiert einen Blocker dauerhaft als von Austin erledigt → er verschwindet aus
+// Markiert einen Blocker dauerhaft als vom PO erledigt → er verschwindet aus
 // der Dringend-Liste, auch wenn der (schlafende) Agent nie ein neues "done" postet.
 // Body: { agent, blocker }. Format: "Agent | blocker-text" in standup/_resolved.md.
 export default defineEventHandler(async (event) => {

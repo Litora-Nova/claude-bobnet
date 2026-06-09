@@ -1,6 +1,7 @@
 import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
 import { tenantOf } from '../utils/tenant'
+import { teamOf } from '../utils/team'
 import { render, frontmatter } from '../utils/md'
 
 // Liest Q&A-Einträge (standup/qa/YYYY-MM-DD-<slug>.md, Frontmatter
@@ -33,7 +34,7 @@ function isDismissed(v: string | undefined): boolean {
   return String(v || '').toLowerCase() === 'true'
 }
 
-function meta(raw: string, file: string): QaMeta {
+function meta(raw: string, file: string, poName: string): QaMeta {
   const { data, body } = frontmatter(raw)
   // Antwort-Body = alles nach der ersten # …-Zeile. Den "**Antwort (Bob):**"-
   // Marker (vom qa-add.sh-Template / compose() im POST) strippen wir hier raus —
@@ -45,7 +46,7 @@ function meta(raw: string, file: string): QaMeta {
   return {
     file,
     question: questionOf(body, file),
-    asked_by: data.asked_by || 'Austin',
+    asked_by: data.asked_by || poName,
     answered_by: data.answered_by || 'Bob',
     created: data.created || file.slice(0, 10),
     answered: data.answered || '',
@@ -56,14 +57,18 @@ function meta(raw: string, file: string): QaMeta {
 }
 
 export default defineEventHandler(async (event) => {
-  const dir = join(tenantOf(event).standupDir, 'qa')
+  const tenant = tenantOf(event)
+  // PO-Name (team.config po.name → team.PO, Fallback in team.ts), als Default-Autor
+  // für Frontmatter-lose Alt-Einträge.
+  const poName = teamOf(tenant).PO
+  const dir = join(tenant.standupDir, 'qa')
 
   let files: string[] = []
   try { files = await fs.readdir(dir) } catch { /* Ordner fehlt noch */ }
   const names = files.filter(f => /\.md$/.test(f) && f !== 'README.md')
 
   const items = await Promise.all(
-    names.map(async f => meta(await fs.readFile(join(dir, f), 'utf8').catch(() => ''), f))
+    names.map(async f => meta(await fs.readFile(join(dir, f), 'utf8').catch(() => ''), f, poName))
   )
 
   // created desc (neueste oben). dismissed_at NICHT für Sortierung — bleibt
@@ -77,7 +82,7 @@ export default defineEventHandler(async (event) => {
     const { body } = frontmatter(raw)
     // Antwort = Body ohne die erste # …-Frage-Zeile.
     const answerMd = body.replace(/^#\s+.+\n?/m, '').trim()
-    current = { ...meta(raw, q), html: render(answerMd) }
+    current = { ...meta(raw, q, poName), html: render(answerMd) }
   }
 
   return { items, current }

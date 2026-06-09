@@ -8,7 +8,7 @@
 //
 // Felder je Projekt: uid (immutabler Namespace, Lookup-Key) · name (= Ordnername,
 // Primary Key lt. Registry-Regel) · label (Anzeige) · path · standup · theme ·
-// status · responsibility (#7) · icon (optional, Austin-Wunsch 2026-06-06).
+// status · responsibility (#7) · icon (optional, PO-Wunsch 2026-06-06).
 // Unbekannte Felder werden unverändert durchgereicht — das Schema wächst mit #7.
 import { readFileSync, statSync } from 'node:fs'
 import { resolve } from 'node:path'

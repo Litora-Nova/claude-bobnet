@@ -1,10 +1,11 @@
 import { promises as fs } from 'node:fs'
-import { join } from 'node:path'
 import { render } from '../utils/md'
 import { tenantOf } from '../utils/tenant'
 import { teamOf } from '../utils/team'
+import { tasksFile } from '../utils/po-tasks-file.mjs'
 
-// Liest Austins „Tasks mit Details" aus standup/austin.tasks.md.
+// Liest die PO-„Tasks mit Details" aus standup/po.tasks.md (Legacy: austin.tasks.md
+// — Datei-Auflösung backward-kompatibel via tasksFile()).
 //
 // Format: ## <Titel> + Body bis zur nächsten ##-Sektion (oder bis zum
 // `---\n### ARCHIV:`-Trenner — alles darunter zählt als Archiv).
@@ -14,10 +15,10 @@ import { teamOf } from '../utils/team'
 //
 //   ## Nächste Task ...
 //
-// Done-State (Austin 2026-05-30 02:35: "Sollte verschwinden wenn erledigt"):
+// Done-State (PO 2026-05-30 02:35: "Sollte verschwinden wenn erledigt"):
 //   • Titel beginnt mit `~~…~~` (Strikethrough)                      → done
 //   • Titel enthält ✅ ODER "ENTSCHIEDEN" ODER "ARCHIV" ODER "DONE"   → done
-//     (Markdown-friendly Pflege: Austin/Bobs schreiben einfach ✅ rein)
+//     (Markdown-friendly Pflege: PO/Bobs schreiben einfach ✅ rein)
 //   • Body enthält explizit `- [x] erledigt` als erste Checkbox        → done
 //   • Unter `### ARCHIV:`-Sektion (separater Bereich, alles archived)  → done
 //
@@ -39,7 +40,7 @@ const DONE_CHECKBOX_RE = /^\s*-\s*\[x\]\s+/im
 const DONE_TITLE_RE = /(?:✅|\bENTSCHIEDEN\b|\bARCHIV\b|\bDONE\b)/i
 
 // Trenner: `---` gefolgt von `### ARCHIV:` markiert den Archiv-Block.
-// Tasks darunter sind alle done (Austin's manuelles „weg in den Schrank").
+// Tasks darunter sind alle done (manuelles „weg in den Schrank").
 const ARCHIV_RE = /^---\s*\n+###\s+ARCHIV:/m
 
 function parseTasks(raw: string, roleOf: (n: string) => string): Array<{
@@ -85,7 +86,7 @@ function parseTasks(raw: string, roleOf: (n: string) => string): Array<{
 export default defineEventHandler(async (event) => {
   const tenant = tenantOf(event)
   const team = teamOf(tenant)
-  const raw = await fs.readFile(join(tenant.standupDir, 'austin.tasks.md'), 'utf8').catch(() => '')
+  const raw = await fs.readFile(tasksFile(tenant.standupDir), 'utf8').catch(() => '')
   const tasks = parseTasks(raw, team.roleOf)
   return { tasks }
 })

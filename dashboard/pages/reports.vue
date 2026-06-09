@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // /reports — EINE Seite mit Tabs (Sprints / Feedback / Wünsche), kein Dropdown in
-// der Haupt-Nav (Austin 2026-06-01). Jeder Tab hostet das generische OverlayPanel
+// der Haupt-Nav (PO 2026-06-01). Jeder Tab hostet das generische OverlayPanel
 // im page-Mode. Tab ist über ?tab= linkbar (z.B. /reports?tab=feedback).
 const route = useRoute()
 const router = useRouter()

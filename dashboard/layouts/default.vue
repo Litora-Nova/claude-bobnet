@@ -21,8 +21,11 @@ const brandName = computed(() => {
 // Geteilte Live-Quellen (stabile Keys → ein Cache für Layout + Seiten).
 const { data: standup } = await useStandup()
 await useTasks()
-const { data: austinTasks } = useAustinTasks()
+const { data: poTasks } = usePoTasks()
 const blocked = useBlocked()
+// PO-Name aus der Instanz-Config (team.config po.name → public.poName), Fallback
+// 'Owner' — fuer den globalen Status-Post (agent=<PO>) weiter unten.
+const poName = (useRuntimeConfig().public.poName as string) || 'Owner'
 // Plan (#30): GOAL.md/ROADMAP.md des aktiven Tenants. goalEmpty speist das Nav-Badge
 // "!" am Plan-Eintrag → der fehlende Goal ist von JEDER Seite sichtbar (PO-Wunsch).
 const { data: planData } = await usePlan()
@@ -33,8 +36,8 @@ const clock = computed(() => (standup.value as any)?.updatedAt
   ? new Date((standup.value as any).updatedAt).toLocaleTimeString('de-DE', { timeZone: 'Europe/Berlin', hour12: false })
   : '…')
 
-// Briefing-Badge (offene austin.tasks). Q&A bekommt KEINEN Indikator (Austin).
-const tasksOpenCount = computed(() => ((austinTasks.value as any)?.tasks || []).filter((t: any) => !t.done).length)
+// Briefing-Badge (offene po.tasks). Q&A bekommt KEINEN Indikator (PO).
+const tasksOpenCount = computed(() => ((poTasks.value as any)?.tasks || []).filter((t: any) => !t.done).length)
 
 // Mobile-Burger (der coole bleibt). Sammel-Badge = offene Briefing-Tasks.
 const burgerOpen = ref(false)
@@ -46,12 +49,12 @@ let fast: ReturnType<typeof setInterval> | undefined
 let slow: ReturnType<typeof setInterval> | undefined
 onMounted(() => {
   fast = setInterval(() => refreshNuxtData(['standup', 'tasks', 'inbox']), 3000)
-  slow = setInterval(() => refreshNuxtData(['qa', 'austinTasks', 'projects', 'plan']), 10000)
+  slow = setInterval(() => refreshNuxtData(['qa', 'poTasks', 'projects', 'plan']), 10000)
 })
 onBeforeUnmount(() => { if (fast) clearInterval(fast); if (slow) clearInterval(slow) })
 
-// Globale Status-Eingabe (Austin): Icon im Header, Form direkt darunter — auf
-// JEDER Seite verfügbar (Austin 2026-06-01). Postet als agent=Austin → standup.
+// Globale Status-Eingabe (PO): Icon im Header, Form direkt darunter — auf
+// JEDER Seite verfügbar (PO 2026-06-01). Postet als agent=<PO> → standup.
 const myStatus = ref('busy')
 const myMsg = ref('')
 const showMentions = ref(false)
@@ -60,16 +63,16 @@ onMounted(() => { if (localStorage.getItem('showStatus') === '1') showStatusForm
 watch(showStatusForm, v => localStorage.setItem('showStatus', v ? '1' : '0'))
 // Tenant-aware (#13): die globale Status-Box hängt auf JEDER Seite → höchstes
 // Write-Volumen. heartbeat.post.ts ist serverseitig tenantOf-gescoped; ohne
-// ?project landet Austins Status im Launcher-Projekt statt im aktiven Tenant.
+// ?project landet der PO-Status im Launcher-Projekt statt im aktiven Tenant.
 const projectParam = useProjectParam()
 async function postStatus() {
   if (!myMsg.value.trim()) return
-  await $fetch('/api/heartbeat', { method: 'POST', query: projectParam(), body: { agent: 'Austin', status: myStatus.value, msg: myMsg.value.trim() } })
+  await $fetch('/api/heartbeat', { method: 'POST', query: projectParam(), body: { agent: poName, status: myStatus.value, msg: myMsg.value.trim() } })
   myMsg.value = ''
   refreshNuxtData('standup')
 }
 
-// Schlanke Haupt-Nav (Austin 2026-06-01): nur Team · Reports · Docs · Bugs · Inbox.
+// Schlanke Haupt-Nav (PO 2026-06-01): nur Team · Reports · Docs · Bugs · Inbox.
 // Reports = Tabs (Sprints/Feedback/Wünsche). Inbox = Hub mit Unterseiten
 // (Approvals/Briefings/Messages/Tasks); Briefing-Badge + Block-! hängen an Inbox.
 // /bobiverse ist NICHT mehr Teil der NAV — es ist der prominente Hub-Button vorn
@@ -98,7 +101,7 @@ const pageTitle = computed(() => {
   if (route.path === '/bobiverse') return 'Bobiverse'   // Hub-Button (nicht mehr in NAV)
   if (route.path.startsWith('/reports')) return 'Reports'
   if (route.path.startsWith('/inbox')) return 'Inbox'
-  // Bob-Detail: Name des Bobs als Header-Titel (Austin 2026-06-01).
+  // Bob-Detail: Name des Bobs als Header-Titel (PO 2026-06-01).
   if (route.path.startsWith('/team/')) return decodeURIComponent(route.path.slice('/team/'.length))
   return ''
 })

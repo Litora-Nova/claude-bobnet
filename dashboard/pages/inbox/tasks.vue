@@ -1,12 +1,15 @@
 <script setup lang="ts">
-// /tasks: interaktive Quick-Tasks (Austin) + Blocker-Übernahme. Eigene Seite seit
-// dem Multi-Page-Umbau (Austin-Wunsch 2026-06-01). Das globale Blocker-Banner im
+// /tasks: interaktive Quick-Tasks (PO) + Blocker-Übernahme. Eigene Seite seit
+// dem Multi-Page-Umbau (PO-Wunsch 2026-06-01). Das globale Blocker-Banner im
 // Layout verlinkt hierher ('+ als Task' lebt hier). Quelle: /api/tasks + blocked.
 
 useHead({ title: 'Tasks · Stand-up' })
 
 const { data: tasks } = await useTasks()
 const blocked = useBlocked()
+// PO-Name aus der Instanz-Config (team.config po.name → public.poName), Fallback
+// 'Owner' — für die PO-Heartbeats beim Abhaken/„mach ich jetzt".
+const poName = (useRuntimeConfig().public.poName as string) || 'Owner'
 
 // Tenant-aware (#13): die GET-Quelle (useTasks) hängt schon am ?project. ALLE
 // schreibenden Calls hier (heartbeat/notify/resolve/tasks) sind serverseitig
@@ -17,11 +20,11 @@ const projectParam = useProjectParam()   // () => {} oder { project }
 type Task = { id: number; state: 'open' | 'doing' | 'done'; done: boolean; text: string; owner: string }
 const newTask = ref('')
 
-// Abhaken = erledigt: Austin-Heartbeat, Owner 1× pingen, Blocker dauerhaft als
+// Abhaken = erledigt: PO-Heartbeat, Owner 1× pingen, Blocker dauerhaft als
 // erledigt merken (sonst kommt ein schlafender Agent wieder als 'blocked' hoch),
 // dann aus der Liste entfernen.
 async function completeTask(t: Task) {
-  await $fetch('/api/heartbeat', { method: 'POST', query: projectParam(), body: { agent: 'Austin', status: 'done', msg: `✔ ${t.text}` } })
+  await $fetch('/api/heartbeat', { method: 'POST', query: projectParam(), body: { agent: poName, status: 'done', msg: `✔ ${t.text}` } })
   if (t.owner) {
     await $fetch('/api/notify', { method: 'POST', query: projectParam(), body: { agent: t.owner, msg: `✔ erledigt: "${t.text}" — leg los` } })
     await $fetch('/api/resolve', { method: 'POST', query: projectParam(), body: { agent: t.owner, blocker: t.text } })
@@ -43,8 +46,8 @@ async function addTask() {
   newTask.value = ''
   refreshNuxtData('tasks')
 }
-async function doTaskNow(text: string) {       // Task → aktueller Austin-Heartbeat
-  await $fetch('/api/heartbeat', { method: 'POST', query: projectParam(), body: { agent: 'Austin', status: 'busy', msg: text } })
+async function doTaskNow(text: string) {       // Task → aktueller PO-Heartbeat
+  await $fetch('/api/heartbeat', { method: 'POST', query: projectParam(), body: { agent: poName, status: 'busy', msg: text } })
   refreshNuxtData('standup')
 }
 // Blocker als Task übernehmen (ohne Nachricht) — der Ping passiert erst beim Abhaken.
@@ -57,7 +60,7 @@ async function blockToTask(a: any) {
 <template>
   <div>
     <div class="page-head">
-      <h2><Icon name="mdi:pin" class="ic" /> Tasks · Austin</h2>
+      <h2><Icon name="mdi:pin" class="ic" /> Tasks · {{ poName }}</h2>
       <span class="ph-sub">{{ (tasks as any)?.tasks?.length || 0 }} Tasks<span v-if="blocked.length"> · {{ blocked.length }} blockiert</span></span>
     </div>
 

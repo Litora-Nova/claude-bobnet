@@ -6,7 +6,7 @@ import { teamOf } from '../utils/team'
 
 // Liest ALLE Markdown-Files in standup/feedback/ und rendert sie zu HTML.
 //
-// Zwei Klassen (gleicher Tab — Austin's Wunsch: „ALLES Feedback sichtbar"):
+// Zwei Klassen (gleicher Tab — PO-Wunsch: „ALLES Feedback sichtbar"):
 //   • Sprint-Runden:   YYYY-MM-DD.md, YYYY-MM-DD-am.md, YYYY-MM-DD-eve.md
 //     → mit `## @Name`-Sektionen + (a)/(b)/(c)-Antworten → Aggregation byQuestion.
 //   • Sonstige Reports: YYYY-MM-DD-<author-or-tag>-<rest>.md (Quality-Checks,
@@ -52,16 +52,16 @@ function genericPreview(raw: string): string {
 }
 
 // Aus Filename Author + Type erraten.
-// Beispiele:
+// Beispiele (bei einem PO namens "Owner" + Member "Bill"):
 //   2026-05-29-bill-quality-check.md    → author=Bill, type=quality-check
-//   2026-05-29-austin-live-bugs.md      → author=Austin, type=live-bugs
+//   2026-05-29-owner-live-bugs.md       → author=Owner, type=live-bugs
 //   2026-05-29-coverage-audit.md        → author='',     type=coverage-audit
 //   2026-05-29-am.md                    → author='',     type=round (Sprint-Runde)
-const KNOWN_AUTHORS = new Set([
-  'Austin', 'Bob', 'Bill', 'Howard', 'Dexter', 'Loki', 'Riker', 'Marvin',
-  'Garfield', 'Bender', 'Homer', 'Mario', 'Tim', 'Henry', 'Hugh',
-])
-function metaFromFilename(file: string): { date: string; author: string; type: string; kind: 'round' | 'other' } {
+//
+// Die „bekannten Autoren" sind KEINE feste Namensliste mehr (white-label): sie
+// kommen aus der Instanz-Config (PO + Roster-Mitglieder) — so erkennt die Engine
+// die realen Team-Namen jeder Instanz, ohne Personennamen fest zu verdrahten.
+function metaFromFilename(file: string, knownAuthors: ReadonlySet<string>): { date: string; author: string; type: string; kind: 'round' | 'other' } {
   const sprint = SPRINT_RE.exec(file)
   if (sprint) return { date: sprint[1], author: '', type: sprint[2] ? `round-${sprint[2].toLowerCase()}` : 'round', kind: 'round' }
   const dated = DATED_RE.exec(file)
@@ -70,7 +70,7 @@ function metaFromFilename(file: string): { date: string; author: string; type: s
     const parts = rest.split('-')
     const first = parts[0]
     const cap = first.charAt(0).toUpperCase() + first.slice(1).toLowerCase()
-    if (KNOWN_AUTHORS.has(cap)) {
+    if (knownAuthors.has(cap)) {
       return { date, author: cap, type: parts.slice(1).join('-') || 'note', kind: 'other' }
     }
     return { date, author: '', type: rest, kind: 'other' }
@@ -78,8 +78,8 @@ function metaFromFilename(file: string): { date: string; author: string; type: s
   return { date: '', author: '', type: 'misc', kind: 'other' }
 }
 
-function meta(raw: string, file: string) {
-  const fm = metaFromFilename(file)
+function meta(raw: string, file: string, knownAuthors: ReadonlySet<string>) {
+  const fm = metaFromFilename(file, knownAuthors)
   if (fm.kind === 'round') {
     return { file, date: fm.date, author: fm.author, type: fm.type, kind: 'round' as const, preview: sprintPreview(raw), agents: agentCount(raw) }
   }
@@ -89,7 +89,7 @@ function meta(raw: string, file: string) {
 // Aggregation pro Frage: parst `## @Name`-Sektionen → (a)/(b)/(c).
 // Nur sinnvoll für Sprint-Runden — sonstige Reports liefern leeres Objekt zurück.
 // Antworten werden serverseitig zu HTML gerendert (volles Markdown: Listen,
-// Tabellen, Code-Blöcke) statt nur Inline-Mini-Render im Client. Austin-Wunsch:
+// Tabellen, Code-Blöcke) statt nur Inline-Mini-Render im Client. PO-Wunsch:
 // „Markdown→HTML im Feedback" — Listen/Aufzählungen kamen vorher als roher
 // Text raus, weil der inline()-Renderer im Client nur **bold**/`code`/<br> kann.
 function byQuestion(raw: string, roleOf: (n: string) => string): Record<string, Array<{ agent: string; role: string; answer: string; html: string }>> {
@@ -113,6 +113,13 @@ function byQuestion(raw: string, roleOf: (n: string) => string): Record<string, 
 export default defineEventHandler(async (event) => {
   const tenant = tenantOf(event)
   const team = teamOf(tenant)
+  // Bekannte Autoren = PO + Roster-Mitglieder der Instanz (config-getrieben statt
+  // hardcoded). Capitalized, damit der Filename-Match (cap) trifft.
+  const knownAuthors = new Set<string>(
+    [team.PO, ...Object.keys(team.TEAM)]
+      .filter(Boolean)
+      .map(n => n.charAt(0).toUpperCase() + n.slice(1).toLowerCase()),
+  )
   const dir = join(tenant.standupDir, 'feedback')
 
   let files: string[] = []
@@ -124,14 +131,14 @@ export default defineEventHandler(async (event) => {
   names.sort((a, b) => b.localeCompare(a))
 
   const rounds = await Promise.all(
-    names.map(async f => meta(await fs.readFile(join(dir, f), 'utf8').catch(() => ''), f))
+    names.map(async f => meta(await fs.readFile(join(dir, f), 'utf8').catch(() => ''), f, knownAuthors))
   )
 
   const q = String(getQuery(event).file || '')
   let current = null
   if (q && names.includes(q)) {
     const raw = await fs.readFile(join(dir, q), 'utf8').catch(() => '')
-    const m = meta(raw, q)
+    const m = meta(raw, q, knownAuthors)
     current = { ...m, html: render(annotateAgents(raw, team.roleOf)), byQuestion: m.kind === 'round' ? byQuestion(raw, team.roleOf) : {} }
   }
 

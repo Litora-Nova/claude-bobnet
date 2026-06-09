@@ -5,7 +5,7 @@ import { frontmatter } from '../utils/md'
 
 // Freigaben schreiben:
 //   { action: 'add', requested_by, kind, title, body }   // Bob stellt Antrag → pending
-//   { action: 'decide', file, decision: 'approved'|'rejected' }  // Austin entscheidet
+//   { action: 'decide', file, decision: 'approved'|'rejected' }  // PO entscheidet
 // Audit via git-blame — keine history-Liste im Frontmatter (wie bei Wünschen).
 
 const slug = (s: string) =>

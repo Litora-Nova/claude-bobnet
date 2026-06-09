@@ -9,7 +9,7 @@
 //   - wishes:   Liste [status · prio · title · author→target]   Detail = HTML + Status-Toggle
 //   - qa:       Inline-Karten (kein Detail-Drilldown nötig, Antwort ist meist kurz)
 //               mit „Okay, kann weg"-Dismiss-Button, Filter Offen | Archiv.
-//   - tasks:    Austins Tasks-mit-Details aus standup/austin.tasks.md
+//   - tasks:    PO-Tasks-mit-Details aus standup/po.tasks.md (Legacy: austin.tasks.md)
 //               (`## <Titel>` + Markdown-Body) — Click-Expand inline, Done-State
 //               via `~~strike~~` / `- [x]` / ARCHIV-Block, Filter Offen|Done|Alle.
 
@@ -18,7 +18,7 @@
 const props = defineProps<{ kind: 'reports' | 'feedback' | 'wishes' | 'qa' | 'tasks' }>()
 
 // Tenant-aware (#13/#25): ALLE Calls hier laufen imperativ über $fetch — der
-// GET load() (reports/feedback/wishes/qa/austin-tasks) UND die POSTs (wishes ×2,
+// GET load() (reports/feedback/wishes/qa/po-tasks) UND die POSTs (wishes ×2,
 // qa). Die Server-Endpoints sind tenantOf-gescoped → ohne aktiven ?project liest
 // load() aus dem Launcher-Projekt (FALSCHER Tenant) und die POSTs schreiben dort
 // hin. projectParam() ist eine Snapshot-Funktion auf das aktive Projekt: jeder
@@ -30,14 +30,14 @@ const ENDPOINTS: Record<string, string> = {
   feedback: '/api/feedback',
   wishes: '/api/wishes',
   qa: '/api/qa',
-  tasks: '/api/austin-tasks',
+  tasks: '/api/po-tasks',
 }
 const TITLES: Record<string, string> = {
   reports: 'Reports',
   feedback: 'Feedback',
   wishes: 'Wünsche',
   qa: 'Docs',
-  tasks: 'Austins Tasks (mit Details)',
+  tasks: 'PO-Tasks (mit Details)',
 }
 // Passend zu den Nav-Icons (layouts/default.vue) — gleiche mdi-Glyphen.
 const TITLE_ICON: Record<string, string> = {
@@ -52,7 +52,7 @@ const EMPTY: Record<string, string> = {
   feedback: '— noch kein Feedback gesammelt —',
   wishes: '— noch keine Wünsche —',
   qa: 'Keine offenen Fragen — schick Bob welche!',
-  tasks: '— keine Tasks in austin.tasks.md —',
+  tasks: '— keine Tasks in po.tasks.md —',
 }
 
 const data = ref<any>(null)
@@ -62,10 +62,10 @@ const qaFilter = ref<'open' | 'archive' | 'all'>('open')
 // Tasks: 'open' = nicht-done, 'done' = nur done, 'all' = beides.
 const taskFilter = ref<'open' | 'done' | 'all'>('open')
 // Welche Task-IDs sind aufgeklappt (Click-Expand inline). Set überlebt Reload nicht
-// bewusst — Austin will pro Session frisch entscheiden was er aufmacht.
+// bewusst — der PO will pro Session frisch entscheiden was er aufmacht.
 const expandedTasks = ref<Set<number>>(new Set())
 // Card-DOM-Refs damit die aufgeklappte Card beim Open in den View scrollt
-// (Austin 02:35: Layout-Bug — aufgeklappte Box "quetschte" andere; jetzt:
+// (PO 02:35: Layout-Bug — aufgeklappte Box "quetschte" andere; jetzt:
 // Container scrollt nicht mehr per max-height, aber wenn der User auf eine
 // Card weiter unten klickt, scrollt sie sich oben in den Viewport).
 const taskCardRefs = reactive<Record<number, HTMLElement>>({})
@@ -140,7 +140,7 @@ const items = computed<any[]>(() => {
 
 async function load(file?: string) {
   // cache:'no-store' verhindert Browser-Disk-Cache trotz no-store-Header
-  // vom Server (Austin 02:35: Wünsche + Briefing zeigten alte Daten — der
+  // vom Server (PO 02:35: Wünsche + Briefing zeigten alte Daten — der
   // Server lieferte frisch, der Browser cachte). Polling 5s siehe onMounted.
   data.value = await $fetch(ENDPOINTS[props.kind], {
     params: { ...(file ? { file } : {}), ...projectParam() },
@@ -156,7 +156,7 @@ async function toggleStatus(file: string) {
 }
 
 // Q&A: dismiss / undismiss — Frontmatter-Patch via /api/qa, dann Liste neu laden.
-// (Kein localStorage — Austin nutzt das Dashboard auf mehreren Geräten, daher
+// (Kein localStorage — der PO nutzt das Dashboard auf mehreren Geräten, daher
 //  Server-persistiert.)
 async function qaDismiss(file: string, dismiss: boolean) {
   await $fetch('/api/qa', { method: 'POST', query: projectParam(), body: { action: dismiss ? 'dismiss' : 'undismiss', file } })
@@ -164,7 +164,7 @@ async function qaDismiss(file: string, dismiss: boolean) {
 }
 
 // Q&A-Karten collapsible: Frage immer sichtbar, Antwort/Details eingeklappt
-// (Austin: Anleitungs-/Info-Seite, scanbar halten, Details auf Klick).
+// (PO: Anleitungs-/Info-Seite, scanbar halten, Details auf Klick).
 const qaOpen = ref<Set<string>>(new Set())
 function toggleQa(file: string) {
   const s = new Set(qaOpen.value)
@@ -172,16 +172,25 @@ function toggleQa(file: string) {
   qaOpen.value = s
 }
 // "Ausblenden" weniger present (nur im aufgeklappten Detail) + Bestätigung,
-// damit nichts aus Versehen verschwindet (Austin-Wunsch).
+// damit nichts aus Versehen verschwindet (PO-Wunsch).
 async function qaDismissConfirm(file: string) {
   if (typeof window !== 'undefined' && !window.confirm('Diese Q&A-Karte ausblenden? Sie bleibt im Archiv abrufbar.')) return
   await qaDismiss(file, true)
 }
 
 // Submit-Form für neue Wünsche (nur ✨ Wünsche, nur Listenansicht).
-const TEAM = ['Austin', 'Bob', 'Bill', 'Luke', 'Linus', 'Riker', 'Marvin', 'Dexter', 'Bender', 'Garfield', 'Homer', 'Bridget', 'Mario']
+// Author/Target-Liste config-getrieben statt hardcoded: PO-Name (public.poName,
+// Fallback 'Owner') + die real vorhandenen Roster-Mitglieder aus dem Standup —
+// so kennt die Engine keine festen Personennamen mehr und jede Instanz zeigt ihr
+// echtes Team. PO steht immer vorn.
+const poName = (useRuntimeConfig().public.poName as string) || 'Owner'
+const { data: standupData } = useStandup()
+const TEAM = computed<string[]>(() => {
+  const names = ((standupData.value as any)?.agents || []).map((a: any) => a.name).filter(Boolean)
+  return [poName, ...names.filter((n: string) => n !== poName)]
+})
 const formOpen = ref(false)
-const fAuthor = ref('Austin')
+const fAuthor = ref(poName)
 const fTarget = ref('team')
 const fPrio = ref<'low' | 'med' | 'high'>('med')
 const fTitle = ref('')
@@ -221,8 +230,8 @@ const STATUS_COLOR: Record<string, string> = { open: '#58a6ff', in_progress: '#d
 const STATUS_LABEL: Record<string, string> = { open: 'offen', in_progress: 'läuft', done: 'fertig', dropped: 'verworfen' }
 
 // Polling solange das Overlay offen ist: Wünsche/Briefing/Reports/Feedback
-// ändern sich aus dem Hauptrepo (`standup/wishes/`, `standup/austin.tasks.md`
-// usw.) — ohne Polling muss Austin das Overlay zu+auf machen für frische Daten.
+// ändern sich aus dem Hauptrepo (`standup/wishes/`, `standup/po.tasks.md`
+// usw.) — ohne Polling muss der PO das Overlay zu+auf machen für frische Daten.
 // 5s ist genug Schonung gegenüber der Disk; in Demo-/Detail-View NICHT
 // nachladen (sonst würde sich der `current`-Markdown-Block neu rendern und
 // scrollPosition/Lesefluss kaputt machen).
@@ -324,7 +333,7 @@ watch(() => props.kind, () => load())
     </div>
 
     <!-- Q&A: collapsible Karten (Frage sichtbar, Antwort/Details auf Klick).
-         Austins Anleitungs-/Info-Seite — scanbar, kein "Austin fragt"-Header. -->
+         Die Anleitungs-/Info-Seite des PO — scanbar, kein "PO fragt"-Header. -->
     <div v-if="kind === 'qa'" class="qa-list">
       <article v-for="q in items" :key="q.file" class="qa-card" :class="{ dismissed: q.dismissed, open: qaOpen.has(q.file) }">
         <header class="qa-head" role="button" @click="toggleQa(q.file)">
@@ -460,7 +469,7 @@ watch(() => props.kind, () => load())
 .ghost:disabled { opacity: .5; cursor: not-allowed; }
 
 /* Q&A — collapsible Karten. Frage = klickbare Kopfzeile, Antwort eingeklappt
-   (Austin: Anleitungs-/Info-Seite, scanbar). Kein inner-scroll mehr (Page-Flow). */
+   (PO: Anleitungs-/Info-Seite, scanbar). Kein inner-scroll mehr (Page-Flow). */
 .qa-list { display: flex; flex-direction: column; gap: 10px; padding: 6px 0 4px; }
 .qa-card { border: 1px solid #21262d; border-radius: 10px; background: #0d1117; overflow: hidden; }
 .qa-card.open { border-color: #58a6ff; }
@@ -483,9 +492,9 @@ watch(() => props.kind, () => load())
 .qa-dismissed-at { font-size: 11px; color: #6e7681; }
 .qa-empty { padding: 18px; text-align: center; color: #6e7681; font-size: 13px; border: 1px dashed #21262d; border-radius: 8px; }
 
-/* Tasks — Titel-Karten mit Click-Expand (Austin-Wunsch: Details sichtbar
+/* Tasks — Titel-Karten mit Click-Expand (PO-Wunsch: Details sichtbar
    per Click statt nur Title). Done-Tasks bleiben drin, aber dimmed. */
-/* task-list: max-height vom Container REMOVED (Austin 02:35 "wenn ich eine
+/* task-list: max-height vom Container REMOVED (PO 02:35 "wenn ich eine
    Briefing box auf mache, werden die anderen gequetscht"). Vorher 70vh +
    overflow:auto auf dem Container — wenn ein Item aufgeklappt war + Body
    gross, fuellte es den View und die anderen Cards verschwanden in den
@@ -506,7 +515,7 @@ watch(() => props.kind, () => load())
 .task-card.done .task-title { text-decoration: line-through; color: #8b949e; }
 .task-author { flex: 0 0 auto; font-size: 11px; font-weight: 700; color: #58a6ff; background: #161f2e; border: 1px solid #1f6feb44; border-radius: 5px; padding: 1px 7px; }
 /* Body hat eine eigene max-height (60vh) damit sehr lange Tasks (z.B.
-   austin-Entscheidungen mit 20+ Bullets) nicht den ganzen Viewport fluten —
+   PO-Entscheidungen mit 20+ Bullets) nicht den ganzen Viewport fluten —
    stattdessen scrollt der Body innerhalb der Card. Nicht-expandierte Cards
    bleiben kompakt darueber und darunter sichtbar. */
 .task-body { padding: 4px 14px 14px; border-top: 1px dashed #21262d; }
@@ -557,7 +566,7 @@ watch(() => props.kind, () => load())
   .overlay { padding: 6px 12px 14px; }
   :deep(.md table) { display: block; overflow-x: auto; }
 
-  /* Mobil kompakter (Austin 2026-06-01): Listen enger, Datum klein, Text full-width
+  /* Mobil kompakter (PO 2026-06-01): Listen enger, Datum klein, Text full-width
      + Umbruch (Feedback-Preview lief vorher rechts aus der Karte). */
   .ov-list { gap: 6px; }
   .ov-list li { padding: 8px 10px; gap: 3px 8px; }
