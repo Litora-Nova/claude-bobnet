@@ -46,3 +46,22 @@
 - **Vor jedem `send-keys` in eine interaktive Session: Prompt-Zustand capturen.** Ein „leerer"
   Prompt kann ein Non-Breaking-Space (`c2 a0`) tragen — byte-genau vergleichen statt `grep '^❯ *$'`.
   Steht fremder ungesendeter Text im Buffer: NIE reinsenden, warten oder anderen Kanal nehmen.
+
+## Parallele Hintergrund-Agenten im geteilten Working-Tree
+
+- **Zwei *bauende* Agenten (die `git checkout`/`commit`) gleichzeitig im SELBEN Working-Tree =
+  Kollision.** Ein `checkout -b` des einen schaltet den Tree unter dem anderen um → verlorene/
+  fehlgeleitete Commits. Empirisch passiert; die Agenten fingen es ab, aber Glückssache.
+- **Reflex:** parallele Builder → jeder einen **eigenen git-Worktree** (`isolation: "worktree"`)
+  ODER **sequenzieren**. Reviere (Dateien) trennen reicht NICHT — der eine Tree ist der Konflikt.
+- **Read-only Gate-Agenten** (Review/Compliance, ref-basierte Diffs, kein checkout) sind dagegen
+  **safe-parallel** — sie mutieren den Tree nicht. Die Unterscheidung Builder-vs-read-only ist der Schlüssel.
+
+## Lokale Task-IDs ≠ Issue-Nummern in Commit-Messages
+
+- **Eine Task-/Backlog-Nummer im Kopf ist NICHT die Issue-Nummer im Tracker.** Wer eine lokale
+  Task-Nummer als `#N` in eine Commit-Message schreibt, ohne dass `#N` das gemeinte Tracker-Issue
+  ist, erzeugt auf dem (öffentlichen) Repo eine Cross-Referenz auf ein FREMDES Issue — und
+  History-Rewrite zum Fixen ist meist tabu. (Dieser Absatz nutzt bewusst nur `#N` in Backticks.)
+- **Reflex:** Bevor `#N` in eine Commit-/PR-Message kommt — entweder das Issue ZUERST anlegen und
+  die echte Nummer nehmen, oder `#N` weglassen. Lokale Orchestrierungs-Tasks ≠ Tracker-Issues.
