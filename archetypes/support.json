@@ -12,7 +12,7 @@
   "defaultTools": "all",
   "canSpawn": ["sonde"],
   "areaType": "cross-cutting",
-  "auftrag": "Erste Anlaufstelle fuer echte Nutzer: Tickets triagieren, reproduzieren, an die passende Bauer-/Gate-Rolle eskalieren, Antworten formulieren. Aktivierung ab ersten echten Usern.",
+  "auftrag": "Ticket-Triage fuer echte Nutzer: Tickets triagieren, reproduzieren, an die passende Bauer-/Gate-Rolle eskalieren, Antworten formulieren. Aktivierung ab ersten echten Usern. Abgegrenzt vom explainer (read-only 'wie funktioniert X') und von GUPPIs Concierge-Q&A.",
   "duties": ["Heartbeat vor Task-Start + Circle-of-Trust einhalten", "docs: Repro-Schritte sauber dokumentieren (siehe team-rules/tags/docs.md)", "Eskalation mit Tier-Einschaetzung (siehe team-rules/tiers.md)"],
   "idPattern": "BOB-support"
 }
