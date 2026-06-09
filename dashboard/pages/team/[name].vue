@@ -9,7 +9,14 @@ const name = String(route.params.name)
 const { data: standup } = await useStandup()
 const agent = computed(() => ((standup.value as any)?.agents || []).find((a: any) => a.name === name)
   || { name, role: '', latest: null })
-const { data: bob } = await useFetch('/api/bob', { key: `bob-${name}`, query: { name } })
+// Tenant-aware (#13): bob.get.ts ist tenantOf-gescoped (Agent-Definition liegt im
+// standup-Dir des Tenants) → ohne ?project zeigt die Detailseite die Position aus
+// dem Launcher-Projekt. ?project reaktiv in Query + Cache-Key.
+const bobProject = useActiveProject()
+const { data: bob } = await useFetch('/api/bob', {
+  key: () => `bob-${name}-${bobProject.value || 'env'}`,
+  query: computed(() => ({ name, ...(bobProject.value ? { project: bobProject.value } : {}) })),
+})
 
 const tab = ref<'hb' | 'info'>('hb')
 useHead({ title: `${name} · Team · Stand-up` })
