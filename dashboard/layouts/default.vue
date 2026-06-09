@@ -23,6 +23,10 @@ const { data: standup } = await useStandup()
 await useTasks()
 const { data: austinTasks } = useAustinTasks()
 const blocked = useBlocked()
+// Plan (#30): GOAL.md/ROADMAP.md des aktiven Tenants. goalEmpty speist das Nav-Badge
+// "!" am Plan-Eintrag → der fehlende Goal ist von JEDER Seite sichtbar (PO-Wunsch).
+const { data: planData } = await usePlan()
+const goalEmpty = computed(() => Boolean((planData.value as any)?.goal?.empty ?? true))
 
 // Footer-Clock: explizit Europe/Berlin (SSR=UTC sonst ≠ Client). Memory binding.
 const clock = computed(() => (standup.value as any)?.updatedAt
@@ -42,7 +46,7 @@ let fast: ReturnType<typeof setInterval> | undefined
 let slow: ReturnType<typeof setInterval> | undefined
 onMounted(() => {
   fast = setInterval(() => refreshNuxtData(['standup', 'tasks', 'inbox']), 3000)
-  slow = setInterval(() => refreshNuxtData(['qa', 'austinTasks', 'projects']), 10000)
+  slow = setInterval(() => refreshNuxtData(['qa', 'austinTasks', 'projects', 'plan']), 10000)
 })
 onBeforeUnmount(() => { if (fast) clearInterval(fast); if (slow) clearInterval(slow) })
 
@@ -71,6 +75,7 @@ async function postStatus() {
 const NAV = [
   { to: '/', label: 'Team', icon: 'mdi:account-group', cls: 'nav-home' },
   { to: '/bobiverse', label: 'Bobiverse', icon: 'mdi:orbit' },
+  { to: '/plan', label: 'Plan', icon: 'mdi:flag-checkered', badge: 'goal' },
   { to: '/reports', label: 'Reports', icon: 'mdi:file-document-outline' },
   { to: '/docs', label: 'Docs', icon: 'mdi:book-information-variant' },
   { to: '/bugs', label: 'Bugs', icon: 'mdi:bug-outline' },
@@ -111,6 +116,7 @@ const pageTitle = computed(() => {
             <span>{{ n.label }}</span>
             <span v-if="n.badge === 'briefing' && tasksOpenCount" class="qa-badge">{{ tasksOpenCount }}</span>
             <span v-if="n.to === '/inbox' && blocked.length" class="qa-badge blocked" :title="`${blocked.length} blockiert`">!</span>
+            <span v-if="n.badge === 'goal' && goalEmpty" class="qa-badge blocked" title="GOAL fehlt — GOAL.md im Projekt-Root anlegen">!</span>
           </NuxtLink>
         </nav>
       </div>

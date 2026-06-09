@@ -66,6 +66,8 @@ export default defineNuxtConfig({
         'mdi:server-network', 'mdi:spider', 'mdi:satellite-variant', 'mdi:robot-outline',
         // Multi-tenant (#9): Bobiverse-Übersicht (Nav + Intro).
         'mdi:orbit',
+        // Plan-View (#30): Nav + Goal/Roadmap-Sektionen.
+        'mdi:flag-checkered', 'mdi:target', 'mdi:map-marker-path',
       ],
     },
   },
