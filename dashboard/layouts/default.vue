@@ -142,6 +142,15 @@ const pageTitle = computed(() => {
       <NuxtLink to="/inbox/tasks" class="banner-link">→ auflösen</NuxtLink>
     </div>
 
+    <!-- Globales GOAL-fehlt-Banner: das Goal ist die oberste Wahrheit (Anek prüft dagegen) —
+         ohne gefülltes GOAL.md nie übersehbar (jede Seite). -->
+    <div v-if="goalEmpty" class="banner">
+      <Icon name="mdi:flag-checkered" class="banner-icon" />
+      <span class="banner-title">GOAL fehlt</span>
+      <span class="banner-names">Lege <code>GOAL.md</code> im Projekt-Root an — ohne Goal kein Kompass.</span>
+      <NuxtLink to="/plan" class="banner-link">→ Plan</NuxtLink>
+    </div>
+
     <!-- page-main: min-height 70vh → kurze Seiten füllen den Viewport (kein inner-scroll). -->
     <main class="page-main"><slot /></main>
 
