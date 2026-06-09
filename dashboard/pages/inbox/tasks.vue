@@ -8,6 +8,13 @@ useHead({ title: 'Tasks · Stand-up' })
 const { data: tasks } = await useTasks()
 const blocked = useBlocked()
 
+// Tenant-aware (#13): die GET-Quelle (useTasks) hängt schon am ?project. ALLE
+// schreibenden Calls hier (heartbeat/notify/resolve/tasks) sind serverseitig
+// tenantOf-gescoped → ohne ?project landen sie im Launcher-Projekt statt im
+// aktiven Tenant. Darum jeden POST mit dem aktiven Projekt-Query versehen.
+const projectQuery = useProjectQuery()
+const projectParam = () => projectQuery.value   // {} oder { project }
+
 type Task = { id: number; state: 'open' | 'doing' | 'done'; done: boolean; text: string; owner: string }
 const newTask = ref('')
 
@@ -15,35 +22,35 @@ const newTask = ref('')
 // erledigt merken (sonst kommt ein schlafender Agent wieder als 'blocked' hoch),
 // dann aus der Liste entfernen.
 async function completeTask(t: Task) {
-  await $fetch('/api/heartbeat', { method: 'POST', body: { agent: 'Austin', status: 'done', msg: `✔ ${t.text}` } })
+  await $fetch('/api/heartbeat', { method: 'POST', query: projectParam(), body: { agent: 'Austin', status: 'done', msg: `✔ ${t.text}` } })
   if (t.owner) {
-    await $fetch('/api/notify', { method: 'POST', body: { agent: t.owner, msg: `✔ erledigt: "${t.text}" — leg los` } })
-    await $fetch('/api/resolve', { method: 'POST', body: { agent: t.owner, blocker: t.text } })
+    await $fetch('/api/notify', { method: 'POST', query: projectParam(), body: { agent: t.owner, msg: `✔ erledigt: "${t.text}" — leg los` } })
+    await $fetch('/api/resolve', { method: 'POST', query: projectParam(), body: { agent: t.owner, blocker: t.text } })
   }
-  await $fetch('/api/tasks', { method: 'POST', body: { action: 'remove', id: t.id } })
+  await $fetch('/api/tasks', { method: 'POST', query: projectParam(), body: { action: 'remove', id: t.id } })
   refreshNuxtData(['tasks', 'standup'])
 }
 
 // Zustands-Pill: zyklisch [ ]→[~]→[x]→[ ].
 const STATE_NEXT: Record<Task['state'], string> = { open: 'mach ich grad', doing: 'fertig', done: 'wieder offen' }
 async function cycleTask(t: Task) {
-  await $fetch('/api/tasks', { method: 'POST', body: { action: 'toggle', id: t.id } })
+  await $fetch('/api/tasks', { method: 'POST', query: projectParam(), body: { action: 'toggle', id: t.id } })
   refreshNuxtData('tasks')
 }
 async function addTask() {
   const text = newTask.value.trim()
   if (!text) return
-  await $fetch('/api/tasks', { method: 'POST', body: { action: 'add', text } })
+  await $fetch('/api/tasks', { method: 'POST', query: projectParam(), body: { action: 'add', text } })
   newTask.value = ''
   refreshNuxtData('tasks')
 }
 async function doTaskNow(text: string) {       // Task → aktueller Austin-Heartbeat
-  await $fetch('/api/heartbeat', { method: 'POST', body: { agent: 'Austin', status: 'busy', msg: text } })
+  await $fetch('/api/heartbeat', { method: 'POST', query: projectParam(), body: { agent: 'Austin', status: 'busy', msg: text } })
   refreshNuxtData('standup')
 }
 // Blocker als Task übernehmen (ohne Nachricht) — der Ping passiert erst beim Abhaken.
 async function blockToTask(a: any) {
-  await $fetch('/api/tasks', { method: 'POST', body: { action: 'add', text: `@${a.name} ${a.latest?.msg || 'Blocker auflösen'}` } })
+  await $fetch('/api/tasks', { method: 'POST', query: projectParam(), body: { action: 'add', text: `@${a.name} ${a.latest?.msg || 'Blocker auflösen'}` } })
   refreshNuxtData('tasks')
 }
 </script>
