@@ -2,7 +2,7 @@
 
 Verbindliche Regeln für das Team-OS. Gelten projekt- und themen-übergreifend.
 
-## 1. Beschreibende Namen & IDs — NIEMALS opak (HARTE Regel, Austin 2026-06-02)
+## 1. Beschreibende Namen & IDs — NIEMALS opak (HARTE Regel, PO 2026-06-02)
 
 > **Jeder Agent, Bob und externe Coworker — und der Mensch — bekommt IMMER einen
 > beschreibenden, rollen-basierten Namen UND eine stabile beschreibende `id`.**
@@ -11,7 +11,7 @@ Verbindliche Regeln für das Team-OS. Gelten projekt- und themen-übergreifend.
 
 - **Bob = `team_lead`/`techlead`**, nicht `agent1`. **Der Mensch = `human`**, nicht `p0`.
 - **Warum:** Eindeutige, sprechende Namen haben in der Praxis viele Koordinations-Probleme
-  *verhindert* — ohne sie „klappt die Teamarbeit nicht mehr" (Austin). Opake IDs erzeugen
+  *verhindert* — ohne sie „klappt die Teamarbeit nicht mehr" (PO). Opake IDs erzeugen
   Verwechslung, Fehl-Zuordnung von Tasks, kaputte @-Mentions.
 - **`id`-Schema** (stabil, aufgabenbasiert, **themen-unabhängig**): `<KATEGORIE>-<rolle>`
   — `BOB-techlead`, `BOB-backend`, `BOB-review`, `EXT-design`, `SVC-guppi`, `HUMAN-bob`.
@@ -37,7 +37,7 @@ Es gibt **zwei komplementäre Identitäts-Ebenen**, die NICHT verwechselt werden
 
 - **Warum projekt-präfixiert:** im BobNet (das mehrere Projekt-Bobiverses sieht) macht der
   `<PROJECT_UID>-`-Prefix sofort klar, **wessen** Backend-Bob es ist (`acme-backend-dev` vs.
-  `keyhub-backend-dev`). Cross-Team-Comms via SCUT adressieren über diese UID.
+  `beta-backend-dev`). Cross-Team-Comms via SCUT adressieren über diese UID.
 - **`PROJECT_UID` ist immutabel** (kurzer Namespace, z.B. `acme`) — der Display-Name darf wechseln
   (`Acme Inc`), die UID nie. Sie wird beim Onboarding einmal abgefragt (`dev-team.env`).
 - **Angewandt wird die Spawn-UID** beim Spawn durch `init-bobs`/Bob#1 (Agent-`id` der Instanz),
