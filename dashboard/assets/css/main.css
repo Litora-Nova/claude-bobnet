@@ -6,6 +6,31 @@ h1 { font-size: 21px; margin: 0; color: #e6edf3; display: inline-flex; align-ite
 /* Live-Pulse-Dot direkt im Titel (statt Kaffeetassen-Emoji, Austin 2026-05-30 23:21).
    Signalisiert "läuft live" prominent oben links, nicht mehr als kleine Pille rechts. */
 .title-pulse { display: inline-block; width: 11px; height: 11px; border-radius: 50%; background: #3fb950; box-shadow: 0 0 0 0 rgba(63,185,80,.55); animation: p 1.6s ease-in-out infinite; flex: 0 0 auto; }
+/* Bobiverse-Hub-Button (#28): prominenter Button GANZ vorn im Header, beim Live-Puls.
+   Greift dessen Live-/Atem-Charakter auf — sanft pulsierender grüner Glow-Ring (Breathing),
+   orbit-Icon + Label, klar als Button erkennbar (Pille, Rahmen, Hover hebt). Atem wird
+   ROT, sobald ein Projekt blockiert ist (.blocked) — Flotten-Status auf einen Blick.
+   .is-active (= wir sind auf /bobiverse) macht ihn voll-gefüllt = "du bist in der Flotte". */
+.hub-btn { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; flex: 0 0 auto;
+  padding: 4px 11px 4px 9px; border-radius: 999px; font-size: 13px; font-weight: 700; line-height: 1;
+  color: #3fb950; border: 1px solid #2ea04366; background: #0d1d12;
+  box-shadow: 0 0 0 0 rgba(63,185,80,.5); animation: hub-breathe 2.4s ease-in-out infinite; transition: color .15s, border-color .15s, background .15s; }
+.hub-btn:hover { color: #56d364; border-color: #3fb950; background: #112a1a; }
+.hub-ic { font-size: 16px; flex: 0 0 auto; }
+/* Icon-only (PO 2026-06-09): inaktiver Zustand zeigt NUR das orbit-Icon (kompakter
+   Header). Atem/Glow-Animation bleibt (sie hängt an .hub-btn, nicht entfernt) = Live-
+   Signal. Symmetrisches Padding + kein gap → runde Pille. Label ist im Markup ausgeblendet. */
+.hub-btn.icon-only { gap: 0; padding: 4px 8px; }
+.hub-btn.is-active { color: #0d1117; background: #3fb950; border-color: #3fb950; }
+.hub-btn.is-active .hub-ic, .hub-btn.is-active .hub-label { color: #0d1117; }
+/* Flotten-Status: blockiert → roter Atem + rote Akzente (auch im aktiven Zustand). */
+.hub-btn.blocked { color: #f85149; border-color: #f8514966; background: #1d1010; animation-name: hub-breathe-red; }
+.hub-btn.blocked:hover { color: #ff7b72; border-color: #f85149; background: #2a1414; }
+.hub-btn.blocked.is-active { color: #0d1117; background: #f85149; border-color: #f85149; }
+.hub-btn.blocked.is-active .hub-ic, .hub-btn.blocked.is-active .hub-label { color: #0d1117; }
+@keyframes hub-breathe { 0%,100% { box-shadow: 0 0 0 0 rgba(63,185,80,.45); } 50% { box-shadow: 0 0 0 6px rgba(63,185,80,0); } }
+@keyframes hub-breathe-red { 0%,100% { box-shadow: 0 0 0 0 rgba(248,81,73,.5); } 50% { box-shadow: 0 0 0 7px rgba(248,81,73,0); } }
+@media (prefers-reduced-motion: reduce) { .hub-btn, .title-pulse { animation: none; } }
 /* Rechte Header-Gruppe: Status-Icon-Link + Burger/Nav. Status-Icon VOR der Nav,
    auf jeder Größe sichtbar (Austin 2026-06-01: Status auf jeder Seite). */
 .head-right { display: inline-flex; align-items: center; gap: 10px; }
@@ -24,6 +49,10 @@ h1 { font-size: 21px; margin: 0; color: #e6edf3; display: inline-flex; align-ite
   padding: 10px; min-width: 230px; box-shadow: 0 12px 32px rgba(0,0,0,.45);
 }
 .head-actions.menu-open .ghost { text-align: left; }
+/* Fleet-Mode (#28): auf /bobiverse sind die tenant-scoped Links nicht anwendbar
+   (keine Inbox/Docs/… für die ganze Flotte) → gedimmt + inert. Layout bleibt stabil
+   (kein Springen), der Hub-Button + die Projektkarten führen weiter. */
+.head-actions.fleet-dim .nav-link { opacity: .35; pointer-events: none; filter: saturate(.4); }
 /* Footer-Status: live-Label + Uhrzeit landen unten (Austin-Wish 02:2x).
    Visuell zurückhaltend: zentrierter grauer Text, kleine Schrift, dezenter
    Top-Border als Trenner zur sprint-Section darüber. */
