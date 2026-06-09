@@ -28,6 +28,7 @@ bash tests/git_identity_spec.sh         # einzeln (eigenes summary + Exit-Code)
 |---|---|---|
 | `scripts/git-identity.sh` | `git_identity_spec.sh` | Format-String (mit/ohne role), i18n de/en, trailer, export(author/both), role-Fallback-Kette, Edges: fehlendes positionLabel/PROJECT_NAME/Email/theme.json, unbekannter Name → rc!=0; Integration gegen echte `bobiverse/theme.json` |
 | `scripts/scut-router.sh` | `scut_router_spec.sh` | gerichtet `@X`/`[uid]`/`[uid]@X` → Inbox, TEAM_LEAD-Default, ungerichtet → Review-Queue, DRYRUN, Robustheit gegen malformed/leere Events, fehlende Registry |
+| `dashboard/server/api/*.post.ts` + `utils/tenant.ts` | `dashboard_tenant_scope_spec.sh` | **Tenant-Leak-Regression-Guard** (lokaler Task #13): ?project=X trifft NUR X's standupDir (Zwei-Tenant-mktemp-Registry, Schreibziele disjunkt, Write leakt nicht in B) · unbekanntes project → 404-Pfad (kein stiller Fallback) · Quell-Invariante: alle tenant-gescopeten Writes leiten ihr Dir aus `tenantOf(event)` ab, kein direkter `envTenant()` im Write · Live (read-only, skip-grün): POST resolve ?project=`<unbekannt>` → 404 vor dem Write (KEINE Live-Tenant-Mutation) |
 
 ## Coverage-Gap (Stand Phase D) — siehe Handoff an Bob
 
