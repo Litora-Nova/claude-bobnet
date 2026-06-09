@@ -14,7 +14,7 @@ function teamConfig(): any {
 const tc = teamConfig()
 const TITLE = tc.title || 'Stand-up'
 const SHORT = tc.shortTitle || tc.title || 'Stand-up'
-const PO_NAME = (tc.po && tc.po.name) || 'Austin'
+const PO_NAME = (tc.po && tc.po.name) || 'Owner'
 const ALLOWED = (process.env.NUXT_ALLOWED_HOSTS || '').split(',').map((s: string) => s.trim()).filter(Boolean)
 
 export default defineNuxtConfig({
@@ -26,16 +26,16 @@ export default defineNuxtConfig({
   // konsistent (sonst Default 3000).
   devServer: { host: '0.0.0.0', port: 3030 },
   vite: { server: { allowedHosts: ALLOWED } },
-  // PWA/Service-Worker ENTFERNT 2026-05-30 (Austin-Entscheidung): @vite-pwa/nuxt
+  // PWA/Service-Worker ENTFERNT 2026-05-30 (PO-Entscheidung): @vite-pwa/nuxt
   // restlos raus (kein Workbox-SW, kein Auto-Manifest mehr). Install-Fähigkeit
   // bleibt erhalten — komplett OHNE SW: iOS „Zum Home-Bildschirm" via apple-meta-
   // tags unten, Chrome/Android „App installieren" via statischem
   // public/manifest.webmanifest + <link rel=manifest> unten. Der alte Stale-Cache-
   // Schmerz kam vom Workbox-Precache; ohne SW kann das nicht mehr passieren.
-  // KEIN @vite-pwa Re-Enable ohne Austin-Opt-in.
+  // KEIN @vite-pwa Re-Enable ohne PO-Opt-in.
   // (public/sw.js bleibt vorerst als selbst-deregistrierender Kill-Switch, der
   //  Alt-Clients vom früheren Workbox-SW befreit — no-cache via routeRules unten.)
-  // @nuxt/icon: mdi (Material Design Icons) via Iconify (2026-06-01, Austin-Wunsch).
+  // @nuxt/icon: mdi (Material Design Icons) via Iconify (2026-06-01, PO-Wunsch).
   // serverBundle bündelt die mdi-Collection serverseitig (offline-tauglich, kein
   // Runtime-API-Call) — der Client lädt nur die tatsächlich genutzten Icons nach.
   modules: ['@nuxt/icon'],
@@ -78,7 +78,7 @@ export default defineNuxtConfig({
   // bis zu ~24h und Alt-Clients kriegen das Deregister-Signal verspätet).
   routeRules: {
     '/sw.js': { headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' } },
-    // Feedback/Wünsche sind Tabs unter /reports (Austin 2026-06-01). Alte/geteilte
+    // Feedback/Wünsche sind Tabs unter /reports (PO 2026-06-01). Alte/geteilte
     // Links bleiben gültig → Server-Redirect auf den passenden Tab (kein Client-
     // navigateTo, das sonst #app-manifest in Dev triggert).
     '/feedback': { redirect: '/reports?tab=feedback' },
@@ -110,7 +110,7 @@ export default defineNuxtConfig({
       meta: [
         { name: 'robots', content: 'noindex' },
         // iOS-PWA-Bits: ohne diese 2 Tags landet die App im Safari-Wrapper statt
-        // im Standalone-Mode wenn Austin sie auf den Home-Screen legt.
+        // im Standalone-Mode wenn der PO sie auf den Home-Screen legt.
         { name: 'apple-mobile-web-app-capable', content: 'yes' },
         { name: 'apple-mobile-web-app-status-bar-style', content: 'black-translucent' },
         { name: 'apple-mobile-web-app-title', content: SHORT },

@@ -1,9 +1,12 @@
 <script setup lang="ts">
 // Team (/): Sprintbar + Team-Grid (sortierbar, Karten → /team/<name>-Detail) +
 // Sprint-Detail. Status-Eingabe lebt seit 2026-06-01 global im Header (jede Seite),
-// nicht mehr hier. Austin ist nicht im Grid (er hat /inbox = "Meine Page").
+// nicht mehr hier. Der PO ist nicht im Grid (er hat /inbox = "Meine Page").
 
 const { data } = await useStandup()
+// PO-Name aus der Instanz-Config (team.config po.name → public.poName), Fallback
+// 'Owner' — der PO wird (als Sicherheitsnetz) aus dem Roster-Grid gefiltert.
+const poName = (useRuntimeConfig().public.poName as string) || 'Owner'
 
 const route = useRoute()
 const demoMode = computed(() => route.query.demo === '1')
@@ -13,7 +16,7 @@ useHead({ title: () => demoMode.value ? (rc.public.demoTitle as string) : `Team 
 const COLORS: Record<string, string> = { busy: '#3fb950', idle: '#8b949e', blocked: '#f85149', done: '#58a6ff' }
 const dot = (s?: string) => COLORS[s || ''] || '#6e7681'
 
-// Avatar: BILD aus der Theme-Route (aktives Theme). HARTE Regel (Austin): Mitglieder
+// Avatar: BILD aus der Theme-Route (aktives Theme). HARTE Regel (PO): Mitglieder
 // werden NIE per Emoji gezeigt — fehlt ein Avatar, liefert die Route das Theme-
 // Default-Bild (Anonymous-/Hacker-Maske); laedt selbst das nicht, faellt der Client
 // auf das statische Default-Bild. Name/Bio kommen aus dem Theme (server-seitig am Agent).
@@ -50,7 +53,7 @@ const isInactive = (a: any) => !a.latest?.epoch || (nowRef.value - a.latest.epoc
 const isCollapsed = (a: any) => teamSort.value === 'activity' && isInactive(a)
 // Last-log kürzen (collapsed Name 17 / Rolle 23; Rolle-Name-Heartbeat responsiv).
 const clip = (s: string, n: number) => { const t = s || ''; return t.length > n ? t.slice(0, n).trimEnd() + '…' : t }
-// HARTE Zeichengrenze für den Heartbeat im Grid (Austin: CSS-Truncation reicht
+// HARTE Zeichengrenze für den Heartbeat im Grid (PO: CSS-Truncation reicht
 // mobil nicht → echtes Char-Limit). Mobile 75 / Desktop 160. winW startet auf
 // Desktop (SSR), onMounted korrigiert clientseitig (Update NACH Hydration → kein
 // Mismatch). resize hält es live.
@@ -80,12 +83,12 @@ const sortedAgents = computed(() => {
 //     (Tim/Henry), war schon immer im Grid mit "ext"-Badge → bleibt wie gehabt.
 //   service      → eigene Service-Leiste (GUPPI/SCUT/Colonel, cross-project).
 //   helper       → KEIN eigener Eintrag; Icon-Badge am Eltern-Agent (parent).
-//   human (PO)   → gar nicht im Grid (hat /inbox). Austin-Sonderfall bleibt als
-//                  Sicherheitsnetz fuer id-/category-lose Alt-Configs.
+//   human (PO)   → gar nicht im Grid (hat /inbox). Der PO-Namens-Sonderfall bleibt
+//                  als Sicherheitsnetz fuer id-/category-lose Alt-Configs.
 const catOf = (a: any): string => a.category || 'bob'
 const ROSTER_CATS = new Set(['bob', 'coworker'])
 const visibleAgents = computed(() => sortedAgents.value.filter((a: any) =>
-  ROSTER_CATS.has(catOf(a)) && a.name !== 'Austin'))
+  ROSTER_CATS.has(catOf(a)) && a.name !== poName))
 const serviceAgents = computed(() => sortedAgents.value.filter((a: any) => catOf(a) === 'service'))
 // Helfer je Eltern-Agent gruppiert (Badge-Rendering im Roster-Card).
 const helpersByParent = computed(() => {

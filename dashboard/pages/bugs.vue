@@ -15,7 +15,7 @@ const { data } = await useFetch('/api/bugs', {
   <div>
     <div class="page-head">
       <h2><Icon name="mdi:bug-outline" class="ic" /> Bugs · QM-Log</h2>
-      <span class="ph-sub">Produkt-Bug-/QM-Log (Bob pflegt · Quelle: Austins Durchklick) — read-only</span>
+      <span class="ph-sub">Produkt-Bug-/QM-Log (Bob pflegt · Quelle: Durchklick des PO) — read-only</span>
     </div>
     <section class="panel-box">
       <div v-if="(data as any)?.html" class="md" v-html="(data as any).html"></div>

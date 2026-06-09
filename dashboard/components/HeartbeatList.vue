@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Geteilte Heartbeat-Liste (letzte N Logs eines Agents, neueste zuerst). Genutzt
-// vom Inbox-Index (Austin) und der Bob-Detail-Seite. Quelle: /api/heartbeats.
+// vom Inbox-Index (PO) und der Bob-Detail-Seite. Quelle: /api/heartbeats.
 const props = defineProps<{ agent: string; limit?: number }>()
 // Tenant-aware (#13): heartbeats.get.ts ist tenantOf-gescoped → ohne ?project
 // liest die Liste die Logs des Launcher-Projekts statt des aktiven Tenants.

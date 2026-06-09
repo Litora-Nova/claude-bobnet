@@ -6,7 +6,7 @@ import { teamOf } from '../utils/team'
 
 // Liest Freigabe-Anträge (standup/approvals/YYYY-MM-DD-<slug>.md, Frontmatter
 // requested_by/kind/status/created/decided — siehe standup/approvals/README.md).
-// Bobs tragen Requests ein, Austin entscheidet (approve/reject) via approvals.post.
+// Bobs tragen Requests ein, der PO entscheidet (approve/reject) via approvals.post.
 //
 // Ohne ?file: Liste (pending zuerst, dann created desc).
 // Mit  ?file=<name>.md: zusätzlich `current` mit Frontmatter + gerendertem Body-HTML.

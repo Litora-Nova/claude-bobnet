@@ -2,13 +2,13 @@
 //
 // Kill-Switch — retire (Datei löschen) wenn alle Clients clean (frühestens in
 // ein paar Tagen). NICHT vorher löschen: sonst kriegt ein Alt-Gerät (v.a.
-// Austins iPhone) das Deregister-Signal nie. Wird via nuxt.config routeRules
+// ein PO-Mobilgerät) das Deregister-Signal nie. Wird via nuxt.config routeRules
 // mit `Cache-Control: no-cache, no-store, must-revalidate` ausgeliefert, damit
 // Browser ihn SOFORT beim nächsten Update-Check abholen statt erst nach ~24h.
-// PWA/@vite-pwa ist sonst restlos raus (Austin-Entscheidung) — siehe CLAUDE.md.
+// PWA/@vite-pwa ist sonst restlos raus (PO-Entscheidung) — siehe CLAUDE.md.
 //
-// Hintergrund: Der vorige @vite-pwa/nuxt-SW (Branch garfield/pwa-enable, master
-// 67a1ead) hat Austin's Dashboard stundenlang stale gerendert (gestriger Sprint,
+// Hintergrund: Der vorige @vite-pwa/nuxt-SW (Branch pwa-enable, master
+// 67a1ead) hat das Dashboard stundenlang stale gerendert (gestriger Sprint,
 // alte Heartbeats). Diese Datei ersetzt den alten SW: sie installiert sich,
 // löscht ALLE Caches, deinstalliert sich selbst und navigiert offene Tabs zur
 // frischen URL. Beim nächsten Reload danach läuft die Page ganz ohne SW.

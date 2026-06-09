@@ -6,7 +6,7 @@ const props = defineProps<{ agent: any; tag?: string; showAvatar?: boolean }>()
 const COLORS: Record<string, string> = { busy: '#3fb950', idle: '#8b949e', blocked: '#f85149', done: '#58a6ff' }
 const dot = (s?: string) => COLORS[s || ''] || '#6e7681'
 // Anzeigename kommt aus dem aktiven Theme (server-seitig am Agent); kein hardcoded
-// Roster. Avatar aus der Theme-Route. HARTE Regel (Austin): NIE Emoji — laedt das
+// Roster. Avatar aus der Theme-Route. HARTE Regel (PO): NIE Emoji — laedt das
 // Theme-Bild nicht, kommt das statische Default-Bild (Anonymous-/Hacker-Maske).
 const fail = ref(false)
 const displayName = computed(() => props.agent?.displayName || props.agent?.name)

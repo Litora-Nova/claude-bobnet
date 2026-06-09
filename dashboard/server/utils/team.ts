@@ -123,7 +123,7 @@ function buildCtx(config: TeamConfig): TeamCtx {
     config,
     TEAM,
     RETIRED: new Set<string>(config.retired || []),
-    PO: config.po?.name || 'Austin',
+    PO: config.po?.name || 'Owner',
     AGENTS,
     GROUPS,
     roleOf: (name) => TEAM[name]?.role || '',

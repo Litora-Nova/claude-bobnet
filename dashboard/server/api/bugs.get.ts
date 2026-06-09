@@ -4,7 +4,7 @@ import { render } from '../utils/md'
 import { tenantOf } from '../utils/tenant'
 
 // Rendert standup/_bugs.md (Produkt-Bug-/QM-Log von Acme Inc, Bob pflegt — Quelle:
-// Austins Durchklick) als HTML. Read-only: das Dashboard fixt keine Bugs, es zeigt
+// Durchklick des PO) als HTML. Read-only: das Dashboard fixt keine Bugs, es zeigt
 // nur. `empty` signalisiert der Seite, dass die Datei fehlt/leer ist.
 export default defineEventHandler(async (event) => {
   const root = tenantOf(event).standupDir

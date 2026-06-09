@@ -1,8 +1,10 @@
 <script setup lang="ts">
-// Inbox = "Meine Page"-Hub (Austin). Oben Austin-RosterCard (nur Zustand), darunter
+// Inbox = "Meine Page"-Hub (PO). Oben PO-RosterCard (nur Zustand), darunter
 // Sub-Nav (v-tabs) + die gewählte Unterseite. Index (/inbox) = letzte 42 Heartbeats.
 const { data: standup } = await useStandup()
-const { data: austinTasks } = await useAustinTasks()
+const { data: poTasks } = await usePoTasks()
+// PO-Name aus der Instanz-Config (team.config po.name → public.poName), Fallback 'Owner'.
+const poName = (useRuntimeConfig().public.poName as string) || 'Owner'
 // Tenant-aware (#13): ?project mitschicken UND den Cache-Key projekt-abhängig
 // machen (sonst leakt approvals über Tenants — der Server fällt sonst auf das
 // Launcher-Projekt zurück). Key analog zur projekt-abhängigen Quelle.
@@ -12,11 +14,11 @@ const { data: approvals } = await useFetch('/api/approvals', {
   query: useProjectQuery(),
 })
 
-const me = computed(() => ((standup.value as any)?.agents || []).find((a: any) => a.name === 'Austin')
-  || { name: 'Austin', role: 'Product Owner / Vision (2-legger)', latest: null })
+const me = computed(() => ((standup.value as any)?.agents || []).find((a: any) => a.name === poName)
+  || { name: poName, role: 'Product Owner / Vision (2-legger)', latest: null })
 
-// Indikatoren: offene Briefings (austin.tasks nicht done) + pending Approvals.
-const briefOpen = computed(() => ((austinTasks.value as any)?.tasks || []).filter((t: any) => !t.done).length)
+// Indikatoren: offene Briefings (po.tasks nicht done) + pending Approvals.
+const briefOpen = computed(() => ((poTasks.value as any)?.tasks || []).filter((t: any) => !t.done).length)
 const apprPending = computed(() => ((approvals.value as any)?.approvals || []).filter((a: any) => a.status === 'pending').length)
 
 const SUB = computed(() => [

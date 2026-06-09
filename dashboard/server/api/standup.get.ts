@@ -81,7 +81,7 @@ export default defineEventHandler(async (event) => {
 
   let sprint = ''
   try { sprint = await fs.readFile(join(dir, '_sprint.md'), 'utf8') } catch { /* optional */ }
-  // sprintHtml = serverseitig gerenderter Markdown (Austin 2026-05-30 03:xx:
+  // sprintHtml = serverseitig gerenderter Markdown (PO 2026-05-30 03:xx:
   // "unten der Sprint, der könnte noch HTML formatiert werden"). Reuse vom
   // gleichen md.render() den auch Briefing/Wünsche/Feedback/Reports nutzen —
   // konsistente Listen/Headings/Code-Spans im "md"-CSS-Block.

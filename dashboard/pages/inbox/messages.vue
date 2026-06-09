@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// /inbox/messages — Team-Messages: Austin postet eine Zeile an @Bob/@team/@<Name>
+// /inbox/messages — Team-Messages: der PO postet eine Zeile an @Bob/@team/@<Name>
 // (notify.post.ts → standup/_inbox.md) + Liste der letzten Nachrichten. Unterseite
 // des Inbox-Hubs (2026-06-01).
 useHead({ title: 'Inbox · Messages · Stand-up' })

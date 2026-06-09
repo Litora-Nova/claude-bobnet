@@ -1,6 +1,7 @@
 import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
 import { tenantOf } from '../utils/tenant'
+import { teamOf } from '../utils/team'
 import { frontmatter } from '../utils/md'
 
 // Q&A schreiben:
@@ -20,9 +21,9 @@ const slug = (s: string) =>
 const today = () => new Date().toISOString().slice(0, 10)
 const stamp = () => new Date().toISOString().slice(0, 16)   // YYYY-MM-DDTHH:MM
 
-function compose(d: Record<string, string>, question: string, answer: string): string {
+function compose(d: Record<string, string>, question: string, answer: string, poName: string): string {
   return `---
-asked_by: ${d.asked_by || 'Austin'}
+asked_by: ${d.asked_by || poName}
 answered_by: ${d.answered_by || 'Bob'}
 created: ${d.created || stamp()}
 answered: ${d.answered || stamp()}
@@ -51,7 +52,10 @@ function splitQA(md: string): { question: string; answer: string } {
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
-  const dir = join(tenantOf(event).standupDir, 'qa')
+  const tenant = tenantOf(event)
+  // PO-Name (team.config po.name → team.PO) als Default-Autor neuer Q&A-Einträge.
+  const poName = teamOf(tenant).PO
+  const dir = join(tenant.standupDir, 'qa')
   await fs.mkdir(dir, { recursive: true })
 
   if (body?.action === 'dismiss' || body?.action === 'undismiss') {
@@ -72,7 +76,7 @@ export default defineEventHandler(async (event) => {
       answered_by: data.answered_by || 'Bob',
     }
     const { question, answer } = splitQA(md)
-    await fs.writeFile(path, compose(next, question, answer))
+    await fs.writeFile(path, compose(next, question, answer, poName))
     return { ok: true, dismissed: isDismiss }
   }
 
@@ -80,7 +84,7 @@ export default defineEventHandler(async (event) => {
     const question = String(body.question || '').trim().slice(0, 200)
     const answer = String(body.answer || '').trim().slice(0, 8000)
     if (!question) return { ok: false, error: 'question required' }
-    const asked_by = String(body.asked_by || 'Austin').trim() || 'Austin'
+    const asked_by = String(body.asked_by || poName).trim() || poName
     const answered_by = String(body.answered_by || 'Bob').trim() || 'Bob'
     const created = today()
     const file = `${created}-${slug(question)}.md`
@@ -90,7 +94,7 @@ export default defineEventHandler(async (event) => {
     }
     await fs.writeFile(path, compose(
       { asked_by, answered_by, created: stamp(), answered: stamp(), dismissed: 'false', dismissed_at: '' },
-      question, answer,
+      question, answer, poName,
     ))
     return { ok: true, file: path.split('/').pop() }
   }

@@ -1,15 +1,17 @@
 import { promises as fs } from 'node:fs'
-import { join } from 'node:path'
 import { tenantOf } from '../utils/tenant'
+import { tasksFile } from '../utils/po-tasks-file.mjs'
 
-// Austins Tasks bearbeiten: { action: 'toggle'|'remove', id } | { action: 'add', text }
-// Schreibt zurück nach standup/austin.tasks.md (Checkbox-Format bleibt erhalten).
+// PO-Tasks bearbeiten: { action: 'toggle'|'remove', id } | { action: 'add', text }
+// Schreibt zurück nach standup/po.tasks.md (Legacy: austin.tasks.md — Datei-Auflösung
+// backward-kompatibel via tasksFile(), schreibt also in die bestehende Datei einer
+// Alt-Instanz). Checkbox-Format bleibt erhalten.
 // toggle schaltet zyklisch durch die drei Zustände: "[ ]" → "[~]" → "[x]" → "[ ]".
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
   const dir = tenantOf(event).standupDir
-  const path = join(dir, 'austin.tasks.md')
-  const raw = await fs.readFile(path, 'utf8').catch(() => '# Austins Tasks (Product Owner)\n')
+  const path = tasksFile(dir)
+  const raw = await fs.readFile(path, 'utf8').catch(() => '# PO Tasks (Product Owner)\n')
 
   const lines = raw.split('\n')
   const taskRe = /^(\s*-\s*)\[( |~|x|X)\](\s+.*)$/

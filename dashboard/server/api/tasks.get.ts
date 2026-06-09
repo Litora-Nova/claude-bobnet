@@ -1,14 +1,16 @@
 import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
 import { tenantOf } from '../utils/tenant'
+import { tasksFile } from '../utils/po-tasks-file.mjs'
 
-// Liest Austins Task-Liste (standup/austin.tasks.md) + die erledigten Blocker
+// Liest die PO-Task-Liste (standup/po.tasks.md, Legacy: austin.tasks.md — Datei-
+// Auflösung backward-kompatibel via tasksFile()) + die erledigten Blocker
 // (standup/_resolved.md). Task-Format: "- [ ] @Bill Text" → owner=Bill (optional).
 // Drei Zustände: "[ ]" offen → "[~]" mach ich grad → "[x]" fertig.
 export default defineEventHandler(async (event) => {
   const dir = tenantOf(event).standupDir
 
-  const raw = await fs.readFile(join(dir, 'austin.tasks.md'), 'utf8').catch(() => '')
+  const raw = await fs.readFile(tasksFile(dir), 'utf8').catch(() => '')
   const tasks = raw.split('\n')
     .map(l => l.match(/^\s*-\s*\[( |~|x|X)\]\s+(.*)$/))
     .filter((m): m is RegExpMatchArray => !!m)
@@ -21,7 +23,7 @@ export default defineEventHandler(async (event) => {
       return { id, state, done: state === 'done', text, owner }
     })
 
-  // Von Austin erledigte Blocker (agent|text) → die filtert das Dashboard aus der
+  // Vom PO erledigte Blocker (agent|text) → die filtert das Dashboard aus der
   // Dringend-Liste raus, damit ein schlafender Agent nicht ewig „blocked" bleibt.
   const resolvedRaw = await fs.readFile(join(dir, '_resolved.md'), 'utf8').catch(() => '')
   const resolved = resolvedRaw.split('\n').map(l => l.trim()).filter(Boolean).map(line => {

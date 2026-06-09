@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Bob-Detail-Seite /team/<name> (Austin 2026-06-01): Profil-Header (RosterCard) →
+// Bob-Detail-Seite /team/<name> (PO 2026-06-01): Profil-Header (RosterCard) →
 // Position direkt darunter → Tabs (Heartbeats | Infos), Struktur wie der Inbox-Hub.
 // key=fullPath → frischer Mount pro Bob beim Navigieren.
 definePageMeta({ key: route => route.fullPath })
@@ -31,7 +31,7 @@ useHead({ title: `${name} · Team · Stand-up` })
 
     <RosterCard :agent="agent" :show-avatar="(standup as any)?.theme?.settings?.showAvatars !== false" />
 
-    <!-- Position direkt unter dem Profil-Header (Austin) -->
+    <!-- Position direkt unter dem Profil-Header (PO) -->
     <div class="bob-pos">
       <Icon name="mdi:clipboard-text-outline" class="ic" />
       <span>{{ bob?.description || bob?.role || '— keine Positions-Beschreibung —' }}</span>

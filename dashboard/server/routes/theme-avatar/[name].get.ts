@@ -5,7 +5,7 @@ import { teamOf } from '../../utils/team'
 import { themeOf } from '../../utils/theme'
 
 // Theme-aware Avatar-Auslieferung: /theme-avatar/<Roster-Name> → PNG aus dem
-// aktiven Theme. HARTE Regel (Austin): Team-Mitglieder werden NIE per Emoji
+// aktiven Theme. HARTE Regel (PO): Team-Mitglieder werden NIE per Emoji
 // gezeigt — fehlt ein Persona-Avatar, kommt das Theme-Default-Bild (Anonymous-/
 // Hacker-Maske). Zweistufig: persona.avatar → defaultAvatar → (nur wenn beides
 // fehlt) 404, dann faellt der Client auf das statische /avatars/default.png.

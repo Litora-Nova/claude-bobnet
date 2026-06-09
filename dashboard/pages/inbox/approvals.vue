@@ -1,8 +1,10 @@
 <script setup lang="ts">
 // /approvals — Freigabe-Queue. Bobs stellen Anträge (Production-Deploy, Merge nach
-// master, externe Kommunikation …), Austin entscheidet approve/reject. Karten mit
+// master, externe Kommunikation …), der PO entscheidet approve/reject. Karten mit
 // Click-Expand für den Body; Antrags-Form im Footer. Quelle: /api/approvals.
 useHead({ title: 'Approvals · Stand-up' })
+// PO-Name aus der Instanz-Config (team.config po.name → public.poName), Fallback 'Owner'.
+const poName = (useRuntimeConfig().public.poName as string) || 'Owner'
 
 // Tenant-aware (#13): aktiver ?project muss an ALLE Calls (GET liste/detail UND
 // POST decide/add), sonst fällt der Server auf das Launcher-Projekt zurück und
@@ -78,7 +80,7 @@ onBeforeUnmount(() => { if (timer) clearInterval(timer) })
   <div>
     <div class="page-head">
       <h2><Icon name="mdi:check-decagram-outline" class="ic" /> Approvals · Freigaben</h2>
-      <span class="ph-sub">Bobs beantragen · Austin entscheidet<span v-if="pendingCount"> · {{ pendingCount }} offen</span></span>
+      <span class="ph-sub">Bobs beantragen · {{ poName }} entscheidet<span v-if="pendingCount"> · {{ pendingCount }} offen</span></span>
     </div>
 
     <div class="ov-filter">
