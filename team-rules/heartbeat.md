@@ -16,6 +16,8 @@
   nicht nur als Lead): setzen **`HEARTBEAT_AGENT=<Name>`** + **`STANDUP_DIR=<Kollab-Instanz>`**.
   So loggt z.B. Garfield als `Garfield` ins BobNet des Projekts, das er gerade bedient — statt
   fälschlich als dessen Lead.
+- **Heartbeat-Moment = Inbox-Moment:** wer heartbeatet, liest auch `<standup>/_inbox.md` — sie
+  ist der Default-Kanal für Agent-zu-Agent-Nachrichten (siehe `comms.md`).
 
 ## Auflösung (im Hook)
 ```
