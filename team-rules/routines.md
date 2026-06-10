@@ -13,7 +13,8 @@
    Fester erster Schritt vor allem anderen.
 2. **Team aktiv + Heartbeat** — jedes aktive Team-Mitglied klinkt sich mit einem ersten,
    status-bezogenen Heartbeat ins BobNet ein (siehe `heartbeat.md`). Kein prophylaktisches
-   „ich-bin-da"-Spammen.
+   „ich-bin-da"-Spammen. **Dabei die Inbox lesen** (`<standup>/_inbox.md`) — sie ist der
+   Default-Kanal für Agent-zu-Agent-Nachrichten (siehe `comms.md`).
 3. **Operations-Modus fragen** — `{TEAM_LEAD}` fragt den `{HUMAN}` *einmal*:
    - **Autonomie-Modus** (Default): `{TEAM_LEAD}` entscheidet eigenständig, Staging-Autonomy aktiv
      (siehe `autonomy.md`). Für normale Sprint-Tage.
