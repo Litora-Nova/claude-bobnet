@@ -132,19 +132,64 @@ not_ok run -- print
 it "EDGE: unbekannte THEME_AGENT_ID → rc!=0"
 not_ok run THEME_AGENT_ID=BOB-ghost -- print
 
+# ── THEMES_DIR: externes User-Themes-Verzeichnis schlägt Engine-Builtins ───────────────────
+# Kanon (comms.md §6-Geist / PO 2026-06-10): Themes wohnen beim User — THEMES_DIR ist der
+# Suchpfad VOR $ENGINE_ROOT/themes (Pendant zu Dashboard-NUXT_THEMES_DIR).
+mkdir -p "$TMP/user-themes/demo"
+cat > "$TMP/user-themes/demo/theme.json" <<'JSON'
+{ "id":"demo","label":"Demo (User)","defaultAvatar":"default.png",
+  "personas":{ "BOB-dashboard":{"name":"Garfield","positionLabel":{"en":"User-Theme Architect"}} } }
+JSON
+it "THEMES_DIR: User-Theme gewinnt über Engine-Builtin"
+eq "$(run THEMES_DIR="$TMP/user-themes" HEARTBEAT_AGENT=Garfield -- print)" \
+   "Garfield (Claude-tools User-Theme Architect) <team@litora-nova.com>"
+
+it "THEMES_DIR: Theme dort NICHT vorhanden → Fallback auf Engine-Builtin"
+eq "$(run THEMES_DIR="$TMP/leeres-themes-dir" HEARTBEAT_AGENT=Garfield -- print)" \
+   "Garfield (Claude-tools BobNet Architect) <team@litora-nova.com>"
+
+# ── team.config: per-Team-Namens-Override (FR#21.3 — Lead heißt z.B. "Martin") ─────────────
+cat > "$TMP/team.config.json" <<'JSON'
+{ "members": [ { "name": "Martin", "id": "BOB-dashboard", "role": "Lead", "order": 1 } ] }
+JSON
+it "team.config: HEARTBEAT_AGENT=per-Team-Name → Member-Fallback (Name aus team.config, Rolle aus Theme)"
+eq "$(run TEAM_CONFIG="$TMP/team.config.json" HEARTBEAT_AGENT=Martin -- print)" \
+   "Martin (Claude-tools BobNet Architect) <team@litora-nova.com>"
+
+it "team.config: THEME_AGENT_ID-Pfad → Member-Name überschreibt Theme-Persona-Name"
+eq "$(run TEAM_CONFIG="$TMP/team.config.json" THEME_AGENT_ID=BOB-dashboard -- print)" \
+   "Martin (Claude-tools BobNet Architect) <team@litora-nova.com>"
+
+it "team.config: Theme-Persona-Name-Match hat Vorrang (Garfield bleibt Garfield)"
+eq "$(run TEAM_CONFIG="$TMP/team.config.json" HEARTBEAT_AGENT=Garfield -- print)" \
+   "Garfield (Claude-tools BobNet Architect) <team@litora-nova.com>"
+
+it "team.config: unbekannter Name trotz team.config → rc!=0 (fail-safe bleibt)"
+not_ok run TEAM_CONFIG="$TMP/team.config.json" HEARTBEAT_AGENT=Niemand -- print
+
+it "team.config: kaputtes JSON → WARN, aber Theme-Lookup läuft weiter"
+printf '{kaputt' > "$TMP/team.broken.json"
+eq "$(run TEAM_CONFIG="$TMP/team.broken.json" HEARTBEAT_AGENT=Garfield -- print 2>/dev/null)" \
+   "Garfield (Claude-tools BobNet Architect) <team@litora-nova.com>"
+
 # ── INTEGRATION: gegen die ECHTE bobiverse/theme.json + echte Archetypen (read-only) ───────
 # Realer Stand (Phase-D-Follow-up 2026-06-02): die echte bobiverse/theme.json hat jetzt je Persona
 # ein positionLabel (i18n {de,en}) → role MUSS aus dem Persona-positionLabel kommen (höchste Prio),
 # NICHT mehr aus dem Archetyp-positionLong-Fallback. Dieser Test pinnt genau dieses Verhalten am
 # echten Theme. (Den Archetyp-Fallback selbst deckt die isolierte 'role-fallback'-Spec oben ab.)
-it "INTEGRATION: echte theme.json → Dexter zieht sein positionLabel 'QM / Tests' (en), kein leeres ()"
+# ROLLENTAUSCH (PO-Kanon 2026-06-10): Dexter = Compliance, Marvin = QM/Tests — hier gepinnt.
+it "INTEGRATION: echte theme.json → Dexter ist COMPLIANCE (Rollentausch-Kanon), kein leeres ()"
 cat > "$TMP/env-real" <<'ENV'
 export PROJECT_NAME="Acme Inc"
 export DEV_TEAM_EMAIL="team@litora-nova.com"
 ENV
 real="$(env ENGINE_ROOT="$ENGINE_ROOT" DEV_TEAM_ENV="$TMP/env-real" THEME=bobiverse HEARTBEAT_AGENT=Dexter bash "$GI" print 2>/dev/null)"
-eq "$real" "Dexter (Acme Inc QM / Tests) <team@litora-nova.com>"
+eq "$real" "Dexter (Acme Inc Compliance) <team@litora-nova.com>"
 not_contains "$real" "()"
+
+it "INTEGRATION: echte theme.json → Marvin ist QM/TESTS (Rollentausch-Kanon)"
+realm="$(env ENGINE_ROOT="$ENGINE_ROOT" DEV_TEAM_ENV="$TMP/env-real" THEME=bobiverse HEARTBEAT_AGENT=Marvin bash "$GI" print 2>/dev/null)"
+eq "$realm" "Marvin (Acme Inc QM / Tests) <team@litora-nova.com>"
 
 it "INTEGRATION: echte theme.json → de-Locale wählt das deutsche positionLabel (Garfield → BobNet-Architekt)"
 realde="$(env ENGINE_ROOT="$ENGINE_ROOT" DEV_TEAM_ENV="$TMP/env-real" THEME=bobiverse HEARTBEAT_AGENT=Garfield DEV_TEAM_LOCALE=de bash "$GI" print 2>/dev/null)"

@@ -5,7 +5,10 @@
 #   <Name> (<Projekt-Display> <role>) <DEV_TEAM_EMAIL>
 #
 # Resolution (siehe commits.md):
-#   NAME    = theme.json personas[<id>].name           (id = THEME_AGENT_ID | reverse-lookup HEARTBEAT_AGENT)
+#   NAME    = team.config members[].name (per-Team-Override, gewinnt)
+#             | theme.json personas[<id>].name         (id = THEME_AGENT_ID | reverse-lookup HEARTBEAT_AGENT)
+#             Reverse-Lookup-Kette für HEARTBEAT_AGENT: Theme-Persona-Name → team.config member.name
+#             (so committet ein per-Team benannter Lead — z.B. "Martin" statt Theme-"Bob" — korrekt).
 #   ROLE    = theme.json personas[<id>].positionLabel  (i18n -> en) | archetypes/<arch>.positionLong | ""
 #   DISPLAY = dev-team.env PROJECT_NAME
 #   EMAIL   = dev-team.env DEV_TEAM_EMAIL               (Default team@litora-nova.com)
@@ -20,6 +23,11 @@
 #   THEME_AGENT_ID    exakter Persona-Key (z.B. BOB-dashboard). Höchste Prio.
 #   HEARTBEAT_AGENT   Persona-NAME (z.B. Garfield) — Fallback-Lookup (vom Heartbeat-Hook ohnehin gesetzt).
 #   THEME             Theme-Slug (Default: aus dev-team.env THEME, sonst "bobiverse").
+#   THEMES_DIR        Externes Themes-Verzeichnis (user-seitig, z.B. eigenes Theme-Repo).
+#                     Suchreihenfolge: $THEMES_DIR/<THEME>/ → $ENGINE_ROOT/themes/<THEME>/.
+#                     (Pendant zum Dashboard-NUXT_THEMES_DIR — Themes wohnen beim User.)
+#   TEAM_CONFIG       Pfad zur team.config.json (Default: $STANDUP_DIR/team.config.json) —
+#                     Quelle des per-Team-Namens-Override (members[].name, keyed by id).
 #   ENGINE_ROOT       Engine-Repo-Root (Default: 2 Ebenen über diesem Script).
 #   DEV_TEAM_ENV      Pfad zur dev-team.env (Default: $PROJECT_ROOT/_dev_team/dev-team.env, sonst gesucht).
 #   COMMIT_IDENTITY_MODE  author|trailer|both — steuert export-Verhalten (Default author).
@@ -51,7 +59,15 @@ if [ -n "$ENV_FILE" ] && [ -f "$ENV_FILE" ]; then
 fi
 
 THEME="${THEME:-bobiverse}"
+# Theme-Suchpfad: externes User-Themes-Verzeichnis (THEMES_DIR) schlägt Engine-Builtins.
 THEME_JSON="$ENGINE_ROOT/themes/$THEME/theme.json"
+if [ -n "${THEMES_DIR:-}" ] && [ -f "$THEMES_DIR/$THEME/theme.json" ]; then
+  THEME_JSON="$THEMES_DIR/$THEME/theme.json"
+fi
+# team.config (per-Team-Namens-Override): explizit > Standup-Konvention.
+if [ -z "${TEAM_CONFIG:-}" ] && [ -n "${STANDUP_DIR:-}" ] && [ -f "$STANDUP_DIR/team.config.json" ]; then
+  TEAM_CONFIG="$STANDUP_DIR/team.config.json"
+fi
 ARCHETYPES_DIR="$ENGINE_ROOT/archetypes"
 DEV_TEAM_EMAIL="${DEV_TEAM_EMAIL:-team@litora-nova.com}"
 PROJECT_DISPLAY="${PROJECT_NAME:-}"
@@ -61,7 +77,7 @@ MODE="${COMMIT_IDENTITY_MODE:-author}"
 # --- Identität via python3 resolven (jq-frei, konsistent mit onboard/launcher) ---
 # Gibt bei Erfolg "NAME\tROLE" aus, sonst leer + Warnung auf stderr.
 resolve_identity() {
-  THEME_JSON="$THEME_JSON" ARCHETYPES_DIR="$ARCHETYPES_DIR" \
+  THEME_JSON="$THEME_JSON" ARCHETYPES_DIR="$ARCHETYPES_DIR" TEAM_CONFIG_JSON="${TEAM_CONFIG:-}" \
   THEME_AGENT_ID="${THEME_AGENT_ID:-}" HEARTBEAT_AGENT="${HEARTBEAT_AGENT:-}" LOCALE="$LOCALE" \
   python3 - <<'PY'
 import json, os, sys, glob
@@ -71,6 +87,17 @@ arch_dir   = os.environ["ARCHETYPES_DIR"]
 want_id    = os.environ.get("THEME_AGENT_ID", "").strip()
 want_name  = os.environ.get("HEARTBEAT_AGENT", "").strip()
 locale     = os.environ.get("LOCALE", "en")
+
+# team.config members (per-Team-Namens-Override; optional, fail-safe)
+members = []
+tc_path = os.environ.get("TEAM_CONFIG_JSON", "").strip()
+if tc_path and os.path.isfile(tc_path):
+    try:
+        with open(tc_path) as fh:
+            members = json.load(fh).get("members") or []
+    except Exception as exc:
+        sys.stderr.write("git-identity: WARN team.config nicht lesbar (%s): %s\n" % (tc_path, exc))
+members = [m for m in members if isinstance(m, dict)]
 
 try:
     with open(theme_path) as fh:
@@ -84,29 +111,38 @@ if not isinstance(personas, dict) or not personas:
     sys.stderr.write("git-identity: theme.json hat keine personas\n")
     sys.exit(1)
 
-pid, persona = None, None
+pid, persona, member = None, None, None
 if want_id:
     persona = personas.get(want_id)
     if persona is None:
         sys.stderr.write("git-identity: THEME_AGENT_ID '%s' nicht im Theme\n" % want_id)
         sys.exit(2)
     pid = want_id
+    member = next((m for m in members if m.get("id") == pid), None)
 elif want_name:
     matches = [(k, v) for k, v in personas.items()
                if isinstance(v, dict) and v.get("name") == want_name]
-    if not matches:
-        sys.stderr.write("git-identity: kein Persona mit name='%s' im Theme '%s'\n"
-                         % (want_name, theme.get("id", "?")))
-        sys.exit(2)
-    if len(matches) > 1:
-        sys.stderr.write("git-identity: WARN name='%s' mehrfach — nehme '%s'\n"
-                         % (want_name, matches[0][0]))
-    pid, persona = matches[0]
+    if matches:
+        if len(matches) > 1:
+            sys.stderr.write("git-identity: WARN name='%s' mehrfach — nehme '%s'\n"
+                             % (want_name, matches[0][0]))
+        pid, persona = matches[0]
+    else:
+        # Fallback: per-Team benannter Agent (team.config member.name → id → Theme-Rolle).
+        member = next((m for m in members
+                       if (m.get("name") or "").strip() == want_name and m.get("id")), None)
+        if member is None:
+            sys.stderr.write("git-identity: kein Persona mit name='%s' im Theme '%s' (und kein team.config-Member)\n"
+                             % (want_name, theme.get("id", "?")))
+            sys.exit(2)
+        pid = member["id"]
+        persona = personas.get(pid) or {}
 else:
     sys.stderr.write("git-identity: weder THEME_AGENT_ID noch HEARTBEAT_AGENT gesetzt\n")
     sys.exit(2)
 
-name = (persona.get("name") or "").strip()
+# Per-Team-Override gewinnt: team.config member.name > Theme-Persona-Name.
+name = ((member or {}).get("name") or persona.get("name") or "").strip()
 if not name:
     sys.stderr.write("git-identity: persona '%s' hat keinen name\n" % pid)
     sys.exit(2)
@@ -211,7 +247,8 @@ cmd_self_test() {
   # Funktions-Return-Status verschleiern → Self-Test meldete „ROT", Script exitete aber 0.
   # Mit EXIT-Trap + explizitem `exit` (siehe case unten) propagiert der Status zuverlässig.
   local tmp; tmp="$(mktemp -d "${TMPDIR:-/tmp}/git-identity-test.XXXXXX")"
-  trap 'rm -rf "$tmp"' EXIT
+  # ${tmp:-}: der EXIT-Trap feuert NACH Funktions-Ende — `local tmp` ist dann weg (set -u).
+  trap 'rm -rf "${tmp:-}"' EXIT
   mkdir -p "$tmp/themes/demo" "$tmp/archetypes"
   cat > "$tmp/themes/demo/theme.json" <<'JSON'
 { "id":"demo","label":"Demo","defaultAvatar":"default.png",
