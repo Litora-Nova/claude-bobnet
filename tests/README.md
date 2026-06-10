@@ -1,4 +1,4 @@
-# tests/ — Engine-Behavior-Specs (Dexter / QA-Gate)
+# tests/ — Engine-Behavior-Specs (Marvin / QA-Gate)
 
 Unabhängige Black-Box-Specs für die Engine-Shell-Scripts. **Behavior > Source-Pattern:**
 die Specs leben getrennt von den Scripts, rufen sie als Black-Box auf und asserten gegen
@@ -36,4 +36,4 @@ bash tests/git_identity_spec.sh         # einzeln (eigenes summary + Exit-Code)
 
 Noch OHNE eigene Spec (Channel-Adapter + Poller):
 `scripts/channels/{telegram,email,github,teams}.sh`, `scripts/scut-poll.sh`, `scripts/scut.sh`,
-`scripts/qa-add.sh`. Begründung + Priorisierung im Dexter-Handoff.
+`scripts/qa-add.sh`. Begründung + Priorisierung im Marvin-Handoff.

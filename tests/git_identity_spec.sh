@@ -172,6 +172,47 @@ printf '{kaputt' > "$TMP/team.broken.json"
 eq "$(run TEAM_CONFIG="$TMP/team.broken.json" HEARTBEAT_AGENT=Garfield -- print 2>/dev/null)" \
    "Garfield (Claude-tools BobNet Architect) <team@litora-nova.com>"
 
+# ── team.config: Präzedenz + Robustheit der Override-Kette (Gate-Lücken Marvin 2026-06-11) ──
+# Diese Checks pinnen die im Script-Header (Resolution) dokumentierte Vorrang-Kette explizit,
+# damit eine Umstellung der Lookup-Reihenfolge sofort ROT wird statt still die Identität zu kippen.
+
+it "team.config: Theme-Persona-Name-Match schlägt einen kollidierenden Member-Override (id-Pfad anders)"
+# Member sagt 'Garfield'→BOB-backend, aber HEARTBEAT_AGENT matcht zuerst die Theme-Persona Garfield
+# (BOB-dashboard). Der Persona-Name-Match läuft VOR dem Member-Fallback → Rolle bleibt dashboard.
+printf '{ "members":[ {"name":"Garfield","id":"BOB-backend"} ] }' > "$TMP/team.collide.json"
+eq "$(run TEAM_CONFIG="$TMP/team.collide.json" HEARTBEAT_AGENT=Garfield -- print)" \
+   "Garfield (Claude-tools BobNet Architect) <team@litora-nova.com>"
+
+it "team.config: Member OHNE id wird beim Name-Fallback ignoriert (kein Crash, fail-safe rc!=0)"
+# Ein Member ohne 'id' darf den HEARTBEAT_AGENT-Fallback nicht als Treffer beanspruchen (er liefert
+# keine Persona-Rolle) — und darf erst recht nicht crashen. Name matcht weder Theme noch valider Member.
+printf '{ "members":[ {"name":"Waise","role":"Lead"} ] }' > "$TMP/team.noid.json"
+not_ok run TEAM_CONFIG="$TMP/team.noid.json" HEARTBEAT_AGENT=Waise -- print
+
+it "team.config: Member ohne id stört einen gültigen Theme-Lookup nicht"
+eq "$(run TEAM_CONFIG="$TMP/team.noid.json" HEARTBEAT_AGENT=Garfield -- print)" \
+   "Garfield (Claude-tools BobNet Architect) <team@litora-nova.com>"
+
+it "team.config: STANDUP_DIR-Konvention (team.config.json daneben) wird ohne explizites TEAM_CONFIG gefunden"
+# Produktionspfad: dev-team.env setzt STANDUP_DIR → $STANDUP_DIR/team.config.json wird implizit genutzt.
+mkdir -p "$TMP/standup"
+printf '{ "members":[ {"name":"Martin","id":"BOB-dashboard"} ] }' > "$TMP/standup/team.config.json"
+eq "$(run STANDUP_DIR="$TMP/standup" HEARTBEAT_AGENT=Martin -- print)" \
+   "Martin (Claude-tools BobNet Architect) <team@litora-nova.com>"
+
+it "team.config: explizites TEAM_CONFIG schlägt die STANDUP_DIR-Konvention"
+printf '{ "members":[ {"name":"Martin","id":"BOB-dashboard"} ] }' > "$TMP/team.explicit.json"
+# STANDUP_DIR zeigt auf ein team.config mit FALSCHEM Namen — explizit muss gewinnen.
+printf '{ "members":[ {"name":"FALSCH","id":"BOB-dashboard"} ] }' > "$TMP/standup/team.config.json"
+eq "$(run TEAM_CONFIG="$TMP/team.explicit.json" STANDUP_DIR="$TMP/standup" THEME_AGENT_ID=BOB-dashboard -- print)" \
+   "Martin (Claude-tools BobNet Architect) <team@litora-nova.com>"
+
+it "team.config: export(author) trägt den Override-Namen in GIT_AUTHOR_NAME (nicht den Theme-Namen)"
+expm="$(run TEAM_CONFIG="$TMP/team.explicit.json" THEME_AGENT_ID=BOB-dashboard COMMIT_IDENTITY_MODE=author -- export)"
+contains "$expm" "GIT_AUTHOR_NAME=\"Martin (Claude-tools BobNet Architect)\""
+contains "$expm" "GIT_COMMITTER_NAME=\"Martin (Claude-tools BobNet Architect)\""
+not_contains "$expm" "Garfield"
+
 # ── INTEGRATION: gegen die ECHTE bobiverse/theme.json + echte Archetypen (read-only) ───────
 # Realer Stand (Phase-D-Follow-up 2026-06-02): die echte bobiverse/theme.json hat jetzt je Persona
 # ein positionLabel (i18n {de,en}) → role MUSS aus dem Persona-positionLabel kommen (höchste Prio),
@@ -190,6 +231,17 @@ not_contains "$real" "()"
 it "INTEGRATION: echte theme.json → Marvin ist QM/TESTS (Rollentausch-Kanon)"
 realm="$(env ENGINE_ROOT="$ENGINE_ROOT" DEV_TEAM_ENV="$TMP/env-real" THEME=bobiverse HEARTBEAT_AGENT=Marvin bash "$GI" print 2>/dev/null)"
 eq "$realm" "Marvin (Acme Inc QM / Tests) <team@litora-nova.com>"
+
+it "INTEGRATION: Rollentausch-Negativkontrolle — Dexter trägt NICHT mehr QM/Tests, Marvin NICHT mehr Compliance"
+# Explizit gegen ein Zurückkippen des Tauschs (vor 2026-06-10 war Dexter=Tests, Marvin=Compliance).
+not_contains "$real"  "QM / Tests"
+not_contains "$realm" "Compliance"
+
+it "INTEGRATION: getauschte Rollen auch in de-Locale gepinnt (Dexter=Compliance, Marvin=QM/Tests)"
+realded="$(env ENGINE_ROOT="$ENGINE_ROOT" DEV_TEAM_ENV="$TMP/env-real" THEME=bobiverse HEARTBEAT_AGENT=Dexter DEV_TEAM_LOCALE=de bash "$GI" print 2>/dev/null)"
+eq "$realded" "Dexter (Acme Inc Compliance) <team@litora-nova.com>"
+realdem="$(env ENGINE_ROOT="$ENGINE_ROOT" DEV_TEAM_ENV="$TMP/env-real" THEME=bobiverse HEARTBEAT_AGENT=Marvin DEV_TEAM_LOCALE=de bash "$GI" print 2>/dev/null)"
+eq "$realdem" "Marvin (Acme Inc QM / Tests) <team@litora-nova.com>"
 
 it "INTEGRATION: echte theme.json → de-Locale wählt das deutsche positionLabel (Garfield → BobNet-Architekt)"
 realde="$(env ENGINE_ROOT="$ENGINE_ROOT" DEV_TEAM_ENV="$TMP/env-real" THEME=bobiverse HEARTBEAT_AGENT=Garfield DEV_TEAM_LOCALE=de bash "$GI" print 2>/dev/null)"
