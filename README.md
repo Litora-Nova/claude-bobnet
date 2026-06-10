@@ -279,8 +279,8 @@ names are shown only as an example of the flavor layer — on `minimal` they are
 | **frontend** | App frontend (SPA): components, pages, composables, API clients, i18n. Consumes the backend contracts. | inner | 1–2 | `frontend, js, dev, i18n` | sonnet | Luke |
 | **website** | Public marketing sites: content, SEO, OG, i18n. No CMS, no tracking. | inner | 1–2 | `website, js, dev, i18n, seo` | sonnet | Linus |
 | **review** | Code-review before every merge: house-rules, correctness, i18n parity, URL↔locale, dead-link check, SEO basics. 30s mini-tick even on hotfixes. | gate | 1–3 | `review` | sonnet | Riker |
-| **compliance** | New deps / lockfile touches / egress / PII / tokens-in-logs / asset provenance / data-minimization. Every lockfile touch auto-pings this role. | gate | 3 | `compliance` | sonnet | Marvin |
-| **tests** | Test coverage: unit + E2E, CI coverage floor, title-specs per page in both locales, composable unit tests. Pings *before* merge on missing specs. | gate | 2–3 | `tests` | sonnet | Dexter |
+| **compliance** | New deps / lockfile touches / egress / PII / tokens-in-logs / asset provenance / data-minimization. Every lockfile touch auto-pings this role. | gate | 3 | `compliance` | sonnet | Dexter |
+| **tests** | Test coverage: unit + E2E, CI coverage floor, title-specs per page in both locales, composable unit tests. Pings *before* merge on missing specs. | gate | 2–3 | `tests` | sonnet | Marvin |
 | **release** | Pre-flight (build dry-run, asset-size, migration dry-run, visual-verify in both locales) + the deploy to staging. **Sole deploy owner.** | gate | 2–4 | `release` | sonnet | Bender |
 | **dashboard** | The live stand-up dashboard (BobNet): roster, heartbeats, tasks, roadmap, badges. Cross-project service, own cadence. | outer | 1–2 | `dashboard, js, dev` | sonnet | Garfield |
 | **docs** | Periodic reports + tech docs + doc-drift detection. Keeps documentation current to the code. | outer | 1 | `docs` | sonnet | Homer |
@@ -333,7 +333,7 @@ the BobNet sees several projects at once. The dashboard hides the prefix for dis
 "Backend") and keeps the full UID internally (collision-free).
 
 **The Taylor homage** lives **only** in the optional `bobiverse` theme. The persona-to-role
-mapping (e.g. `BOB-backend` → *Bill*, `BOB-techlead` → *Bob*, `BOB-tests` → *Dexter*) is purely a
+mapping (e.g. `BOB-backend` → *Bill*, `BOB-techlead` → *Bob*, `BOB-tests` → *Marvin*) is purely a
 flavor choice in `themes/bobiverse/theme.json`; the default `minimal` theme is neutral and names
 the same roles "Backend", "Lead", "QA". Nothing structural depends on the homage.
 

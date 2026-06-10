@@ -28,8 +28,8 @@ optionalen `bobiverse`-Themes — austauschbar, nicht kanonisch.
 | `frontend` | App-Frontend (SPA): Components/Pages/Composables/API-Clients/i18n. | inner | Luke |
 | `website` | Public Marketing-Sites + Doku-Sites: Content/SEO/OG/i18n. | inner | Linus |
 | `review` | Code-Review vor jedem Merge: House-Rules, Korrektheit, i18n-Parität, tote Links. | gate | Riker |
-| `tests` | Test-Coverage: Unit + E2E, CI-Floor, Title-Specs je Locale. Pingt **vor** Merge bei fehlenden Specs. | gate | Dexter |
-| `compliance` | Neue Deps/Lockfile/Egress/PII/Tokens-in-Logs/Asset-Provenance. Jeder Lockfile-Touch pingt automatisch. | gate | Marvin |
+| `tests` | Test-Coverage: Unit + E2E, CI-Floor, Title-Specs je Locale. Pingt **vor** Merge bei fehlenden Specs. | gate | Marvin |
+| `compliance` | Neue Deps/Lockfile/Egress/PII/Tokens-in-Logs/Asset-Provenance. Jeder Lockfile-Touch pingt automatisch. | gate | Dexter |
 | `release` | Pre-Flight (Build/Asset-Size/Migration-Dry-Run/Visual-Verify) + Deploy auf Staging. **Einziger Deploy-Owner.** | gate | Bender |
 | `docs` | Periodische Reports + Tech-Docs + Doc-Drift-Erkennung. Hält Doku am Code. | outer | Homer |
 | `content` | Lesson-/Produkt-Content (beide Locales), Showcase, Question-Payloads ohne Solution-Leaks. | outer | Bridget |

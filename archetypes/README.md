@@ -10,8 +10,8 @@
 | `frontend` | bob | inner | — | Cruiser | Luke (`BOB-frontend`) |
 | `website` | bob | inner | — | Cruiser | Linus (`BOB-website`) |
 | `review` | bob | gate | 1–3 | Cruiser | Riker (`BOB-review`) |
-| `compliance` | bob | gate | 3 | Cruiser | Marvin (`BOB-compliance`) |
-| `tests` | bob | gate | 2–3 | Cruiser | Dexter (`BOB-tests`) |
+| `compliance` | bob | gate | 3 | Cruiser | Dexter (`BOB-compliance`) |
+| `tests` | bob | gate | 2–3 | Cruiser | Marvin (`BOB-tests`) |
 | `release` | bob | gate | 2–4 | Cruiser | Bender (`BOB-release`) |
 | `dashboard` | service | outer | — | Cruiser | Garfield (`BOB-dashboard`) |
 | `docs` | bob | outer | — | Cruiser | Homer (`BOB-docs`) |
