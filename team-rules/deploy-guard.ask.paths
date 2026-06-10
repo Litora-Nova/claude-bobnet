@@ -1,0 +1,18 @@
+# team-rules/deploy-guard.ask.paths — ASK-Globs (deklarativ): Edit nur mit expliziter
+# {HUMAN}-Bestätigung PRO Edit (PO-Doktrin 2026-06-10, siehe tiers.md).
+#
+# Der Hook hooks/deploy-guard.sh antwortet bei Treffer mit permissionDecision "ask" —
+# der Edit landet als Permission-Prompt beim {HUMAN} und darf NIE wegautomatisiert
+# werden (keine Allow-Regel, kein acceptEdits). Erlaubt sind Wert-Anpassungen,
+# KEINE strukturellen Umbauten.
+#
+# Format: wie deploy-guard.paths (eine Glob pro Zeile, '#'-Kommentare, '*' matcht auch '/').
+#
+# 🔒 ASK-FLOOR: */config/deploy.rb + */config/deploy/* sind ein nicht-unterschreitbarer Floor —
+#   der Hook merged sie IMMER dazu (Funktion ask_floor). Ein Projekt-Override darf Globs
+#   ERGÄNZEN oder per deploy-guard.paths verschärfen (ask→block), aber nie freigeben.
+#   Block (deploy-guard.paths) schlägt Ask.
+
+# --- Deploy-/Capistrano-Konfiguration (globale + Stage-Configs, inkl. Templates darunter) ---
+*/config/deploy.rb
+*/config/deploy/*
