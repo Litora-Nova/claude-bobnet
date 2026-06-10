@@ -154,6 +154,15 @@ for bad in '.env' '.env.production' 'config/credentials.yml.enc' 'id_rsa' 'secre
   it "Secret-Refuse: '$bad' verweigert";              neq "$RC" "0"
 done
 
+# --- KANTE-2-Regression: Secret-Refuse ist CASE-INSENSITIV ---
+# (Sync-Ziel kann ein case-insensitives FS sein — macOS-Default: .ENV == .env)
+for bad in '.ENV' '.Env.Production' 'ID_RSA' 'Credentials.yml.enc' 'SECRETS.YML' 'Server.PEM'; do
+  printf '%s\n' "$bad" > "$PROJ_SEC/_dev_team/team-rules/sync-share.items"
+  OUT="$(bash "$SYNC_SHARE" "$PROJ_SEC" --label acme --no-register 2>&1)"
+  RC=$?
+  it "Secret-Refuse case-insensitiv: '$bad' verweigert"; neq "$RC" "0"
+done
+
 # --- Glob-/Traversal-Items werden verweigert (kein Whitelist-Aushebeln, kein mkdir außerhalb) ---
 PROJ_TRV="$TMP/proj_trv"
 mkdir -p "$PROJ_TRV/_dev_team/team-rules"
@@ -172,5 +181,22 @@ printf 'v1.2/\n' > "$PROJ_V/_dev_team/team-rules/sync-share.items"
 bash "$SYNC_SHARE" "$PROJ_V" --label acme --no-register >/dev/null 2>&1
 it "Dir-Marker 'v1.2/' → Ordner (trotz Punkt)";       ok test -d "$PROJ_V/v1.2"
 it "Dir-Marker → Negation mit '/**'";                 file_has "$PROJ_V/.stignore" '!/v1.2/**'
+
+# --- Refuse-Grund-Nachweis: die Verweigerung kommt WIRKLICH vom Secret-Refuse, nicht zufällig ---
+# (sonst wäre ein grüner Refuse-Check nicht aussagekräftig)
+PROJ_RG="$TMP/proj_refgrund"
+mkdir -p "$PROJ_RG/_dev_team/team-rules"
+printf '.env\n' > "$PROJ_RG/_dev_team/team-rules/sync-share.items"
+OUT="$(bash "$SYNC_SHARE" "$PROJ_RG" --label acme --no-register 2>&1)"
+it "Secret-Refuse nennt den konkreten Pfad";          contains "$OUT" "Secret-Pfad '.env'"
+
+# --- Negativ-Kontrolle: legitime Items laufen DURCH (Filter nicht generell zu aggressiv) ---
+PROJ_OK="$TMP/proj_legit"
+mkdir -p "$PROJ_OK/_dev_team/team-rules"
+printf 'plan\ndocs\nenvironment\nshare\n' > "$PROJ_OK/_dev_team/team-rules/sync-share.items"
+bash "$SYNC_SHARE" "$PROJ_OK" --label acme --no-register >/dev/null 2>&1
+RC=$?
+it "legitime Items (plan/docs/environment/share) → OK"; eq "$RC" "0"
+it "… 'environment' nicht fälschlich als '.env' geblockt"; file_has "$PROJ_OK/.stignore" '!/environment'
 
 summary

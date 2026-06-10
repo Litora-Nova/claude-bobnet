@@ -81,7 +81,10 @@ while IFS= read -r raw; do
   case "$line" in
     *'*'*|*\?*|..|../*|*/..|*/../*) refuse "unsicheres Item '$line' (Glob/Traversal)." ;;
   esac
-  case "$line" in
+  # Secret-Check CASE-INSENSITIV: das Sync-Ziel kann ein case-insensitives FS sein
+  # (macOS-Default) — dort ist .ENV dieselbe Datei wie .env.
+  lline="$(printf '%s' "$line" | tr '[:upper:]' '[:lower:]')"
+  case "$lline" in
     *.secrets*|*secret*|*master.key*|*credential*|*.env*|*id_rsa*|*id_ed25519*|*.pem|*.key|*database.yml*|*configuration.yml*|*token*|*password*)
       refuse "Secret-Pfad '$line' in der Whitelist." ;;
   esac
