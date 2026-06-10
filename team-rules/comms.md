@@ -45,3 +45,37 @@ Die Inbox hat keines dieser Probleme: asynchron, auditierbar, kollisionsfrei.
    setzen — das Dashboard zeigt blocked prominent/urgent, der Hilferuf ist sichtbar, ohne
    fremde Prompts zu kapern. Perspektivisch übernimmt ein Comms-Router-/Concierge-Dienst die
    Weck-Funktion sauber; bis dahin gilt: blocked + Inbox, nicht Injection.
+
+## §6 Bobiverse-Sync — Transport zum `{HUMAN}`-Gerät & für externe Coworker (PO-Design 2026-06-10)
+
+Damit der `{HUMAN}` (und externe Coworker-Agenten auf seinen Geräten) Inbox + Plan-Artefakte
+**ohne Formulare und ohne Shell** lesen und editieren können, wird pro Projekt ein
+Datei-Sync eingerichtet (Werkzeug: ein Continuous-Sync-Dienst à la Syncthing). Kanon:
+
+1. **Die Projekt-Wurzel ist die Share-Wurzel — aber Whitelist-only.** Eine generierte
+   `.stignore`-Whitelist (via `bin/sync-share`, Items aus `team-rules/sync-share.items`)
+   lässt NUR die Mensch-Artefakte durch — Default: `_inbox.md` (Nachrichten-Inbox) ·
+   `_inbox/` (Datei-Drops) · `plan/` (GOAL.md, ROADMAP.md, PLAN_*) · `share/` (Freifläche
+   für externe Coworker/Services). **Alles andere (Repo, `.git`, Secrets, Code) bleibt
+   lokal.** Keine Symlinke, kein Extra-Ordner: alles bleibt git-versioniert an Ort und Stelle.
+2. **Geräte-Seite einmalig:** Auto-Accept für das Server-Gerät + Default-Ordnerpfad
+   (z. B. `~/Bobiverse-sync/`) setzen → jeder neue Projekt-Share erscheint dort von selbst
+   als `<uid>/`, ohne weitere Bestätigungen. Daneben kann ein genereller `exchange`-Share
+   für Projekt-Übergreifendes bestehen.
+3. **Die `.stignore` ist heilig.** Sie ist die einzige Bremse — fehlt sie, ginge das ganze
+   Projekt (inkl. `.git`/Secrets) auf Reisen. Nie löschen/editieren außer über
+   `bin/sync-share` (das Tool generiert sie bei jedem Lauf deterministisch neu —
+   Hand-Edits werden bewusst überschrieben); eine Wach-Routine (Colonel/Routinen-Kanon)
+   prüft ihre Existenz. **Secrets gehören NIE in die Whitelist** — das Tool verweigert
+   Secret-artige Items (`.env*`, credentials, Keys/PEM, database/configuration.yml, …)
+   sowie Glob-/Traversal-Items.
+4. **Externe Coworker sind Flotten-Teilnehmer zweiter Ringe:** sie schreiben in die
+   gesyncte `_inbox.md` nach §-Kanon oben (adressiert, signiert, datiert, append-only)
+   und nutzen `share/` für Dateiübergaben. Sync-Konflikt-Dateien (`*.sync-conflict-*`)
+   werden nicht ignoriert, sondern von der Standup-Routine gemerged/gemeldet.
+5. **Plan-Artefakte:** kanonischer Ort ist `<projekt>/plan/` — `{HUMAN}`/Lead editieren,
+   Agenten lesen und schlagen Änderungen per Inbox vor (minimiert Schreibkonflikte).
+6. **Abgrenzung zu `sync.md`:** Der Datei-Sync ist ein **Lese-/Edit-Fenster für Menschen
+   und externe Coworker**, KEIN State-Sync — der State-Sync der Maschinen bleibt Git über
+   `origin` (`sync.md`). Gesyncte, git-versionierte Artefakte (z. B. `plan/`) committet
+   die normale Standup-/Feierabend-Routine als Human-Edits.

@@ -1,0 +1,147 @@
+#!/usr/bin/env bash
+# bin/sync-share — richtet den Bobiverse-Sync für EIN Projekt ein (Whitelist-only).
+#
+# Idee (Kanon: team-rules/comms.md §6): Die Projekt-Wurzel selbst ist die Share-Wurzel.
+# Eine .stignore-WHITELIST sorgt dafür, dass NUR die Mensch-/Extern-Artefakte
+# (Default: _inbox.md · _inbox/ · plan/ · share/ — aus team-rules/sync-share.items)
+# zum {HUMAN}-Gerät gesynct werden. Repo, .git, Secrets, Code bleiben lokal.
+# KEINE Symlinks, KEIN Extra-Ordner: alles bleibt git-versioniert an Ort und Stelle.
+#
+# Usage:
+#   bin/sync-share <projekt-wurzel> --label <uid> [--device <name|id>] [--register|--no-register]
+#
+#   --label       Share-ID/-Label (= PROJECT_UID, z. B. acme). PFLICHT.
+#   --device      Ziel-Gerät (Name oder Device-ID) für --register.
+#   --register    Share via `syncthing cli` anlegen + fürs Gerät freigeben (idempotent).
+#   --no-register (Default) nur Dateien/Whitelist anlegen + Anleitung ausgeben.
+#
+# Items-Format (team-rules/sync-share.items, Projekt-Override ersetzt die Liste):
+#   ein Item pro Zeile, relativ zur Projekt-Wurzel. Trailing '/' = expliziter
+#   Ordner-Marker; ohne Marker gilt: Name ohne Punkt = Ordner, mit Punkt = Datei.
+#
+# Sicherheit:
+#   - Die .stignore ist die EINZIGE Bremse: ohne sie ginge das GANZE Projekt (inkl.
+#     .git/.secrets) zum Sync-Gerät. Der Header der Datei warnt entsprechend; sie wird
+#     bei jedem Lauf deterministisch NEU generiert (bewusstes Überschreiben).
+#   - Verweigert Projekt-Wurzel = '/' oder $HOME (zu breiter Share).
+#   - Verweigert Secret-artige Items (REFUSED): .secrets/secret*, master.key, credential*,
+#     .env*, id_rsa/id_ed25519/*.pem/*.key, database.yml, configuration.yml, token/password.
+#   - Verweigert Glob-/Traversal-Items ('*', '?', '..').
+set -uo pipefail
+
+BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENGINE_ROOT="$(cd "$BIN_DIR/.." && pwd)"
+
+usage() { sed -n '2,29p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+refuse() { echo "sync-share: REFUSED — $1" >&2; exit 1; }
+need_val() { [ "$1" -ge 2 ] || refuse "Option '$2' braucht einen Wert."; }
+
+PROJECT_ROOT_ARG="" ; LABEL="" ; DEVICE="${SYNC_DEVICE:-}" ; REGISTER=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --label)       need_val $# "$1"; LABEL="$2";  shift 2 ;;
+    --device)      need_val $# "$1"; DEVICE="$2"; shift 2 ;;
+    --register)    REGISTER=1; shift ;;
+    --no-register) REGISTER=0; shift ;;
+    -h|--help)     usage; exit 0 ;;
+    -*)            echo "sync-share: unbekannte Option '$1'" >&2; exit 1 ;;
+    *)             PROJECT_ROOT_ARG="$1"; shift ;;
+  esac
+done
+
+[ -n "$PROJECT_ROOT_ARG" ] || { echo "sync-share: Projekt-Wurzel fehlt (siehe --help)." >&2; exit 1; }
+[ -n "$LABEL" ]            || { echo "sync-share: --label <uid> ist Pflicht (Share-ID = PROJECT_UID)." >&2; exit 1; }
+[ -d "$PROJECT_ROOT_ARG" ] || { echo "sync-share: '$PROJECT_ROOT_ARG' ist kein Ordner." >&2; exit 1; }
+PROJECT_ROOT="$(cd "$PROJECT_ROOT_ARG" && pwd)"
+
+# --- Sicherheits-Bremse: nie HOME oder / als Share-Wurzel ---
+if [ "$PROJECT_ROOT" = "/" ] || [ "$PROJECT_ROOT" = "${HOME%/}" ]; then
+  refuse "'$PROJECT_ROOT' ist zu breit als Share-Wurzel (/, \$HOME)."
+fi
+
+# --- Whitelist-Items laden: Projekt-Override > Engine-Daten ---
+ITEMS_FILE=""
+for cand in \
+  "$PROJECT_ROOT/_dev_team/team-rules/sync-share.items" \
+  "$ENGINE_ROOT/team-rules/sync-share.items"; do
+  [ -f "$cand" ] && { ITEMS_FILE="$cand"; break; }
+done
+[ -n "$ITEMS_FILE" ] || { echo "sync-share: team-rules/sync-share.items fehlt." >&2; exit 1; }
+
+ITEMS=() ; ITEM_DIR=()
+while IFS= read -r raw; do
+  # trim (Whitespace-only-Zeilen zählen NICHT als Item)
+  line="${raw#"${raw%%[![:space:]]*}"}"
+  line="${line%"${line##*[![:space:]]}"}"
+  case "$line" in ''|\#*) continue ;; esac
+  explicit_dir=0
+  case "$line" in */) explicit_dir=1 ;; esac
+  line="${line#/}"; line="${line%/}"
+  [ -n "$line" ] || continue
+  case "$line" in
+    *'*'*|*\?*|..|../*|*/..|*/../*) refuse "unsicheres Item '$line' (Glob/Traversal)." ;;
+  esac
+  # Secret-Check CASE-INSENSITIV: das Sync-Ziel kann ein case-insensitives FS sein
+  # (macOS-Default) — dort ist .ENV dieselbe Datei wie .env.
+  lline="$(printf '%s' "$line" | tr '[:upper:]' '[:lower:]')"
+  case "$lline" in
+    *.secrets*|*secret*|*master.key*|*credential*|*.env*|*id_rsa*|*id_ed25519*|*.pem|*.key|*database.yml*|*configuration.yml*|*token*|*password*)
+      refuse "Secret-Pfad '$line' in der Whitelist." ;;
+  esac
+  ITEMS+=("$line") ; ITEM_DIR+=("$explicit_dir")
+done < "$ITEMS_FILE"
+[ "${#ITEMS[@]}" -gt 0 ] || { echo "sync-share: Whitelist ist leer ($ITEMS_FILE)." >&2; exit 1; }
+
+# --- Items anlegen (Ordner bzw. leere Datei), nichts überschreiben ---
+# Ordner, wenn: expliziter '/'-Marker ODER Name ohne Punkt. Existierendes bleibt unberührt.
+for i in "${!ITEMS[@]}"; do
+  item="${ITEMS[$i]}"
+  [ -e "$PROJECT_ROOT/$item" ] && continue
+  if [ "${ITEM_DIR[$i]}" = 1 ] || [[ "$item" != *.* ]]; then
+    mkdir -p "$PROJECT_ROOT/$item"
+  else
+    : > "$PROJECT_ROOT/$item"
+  fi
+done
+
+# --- .stignore-Whitelist schreiben (idempotent, deterministisch; Negation = realer FS-Typ) ---
+STIGNORE="$PROJECT_ROOT/.stignore"
+{
+  echo "// AUTOGENERIERT von bin/sync-share — NICHT LÖSCHEN!"
+  echo "// Ohne diese Datei würde das GANZE Projekt (inkl. .git/.secrets) zum Sync-Gerät gehen."
+  echo "// Whitelist-only: nur die gelisteten Items syncen (Quelle: team-rules/sync-share.items)."
+  echo "/.stversions"
+  for item in "${ITEMS[@]}"; do
+    if [ -d "$PROJECT_ROOT/$item" ]; then
+      echo "!/$item/**"
+      echo "!/$item"
+    else
+      echo "!/$item"
+    fi
+  done
+  echo "*"
+} > "$STIGNORE"
+
+echo "sync-share: OK — Whitelist steht: $STIGNORE"
+echo "  Items: ${ITEMS[*]}"
+
+# --- Optional: Share via syncthing cli registrieren (idempotent) ---
+if [ "$REGISTER" = 1 ]; then
+  if ! command -v syncthing >/dev/null 2>&1; then
+    echo "sync-share: --register, aber 'syncthing' nicht im PATH — manuell anlegen (s.u.)." >&2
+  elif syncthing cli config folders list 2>/dev/null | grep -qx "$LABEL"; then
+    echo "sync-share: Share '$LABEL' existiert bereits — Registrierung übersprungen (idempotent)."
+  else
+    syncthing cli config folders add --id "$LABEL" --label "$LABEL" --path "$PROJECT_ROOT" \
+      && echo "sync-share: Share '$LABEL' angelegt ($PROJECT_ROOT)."
+    if [ -n "$DEVICE" ]; then
+      syncthing cli config folders "$LABEL" devices add --device-id "$DEVICE" \
+        && echo "sync-share: Share '$LABEL' für Gerät '$DEVICE' freigegeben."
+    else
+      echo "sync-share: kein --device angegeben — Geräte-Freigabe manuell ergänzen."
+    fi
+  fi
+else
+  echo "  (kein --register: Share manuell oder per 'bin/sync-share … --register --device <id>' anlegen;"
+  echo "   Gegenseite: Auto-Accept + Default-Ordner einmalig am {HUMAN}-Gerät setzen — comms.md §6.)"
+fi
