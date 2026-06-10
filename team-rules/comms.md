@@ -64,11 +64,18 @@ Datei-Sync eingerichtet (Werkzeug: ein Continuous-Sync-Dienst à la Syncthing). 
    für Projekt-Übergreifendes bestehen.
 3. **Die `.stignore` ist heilig.** Sie ist die einzige Bremse — fehlt sie, ginge das ganze
    Projekt (inkl. `.git`/Secrets) auf Reisen. Nie löschen/editieren außer über
-   `bin/sync-share`; eine Wach-Routine (Colonel/Routinen-Kanon) prüft ihre Existenz.
-   **Secrets gehören NIE in die Whitelist** (das Tool verweigert Secret-Pfade).
+   `bin/sync-share` (das Tool generiert sie bei jedem Lauf deterministisch neu —
+   Hand-Edits werden bewusst überschrieben); eine Wach-Routine (Colonel/Routinen-Kanon)
+   prüft ihre Existenz. **Secrets gehören NIE in die Whitelist** — das Tool verweigert
+   Secret-artige Items (`.env*`, credentials, Keys/PEM, database/configuration.yml, …)
+   sowie Glob-/Traversal-Items.
 4. **Externe Coworker sind Flotten-Teilnehmer zweiter Ringe:** sie schreiben in die
    gesyncte `_inbox.md` nach §-Kanon oben (adressiert, signiert, datiert, append-only)
    und nutzen `share/` für Dateiübergaben. Sync-Konflikt-Dateien (`*.sync-conflict-*`)
    werden nicht ignoriert, sondern von der Standup-Routine gemerged/gemeldet.
 5. **Plan-Artefakte:** kanonischer Ort ist `<projekt>/plan/` — `{HUMAN}`/Lead editieren,
    Agenten lesen und schlagen Änderungen per Inbox vor (minimiert Schreibkonflikte).
+6. **Abgrenzung zu `sync.md`:** Der Datei-Sync ist ein **Lese-/Edit-Fenster für Menschen
+   und externe Coworker**, KEIN State-Sync — der State-Sync der Maschinen bleibt Git über
+   `origin` (`sync.md`). Gesyncte, git-versionierte Artefakte (z. B. `plan/`) committet
+   die normale Standup-/Feierabend-Routine als Human-Edits.

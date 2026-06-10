@@ -6,6 +6,9 @@
 #
 # Format: ein Item pro Zeile (Datei oder Ordner, ohne führenden '/');
 #         Leerzeilen + '#'-Kommentare werden ignoriert.
+#         Trailing '/' = expliziter Ordner-Marker (z. B. `v1.2/`) — ohne Marker gilt:
+#         Name ohne Punkt = Ordner, mit Punkt = Datei. Secret-/Glob-/'..'-Items
+#         werden verweigert (REFUSED).
 # Projekt-Override: _dev_team/team-rules/sync-share.items (ersetzt diese Liste komplett).
 
 _inbox.md

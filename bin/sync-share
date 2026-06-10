@@ -15,24 +15,32 @@
 #   --register    Share via `syncthing cli` anlegen + fürs Gerät freigeben (idempotent).
 #   --no-register (Default) nur Dateien/Whitelist anlegen + Anleitung ausgeben.
 #
+# Items-Format (team-rules/sync-share.items, Projekt-Override ersetzt die Liste):
+#   ein Item pro Zeile, relativ zur Projekt-Wurzel. Trailing '/' = expliziter
+#   Ordner-Marker; ohne Marker gilt: Name ohne Punkt = Ordner, mit Punkt = Datei.
+#
 # Sicherheit:
 #   - Die .stignore ist die EINZIGE Bremse: ohne sie ginge das GANZE Projekt (inkl.
-#     .git/.secrets) zum Sync-Gerät. Der Header der Datei warnt entsprechend;
-#     eine Wach-Routine gehört zum Rollout (siehe comms.md §6).
+#     .git/.secrets) zum Sync-Gerät. Der Header der Datei warnt entsprechend; sie wird
+#     bei jedem Lauf deterministisch NEU generiert (bewusstes Überschreiben).
 #   - Verweigert Projekt-Wurzel = '/' oder $HOME (zu breiter Share).
-#   - Secrets gehören NIE in Whitelist-Items (kein .secrets/-Item akzeptiert).
+#   - Verweigert Secret-artige Items (REFUSED): .secrets/secret*, master.key, credential*,
+#     .env*, id_rsa/id_ed25519/*.pem/*.key, database.yml, configuration.yml, token/password.
+#   - Verweigert Glob-/Traversal-Items ('*', '?', '..').
 set -uo pipefail
 
 BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENGINE_ROOT="$(cd "$BIN_DIR/.." && pwd)"
 
-usage() { sed -n '2,24p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,29p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+refuse() { echo "sync-share: REFUSED — $1" >&2; exit 1; }
+need_val() { [ "$1" -ge 2 ] || refuse "Option '$2' braucht einen Wert."; }
 
 PROJECT_ROOT_ARG="" ; LABEL="" ; DEVICE="${SYNC_DEVICE:-}" ; REGISTER=0
 while [ $# -gt 0 ]; do
   case "$1" in
-    --label)       LABEL="${2:-}"; shift 2 ;;
-    --device)      DEVICE="${2:-}"; shift 2 ;;
+    --label)       need_val $# "$1"; LABEL="$2";  shift 2 ;;
+    --device)      need_val $# "$1"; DEVICE="$2"; shift 2 ;;
     --register)    REGISTER=1; shift ;;
     --no-register) REGISTER=0; shift ;;
     -h|--help)     usage; exit 0 ;;
@@ -48,8 +56,7 @@ PROJECT_ROOT="$(cd "$PROJECT_ROOT_ARG" && pwd)"
 
 # --- Sicherheits-Bremse: nie HOME oder / als Share-Wurzel ---
 if [ "$PROJECT_ROOT" = "/" ] || [ "$PROJECT_ROOT" = "${HOME%/}" ]; then
-  echo "sync-share: REFUSED — '$PROJECT_ROOT' ist zu breit als Share-Wurzel (/, \$HOME)." >&2
-  exit 1
+  refuse "'$PROJECT_ROOT' ist zu breit als Share-Wurzel (/, \$HOME)."
 fi
 
 # --- Whitelist-Items laden: Projekt-Override > Engine-Daten ---
@@ -61,26 +68,40 @@ for cand in \
 done
 [ -n "$ITEMS_FILE" ] || { echo "sync-share: team-rules/sync-share.items fehlt." >&2; exit 1; }
 
-ITEMS=()
-while IFS= read -r line; do
+ITEMS=() ; ITEM_DIR=()
+while IFS= read -r raw; do
+  # trim (Whitespace-only-Zeilen zählen NICHT als Item)
+  line="${raw#"${raw%%[![:space:]]*}"}"
+  line="${line%"${line##*[![:space:]]}"}"
   case "$line" in ''|\#*) continue ;; esac
+  explicit_dir=0
+  case "$line" in */) explicit_dir=1 ;; esac
   line="${line#/}"; line="${line%/}"
+  [ -n "$line" ] || continue
   case "$line" in
-    *.secrets*|*master.key*) echo "sync-share: REFUSED — Secret-Pfad '$line' in der Whitelist." >&2; exit 1 ;;
+    *'*'*|*\?*|..|../*|*/..|*/../*) refuse "unsicheres Item '$line' (Glob/Traversal)." ;;
   esac
-  ITEMS+=("$line")
+  case "$line" in
+    *.secrets*|*secret*|*master.key*|*credential*|*.env*|*id_rsa*|*id_ed25519*|*.pem|*.key|*database.yml*|*configuration.yml*|*token*|*password*)
+      refuse "Secret-Pfad '$line' in der Whitelist." ;;
+  esac
+  ITEMS+=("$line") ; ITEM_DIR+=("$explicit_dir")
 done < "$ITEMS_FILE"
 [ "${#ITEMS[@]}" -gt 0 ] || { echo "sync-share: Whitelist ist leer ($ITEMS_FILE)." >&2; exit 1; }
 
-# --- Items anlegen (Ordner bzw. leere Inbox-Datei), nichts überschreiben ---
-for item in "${ITEMS[@]}"; do
-  case "$item" in
-    *.md|*.*) [ -e "$PROJECT_ROOT/$item" ] || : > "$PROJECT_ROOT/$item" ;;
-    *)        mkdir -p "$PROJECT_ROOT/$item" ;;
-  esac
+# --- Items anlegen (Ordner bzw. leere Datei), nichts überschreiben ---
+# Ordner, wenn: expliziter '/'-Marker ODER Name ohne Punkt. Existierendes bleibt unberührt.
+for i in "${!ITEMS[@]}"; do
+  item="${ITEMS[$i]}"
+  [ -e "$PROJECT_ROOT/$item" ] && continue
+  if [ "${ITEM_DIR[$i]}" = 1 ] || [[ "$item" != *.* ]]; then
+    mkdir -p "$PROJECT_ROOT/$item"
+  else
+    : > "$PROJECT_ROOT/$item"
+  fi
 done
 
-# --- .stignore-Whitelist schreiben (idempotent, deterministisch) ---
+# --- .stignore-Whitelist schreiben (idempotent, deterministisch; Negation = realer FS-Typ) ---
 STIGNORE="$PROJECT_ROOT/.stignore"
 {
   echo "// AUTOGENERIERT von bin/sync-share — NICHT LÖSCHEN!"
