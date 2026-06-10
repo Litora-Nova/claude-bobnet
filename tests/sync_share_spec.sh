@@ -72,4 +72,105 @@ bash "$SYNC_SHARE" "$TMP/p2" --no-register >/dev/null 2>&1
 RC=$?
 it "ohne --label → Fehler";                      neq "$RC" "0"
 
+# --- Item-Normalisierung: führende/trailing Slashes werden getrimmt (kein Ordner '/') ---
+PROJ_SL="$TMP/proj_slash"
+mkdir -p "$PROJ_SL/_dev_team/team-rules"
+printf '/plan/\n/share\ndocs/\n' > "$PROJ_SL/_dev_team/team-rules/sync-share.items"
+bash "$SYNC_SHARE" "$PROJ_SL" --label acme --no-register >/dev/null 2>&1
+it "Slash-Item '/plan/' → Ordner plan/";         ok test -d "$PROJ_SL/plan"
+it "Slash-Item '/share' → Ordner share/";        ok test -d "$PROJ_SL/share"
+it "Slash-Item 'docs/' → Ordner docs/";          ok test -d "$PROJ_SL/docs"
+it "Slash-Item → saubere Negation '!/plan'";     file_has "$PROJ_SL/.stignore" '!/plan'
+NEG_SL="$(grep -c '!//' "$PROJ_SL/.stignore" || true)"
+it "kein doppelter Slash '!//' in Whitelist";    eq "$NEG_SL" "0"
+
+# --- Negation folgt dem REALEN Typ: existiert das Item schon als Ordner, kommt '/**' dazu ---
+# (auch wenn der Name 'wie eine Datei' aussieht — die Heuristik betrifft nur das Neu-Anlegen)
+PROJ_RT="$TMP/proj_realtype"
+mkdir -p "$PROJ_RT/_dev_team/team-rules"
+printf 'release.notes\n' > "$PROJ_RT/_dev_team/team-rules/sync-share.items"
+mkdir -p "$PROJ_RT/release.notes"   # existiert als ORDNER trotz Punkt-Name
+bash "$SYNC_SHARE" "$PROJ_RT" --label acme --no-register >/dev/null 2>&1
+it "existierender Ordner mit Punkt-Name → '/**'"; file_has "$PROJ_RT/.stignore" '!/release.notes/**'
+
+# --- Heuristik-Grenze (dokumentierter Ist-Zustand): Punkt-Name OHNE Vorab-Ordner = Datei ---
+# Ein als Ordner gemeinter Versions-Name wie 'v1.2' wird als leere DATEI angelegt und ohne
+# '/**' negiert. Bekannte Kante der 'enthält Punkt = Datei'-Heuristik (an Lead gemeldet).
+PROJ_HU="$TMP/proj_heur"
+mkdir -p "$PROJ_HU/_dev_team/team-rules"
+printf 'v1.2\n' > "$PROJ_HU/_dev_team/team-rules/sync-share.items"
+bash "$SYNC_SHARE" "$PROJ_HU" --label acme --no-register >/dev/null 2>&1
+it "Heuristik: Punkt-Name → Datei (Ist-Zustand)"; ok test -f "$PROJ_HU/v1.2"
+
+# --- Whitelist-Datei fehlt in Engine UND Projekt → harter Abbruch ---
+FAKE_ENGINE="$TMP/fake_engine"
+mkdir -p "$FAKE_ENGINE/bin"
+cp "$SYNC_SHARE" "$FAKE_ENGINE/bin/sync-share"   # KEIN team-rules/ im Fake-Engine-Root
+mkdir -p "$TMP/proj_noitems"
+OUT="$(bash "$FAKE_ENGINE/bin/sync-share" "$TMP/proj_noitems" --label acme --no-register 2>&1)"
+RC=$?
+it "fehlende Items-Datei (Engine+Projekt) → Abbruch"; neq "$RC" "0"
+it "Abbruch-Meldung nennt sync-share.items";          contains "$OUT" "sync-share.items"
+it "ohne Items-Datei KEINE .stignore geschrieben";    file_missing "$TMP/proj_noitems/.stignore"
+
+# --- relativer Projekt-Pfad wird zu absolut aufgelöst ---
+mkdir -p "$TMP/proj_rel"
+( cd "$TMP" && bash "$SYNC_SHARE" "./proj_rel" --label acme --no-register >/dev/null 2>&1 )
+it "relativer Pfad → .stignore am absoluten Ort";  ok test -s "$TMP/proj_rel/.stignore"
+
+# --- '/' als Share-Wurzel wird verweigert (zweite Sicherheits-Bremse neben \$HOME) ---
+it "verweigert '/' als Share-Wurzel"
+not_ok bash "$SYNC_SHARE" "/" --label root --no-register
+
+# --- HIGH-1-Regression: Option ohne Wert am ENDE darf nicht hängen (Endlosschleifen-Bug) ---
+mkdir -p "$TMP/proj_hang"
+timeout 5 bash "$SYNC_SHARE" "$TMP/proj_hang" --label >/dev/null 2>&1
+RC=$?
+it "--label ohne Wert am Ende → Fehler statt Hang";   neq "$RC" "0"
+it "… kein timeout-Kill (RC≠124)";                    neq "$RC" "124"
+timeout 5 bash "$SYNC_SHARE" "$TMP/proj_hang" --label acme --device >/dev/null 2>&1
+RC=$?
+it "--device ohne Wert am Ende → Fehler statt Hang";  neq "$RC" "0"
+it "… kein timeout-Kill (RC≠124)";                    neq "$RC" "124"
+
+# --- BUG-2-Regression: Whitespace-only-Whitelist = leer → harter Abbruch, keine .stignore ---
+PROJ_WS="$TMP/proj_ws"
+mkdir -p "$PROJ_WS/_dev_team/team-rules"
+printf '   \n\t\n  \n' > "$PROJ_WS/_dev_team/team-rules/sync-share.items"
+OUT="$(bash "$SYNC_SHARE" "$PROJ_WS" --label acme --no-register 2>&1)"
+RC=$?
+it "Whitespace-only-Whitelist → Abbruch";             neq "$RC" "0"
+it "Abbruch-Meldung sagt 'leer'";                     contains "$OUT" "leer"
+it "keine .stignore bei Whitespace-Whitelist";        file_missing "$PROJ_WS/.stignore"
+
+# --- Secret-Refuse-Härtung: gängige Secret-Träger werden als Item verweigert ---
+PROJ_SEC="$TMP/proj_sec"
+mkdir -p "$PROJ_SEC/_dev_team/team-rules"
+for bad in '.env' '.env.production' 'config/credentials.yml.enc' 'id_rsa' 'secrets.yml' \
+           'config/database.yml' 'configuration.yml' 'api-token.txt' 'server.pem' 'tls.key'; do
+  printf '%s\n' "$bad" > "$PROJ_SEC/_dev_team/team-rules/sync-share.items"
+  OUT="$(bash "$SYNC_SHARE" "$PROJ_SEC" --label acme --no-register 2>&1)"
+  RC=$?
+  it "Secret-Refuse: '$bad' verweigert";              neq "$RC" "0"
+done
+
+# --- Glob-/Traversal-Items werden verweigert (kein Whitelist-Aushebeln, kein mkdir außerhalb) ---
+PROJ_TRV="$TMP/proj_trv"
+mkdir -p "$PROJ_TRV/_dev_team/team-rules"
+for bad in '*' 'docs/*' '../evil' 'a/../b'; do
+  printf '%s\n' "$bad" > "$PROJ_TRV/_dev_team/team-rules/sync-share.items"
+  OUT="$(bash "$SYNC_SHARE" "$PROJ_TRV" --label acme --no-register 2>&1)"
+  RC=$?
+  it "unsicheres Item '$bad' verweigert";             neq "$RC" "0"
+done
+it "kein mkdir außerhalb der Wurzel passiert";        file_missing "$TMP/evil"
+
+# --- MED-1-Fix: trailing '/' = expliziter Ordner-Marker (Punkt-Name wird trotzdem Ordner) ---
+PROJ_V="$TMP/proj_vdir"
+mkdir -p "$PROJ_V/_dev_team/team-rules"
+printf 'v1.2/\n' > "$PROJ_V/_dev_team/team-rules/sync-share.items"
+bash "$SYNC_SHARE" "$PROJ_V" --label acme --no-register >/dev/null 2>&1
+it "Dir-Marker 'v1.2/' → Ordner (trotz Punkt)";       ok test -d "$PROJ_V/v1.2"
+it "Dir-Marker → Negation mit '/**'";                 file_has "$PROJ_V/.stignore" '!/v1.2/**'
+
 summary
