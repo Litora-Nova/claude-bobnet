@@ -12,7 +12,7 @@
 
 | Hook | Trigger | Zweck | Regel-Quelle (Daten/Env) | aktiv? |
 |---|---|---|---|---|
-| `deploy-guard.sh` | PreToolUse (Edit\|Write\|MultiEdit) | Blockt Edits an Deploy-/Production-/Secret-Pfaden (Tier-4, human-only). Exit 2 = Block. | `team-rules/deploy-guard.paths` (Fallback: eingebaute Defaults) | ⊘ gebaut, NICHT verdrahtet (Stufe C) |
+| `deploy-guard.sh` | PreToolUse (Edit\|Write\|MultiEdit) | Zweistufig: **blockt** Edits an Production-/Secret-Pfaden (Exit 2, Tier-4 human-only) · **erzwingt Bestätigung** (`permissionDecision:"ask"`) für Deploy-Configs — `{HUMAN}` bestätigt jeden Edit einzeln, nie auto-accept (PO-Doktrin 2026-06-10, `tiers.md`). | `team-rules/deploy-guard.paths` (Block) + `team-rules/deploy-guard.ask.paths` (Ask); Fallback: eingebaute Defaults/Floors | ⊘ gebaut, NICHT verdrahtet (Stufe C) |
 | `session-sync-reminder.sh` | SessionStart | Rendert den State-Sync-Reminder (Branch-Check + fetch/pull/push über die Repos). | `team-rules/sync.md` (`REMINDER:`-Block) + Env `PROJECT_NAME`, `CANONICAL_BRANCH`, `DEV_TEAM_REPOS` | ⊘ gebaut, NICHT verdrahtet (Stufe C) |
 | `session-heartbeat.sh` | SessionStart | Schreibt einen Heartbeat des arbeitenden Agents (`log.sh $AGENT busy session-start`) ins BobNet der Kollab-Instanz. Default-Agent = Lead; shared Services setzen `HEARTBEAT_AGENT`. Fail-safe, blockt nie. | Env `HEARTBEAT_AGENT` (Default `TEAM_LEAD`) + `STANDUP_DIR` aus `dev-team.env` + `team-rules/heartbeat.md` → `scripts/log.sh` | ⊘ gebaut, NICHT verdrahtet (Stufe C) |
 

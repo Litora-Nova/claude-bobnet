@@ -8,6 +8,11 @@
 ## Kanon
 - **Sync = Git.** `origin` ist die eine Wahrheit; Maschinen syncen sich über `origin` (push hier → pull dort),
   NICHT direkt Maschine-zu-Maschine.
+- **Push = Standard** (PO-Doktrin 2026-06-10): `fetch`/`pull`/`push` auf Arbeits-Branches
+  (development/staging/Feature) ist Teil jeder Sync-Routine, keine Sondergenehmigung nötig.
+  **Ausnahme Live-Branch:** der Branch, der die laufende App/Site/Service repräsentiert (je nach
+  Projekt `main`/`master`/`production`), wird NUR per Absprache mit dem `{HUMAN}` gepusht;
+  force-push/History-Rewrite nie (T4 — `tiers.md`). Projekt-HARD-Rules bleiben strenger.
 - Haupt-/Koordinations-Branch: **`$CANONICAL_BRANCH`** (projekt-definiert via Env). Immer wissen, auf welchem Branch man ist.
 - **Real (lokal) ↔ VR (remote/LXC) ↔ origin** müssen in sync sein.
 

@@ -20,9 +20,15 @@
 
 ## Staging-Autonomy
 
-- **`{TEAM_LEAD}` füllt Staging eigenständig**, sobald der volle QM-Circle **ohne Skip GRÜN** ist
-  (Review → Compliance → Tests → Release/Pre-Flight, je nach Tier). Kein separates `{HUMAN}`-OK für Staging.
-- **Production bleibt `{HUMAN}`-only** — die EINE harte Grenze (T4, maschinell via `deploy-guard`, siehe `tiers.md`).
+- **`{TEAM_LEAD}` füllt den Staging-BRANCH eigenständig** (committen + pushen), sobald der volle
+  QM-Circle **ohne Skip GRÜN** ist (Review → Compliance → Tests → Release/Pre-Flight, je nach Tier).
+  Kein separates `{HUMAN}`-OK für den Branch-Push — Push ist Standard (`sync.md`).
+- **Staging-DEPLOY (Ausführung, z. B. `cap staging deploy`) braucht ausdrückliche `{HUMAN}`-Erlaubnis
+  pro Aktion** (PO-Doktrin 2026-06-10). Ansage/Heartbeat allein reicht nicht; die Erlaubnis wird
+  nicht durch Allow-Regeln wegautomatisiert. **Ausnahme von „Schon-OK = OK": Deploy-AUSFÜHRUNGEN
+  sind aktionsgebunden** — jede braucht ihr eigenes Ja.
+- **Production bleibt `{HUMAN}`-only** — die EINE harte Grenze (T4, maschinell via `deploy-guard` +
+  Deny; Remote-Go-Protokoll für `remote-ok`-Apps siehe `tiers.md`).
 - Transparenz bleibt: `{TEAM_LEAD}` meldet proaktiv, was deployed wurde. Bei echter Unsicherheit, ob
   der Circle wirklich clean ist → lieber fragen, kein blindes Deployen.
 

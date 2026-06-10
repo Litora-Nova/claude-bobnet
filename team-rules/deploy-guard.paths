@@ -1,8 +1,10 @@
-# team-rules/deploy-guard.paths — geschützte Pfad-Globs (deklarativ).
+# team-rules/deploy-guard.paths — BLOCK-Globs (deklarativ): Edit nie erlaubt ({HUMAN}-only, Tier-4).
 #
 # Der Hook hooks/deploy-guard.sh liest DIESE Datei statt hartkodierter Globs.
 # Wenn ein PreToolUse-Edit/Write/MultiEdit eine dieser Globs trifft, blockt der Hook
-# (Exit 2) und gibt einen Hinweis aus — Production/Deploy/Secrets sind {HUMAN}-only (Tier-4).
+# (Exit 2) und gibt einen Hinweis aus — Production/Secrets sind {HUMAN}-only (Tier-4).
+# Deploy-CONFIGS (config/deploy*) sind seit der PO-Doktrin 2026-06-10 NICHT mehr hier,
+# sondern bestätigungspflichtig („ask") — siehe team-rules/deploy-guard.ask.paths + tiers.md.
 #
 # Format:
 #   - eine Glob pro Zeile
@@ -10,16 +12,15 @@
 #   - Matching ist substring-/glob-basiert gegen den absoluten file_path (case-sensitive)
 #   - '*' matcht beliebige Zeichen (auch '/'), passend zu Pfad-Fragmenten
 #
-# Schutz erweitern = Zeile anhängen. KEIN Code-Edit nötig.
+# Schutz erweitern = Zeile anhängen. KEIN Code-Edit nötig. Block schlägt Ask.
 # Wenn diese Datei fehlt, fällt der Hook auf eingebaute Defaults zurück (gleiche Liste).
 #
-# 🔒 T4-FLOOR: Die Secret-/Deploy-Kern-Globs (*/.secrets/*, *master.key, *credentials.yml.enc,
-#   *.env.production, */config/deploy/*, */config/deploy.rb, *Capfile, *configuration.yml) sind ein NICHT-überschreibbarer Floor — der Hook
-#   merged sie IMMER dazu (Funktion t4_floor), auch wenn ein Override sie weglässt. Override darf nur ERWEITERN.
+# 🔒 T4-FLOOR: Die Secret-/Struktur-Kern-Globs (*/.secrets/*, *master.key, */config/master.key,
+#   *credentials.yml.enc, *.env.production, *Capfile, *configuration.yml) sind ein NICHT-überschreibbarer
+#   Floor — der Hook merged sie IMMER dazu (Funktion t4_floor), auch wenn ein Override sie weglässt.
+#   Override darf nur ERWEITERN.
 
-# --- Deploy-/Capistrano-Konfiguration (Produktion + Stages) ---
-*/config/deploy.rb
-*/config/deploy/*
+# --- Deploy-Struktur (Capfile/Recipes = strukturell, configuration.yml = secrets-nah) ---
 */Capfile
 *configuration.yml
 *recipes2go*
