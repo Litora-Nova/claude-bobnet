@@ -70,7 +70,17 @@ it "Fehlermeldung nennt den Secret-Refuse";      contains "$OUT" "REFUSED"
 mkdir -p "$TMP/p2"
 bash "$SYNC_SHARE" "$TMP/p2" --no-register >/dev/null 2>&1
 RC=$?
-it "ohne --label → Fehler";                      neq "$RC" "0"
+it "ohne --uid/--label → Fehler";                neq "$RC" "0"
+
+# --- Anzeigename-Schema (PO-Kanon 2026-06-11): ID=--uid, Label=--name, --label=Alias ---
+mkdir -p "$TMP/proj_name"
+it "--uid (neues Schema) funktioniert";          ok bash "$SYNC_SHARE" "$TMP/proj_name" --uid acme --no-register
+it "--name mit Leerzeichen akzeptiert";          ok bash "$SYNC_SHARE" "$TMP/proj_name" --uid acme --name "Acme Inc" --no-register
+it "--label bleibt Alias für --uid (v1-Kompat)"; ok bash "$SYNC_SHARE" "$TMP/proj_name" --label acme --no-register
+timeout 5 bash "$SYNC_SHARE" "$TMP/proj_name" --uid acme --name >/dev/null 2>&1
+RC=$?
+it "--name ohne Wert am Ende → Fehler statt Hang"; neq "$RC" "0"
+it "… kein timeout-Kill (RC≠124)";                neq "$RC" "124"
 
 # --- Item-Normalisierung: führende/trailing Slashes werden getrimmt (kein Ordner '/') ---
 PROJ_SL="$TMP/proj_slash"

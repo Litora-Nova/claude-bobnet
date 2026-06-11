@@ -59,8 +59,11 @@ Datei-Sync eingerichtet (Werkzeug: ein Continuous-Sync-Dienst à la Syncthing). 
    für externe Coworker/Services). **Alles andere (Repo, `.git`, Secrets, Code) bleibt
    lokal.** Keine Symlinke, kein Extra-Ordner: alles bleibt git-versioniert an Ort und Stelle.
 2. **Geräte-Seite einmalig:** Auto-Accept für das Server-Gerät + Default-Ordnerpfad
-   (z. B. `~/Bobiverse-sync/`) setzen → jeder neue Projekt-Share erscheint dort von selbst
-   als `<uid>/`, ohne weitere Bestätigungen. Daneben kann ein genereller `exchange`-Share
+   (z. B. `~/Bobiverse-sync/`) setzen → jeder neue Projekt-Share erscheint dort von selbst,
+   ohne weitere Bestätigungen. **Benennung (PO-Kanon 2026-06-11):** Share-**ID** = immutable
+   `PROJECT_UID` (`--uid`), Share-**LABEL** = menschlicher **Projektname** (`--name`, z. B.
+   „Acme Inc") — Auto-Accept benennt den Geräte-Ordner nach dem LABEL, der Mensch sieht also
+   Projektnamen, die Maschine routet auf UIDs. Daneben kann ein genereller `exchange`-Share
    für Projekt-Übergreifendes bestehen.
 3. **Die `.stignore` ist heilig.** Sie ist die einzige Bremse — fehlt sie, ginge das ganze
    Projekt (inkl. `.git`/Secrets) auf Reisen. Nie löschen/editieren außer über
