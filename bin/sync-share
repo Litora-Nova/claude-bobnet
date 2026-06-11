@@ -8,9 +8,13 @@
 # KEINE Symlinks, KEIN Extra-Ordner: alles bleibt git-versioniert an Ort und Stelle.
 #
 # Usage:
-#   bin/sync-share <projekt-wurzel> --label <uid> [--device <name|id>] [--register|--no-register]
+#   bin/sync-share <projekt-wurzel> --uid <uid> [--name <anzeigename>] [--device <name|id>] [--register|--no-register]
 #
-#   --label       Share-ID/-Label (= PROJECT_UID, z. B. acme). PFLICHT.
+#   --uid         Share-ID (= PROJECT_UID, stabil/immutable, z. B. acme). PFLICHT.
+#   --name        Anzeigename = Syncthing-LABEL (PO-Kanon 2026-06-11): Auto-Accept legt den
+#                 Ordner auf dem {HUMAN}-Gerät unter DIESEM Namen an (z. B. "Acme Inc" →
+#                 ~/<sync-root>/Acme Inc). Default: --uid. Leerzeichen sind ok (quoten).
+#   --label       DEPRECATED Alias für --uid (Abwärtskompatibilität der v1-Anleitung).
 #   --device      Ziel-Gerät (Name oder Device-ID) für --register.
 #   --register    Share via `syncthing cli` anlegen + fürs Gerät freigeben (idempotent).
 #   --no-register (Default) nur Dateien/Whitelist anlegen + Anleitung ausgeben.
@@ -32,14 +36,16 @@ set -uo pipefail
 BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENGINE_ROOT="$(cd "$BIN_DIR/.." && pwd)"
 
-usage() { sed -n '2,29p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,33p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 refuse() { echo "sync-share: REFUSED — $1" >&2; exit 1; }
 need_val() { [ "$1" -ge 2 ] || refuse "Option '$2' braucht einen Wert."; }
 
-PROJECT_ROOT_ARG="" ; LABEL="" ; DEVICE="${SYNC_DEVICE:-}" ; REGISTER=0
+PROJECT_ROOT_ARG="" ; SHARE_UID="" ; SHARE_NAME="" ; DEVICE="${SYNC_DEVICE:-}" ; REGISTER=0
 while [ $# -gt 0 ]; do
   case "$1" in
-    --label)       need_val $# "$1"; LABEL="$2";  shift 2 ;;
+    --uid)         need_val $# "$1"; SHARE_UID="$2";  shift 2 ;;
+    --name)        need_val $# "$1"; SHARE_NAME="$2"; shift 2 ;;
+    --label)       need_val $# "$1"; [ -n "$SHARE_UID" ] || SHARE_UID="$2"; shift 2 ;;  # deprecated Alias
     --device)      need_val $# "$1"; DEVICE="$2"; shift 2 ;;
     --register)    REGISTER=1; shift ;;
     --no-register) REGISTER=0; shift ;;
@@ -48,9 +54,10 @@ while [ $# -gt 0 ]; do
     *)             PROJECT_ROOT_ARG="$1"; shift ;;
   esac
 done
+SHARE_NAME="${SHARE_NAME:-$SHARE_UID}"
 
 [ -n "$PROJECT_ROOT_ARG" ] || { echo "sync-share: Projekt-Wurzel fehlt (siehe --help)." >&2; exit 1; }
-[ -n "$LABEL" ]            || { echo "sync-share: --label <uid> ist Pflicht (Share-ID = PROJECT_UID)." >&2; exit 1; }
+[ -n "$SHARE_UID" ]        || { echo "sync-share: --uid <uid> ist Pflicht (Share-ID = PROJECT_UID)." >&2; exit 1; }
 [ -d "$PROJECT_ROOT_ARG" ] || { echo "sync-share: '$PROJECT_ROOT_ARG' ist kein Ordner." >&2; exit 1; }
 PROJECT_ROOT="$(cd "$PROJECT_ROOT_ARG" && pwd)"
 
@@ -129,14 +136,14 @@ echo "  Items: ${ITEMS[*]}"
 if [ "$REGISTER" = 1 ]; then
   if ! command -v syncthing >/dev/null 2>&1; then
     echo "sync-share: --register, aber 'syncthing' nicht im PATH — manuell anlegen (s.u.)." >&2
-  elif syncthing cli config folders list 2>/dev/null | grep -qx "$LABEL"; then
-    echo "sync-share: Share '$LABEL' existiert bereits — Registrierung übersprungen (idempotent)."
+  elif syncthing cli config folders list 2>/dev/null | grep -qx "$SHARE_UID"; then
+    echo "sync-share: Share '$SHARE_UID' existiert bereits — Registrierung übersprungen (idempotent)."
   else
-    syncthing cli config folders add --id "$LABEL" --label "$LABEL" --path "$PROJECT_ROOT" \
-      && echo "sync-share: Share '$LABEL' angelegt ($PROJECT_ROOT)."
+    syncthing cli config folders add --id "$SHARE_UID" --label "$SHARE_NAME" --path "$PROJECT_ROOT" \
+      && echo "sync-share: Share '$SHARE_UID' (Anzeige: '$SHARE_NAME') angelegt ($PROJECT_ROOT)."
     if [ -n "$DEVICE" ]; then
-      syncthing cli config folders "$LABEL" devices add --device-id "$DEVICE" \
-        && echo "sync-share: Share '$LABEL' für Gerät '$DEVICE' freigegeben."
+      syncthing cli config folders "$SHARE_UID" devices add --device-id "$DEVICE" \
+        && echo "sync-share: Share '$SHARE_UID' für Gerät '$DEVICE' freigegeben — erscheint dort als '$SHARE_NAME'."
     else
       echo "sync-share: kein --device angegeben — Geräte-Freigabe manuell ergänzen."
     fi
