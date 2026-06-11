@@ -73,6 +73,13 @@ Datei-Sync eingerichtet (Werkzeug: ein Continuous-Sync-Dienst à la Syncthing). 
    gesyncte `_inbox.md` nach §-Kanon oben (adressiert, signiert, datiert, append-only)
    und nutzen `share/` für Dateiübergaben. Sync-Konflikt-Dateien (`*.sync-conflict-*`)
    werden nicht ignoriert, sondern von der Standup-Routine gemerged/gemeldet.
+   **Der projektübergreifende `exchange`-Share ist KEIN Projekt-Zuhause** — niemals
+   Projekt-Ordner dort ablegen, um sich eine eigene Share-Registrierung zu „sparen";
+   jedes Projekt bekommt seinen EIGENEN Share auf der Projekt-Wurzel.
+   **Share-Registrierung ist Server-/Infra-Ebene:** scheitert `--register` am Harness
+   eines Projekt-Agenten (Sync-Dienst-Config = systemweite Änderung), legt er die
+   lokalen Artefakte mit `--no-register` an und fordert die Registrierung per Inbox
+   beim Hub-Lead/Serverwächter an — NICHT improvisieren.
 5. **Plan-Artefakte:** kanonischer Ort ist `<projekt>/plan/` — `{HUMAN}`/Lead editieren,
    Agenten lesen und schlagen Änderungen per Inbox vor (minimiert Schreibkonflikte).
 6. **Abgrenzung zu `sync.md`:** Der Datei-Sync ist ein **Lese-/Edit-Fenster für Menschen

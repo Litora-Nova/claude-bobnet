@@ -29,7 +29,7 @@ useHead({ title: `${name} · Team · Stand-up` })
       <NuxtLink to="/" class="back-link"><Icon name="mdi:arrow-left" class="ic" /> Team</NuxtLink>
     </div>
 
-    <RosterCard :agent="agent" :show-avatar="(standup as any)?.theme?.settings?.showAvatars !== false" />
+    <RosterCard :agent="agent" :avatar-size="180" :show-avatar="(standup as any)?.theme?.settings?.showAvatars !== false" />
 
     <!-- Position direkt unter dem Profil-Header (PO) -->
     <div class="bob-pos">
