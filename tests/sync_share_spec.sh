@@ -209,4 +209,67 @@ RC=$?
 it "legitime Items (plan/docs/environment/share) → OK"; eq "$RC" "0"
 it "… 'environment' nicht fälschlich als '.env' geblockt"; file_has "$PROJ_OK/.stignore" '!/environment'
 
+# --- Anzeigename-Schema, Registrierungs-Auflösung (PO-Kanon 2026-06-11) ---
+# Black-Box-Trick: ein Fake-'syncthing' im PATH macht den --register-Pfad beobachtbar,
+# OHNE den echten Sync-Dienst anzufassen. 'config folders list' → leer (Share existiert
+# nicht → add-Pfad), 'folders add' druckt das ID- und das Label-Token EINZELN (so prüfen
+# wir Argument-Grenzen, nicht nur "$*"). Damit wird testbar, was im --no-register-Modus
+# unsichtbar bleibt: ID = --uid, Syncthing-LABEL = --name (Default = --uid), --label = Alias.
+FAKEBIN="$TMP/fakebin"
+mkdir -p "$FAKEBIN"
+cat > "$FAKEBIN/syncthing" <<'FAKE'
+#!/usr/bin/env bash
+case "$*" in
+  *"config folders list"*) exit 0 ;;          # Share existiert nicht → add-Pfad
+  *"folders add"*)
+    prev=""
+    for a in "$@"; do
+      [ "$prev" = "--id" ]    && echo "ID_TOKEN=[$a]"
+      [ "$prev" = "--label" ] && echo "LABEL_TOKEN=[$a]"
+      prev="$a"
+    done ;;
+esac
+FAKE
+chmod +x "$FAKEBIN/syncthing"
+add_args() { PATH="$FAKEBIN:$PATH" bash "$SYNC_SHARE" "$@" --register 2>&1; }
+
+mkdir -p "$TMP/reg"
+# Default: ohne --name ist das Syncthing-LABEL gleich der --uid (jetzt black-box beobachtbar)
+OUT="$(add_args "$TMP/reg" --uid acme)"
+it "register: ID = --uid";                          contains "$OUT" "ID_TOKEN=[acme]"
+it "register: Default-Label = --uid (kein --name)"; contains "$OUT" "LABEL_TOKEN=[acme]"
+
+# --name setzt das Syncthing-LABEL; Leerzeichen bleiben EIN Token (korrektes Quoting)
+OUT="$(add_args "$TMP/reg" --uid acme --name "Acme Inc")"
+it "register: --name → Syncthing-LABEL";            contains "$OUT" "LABEL_TOKEN=[Acme Inc]"
+it "register: --name lässt ID = --uid unberührt";   contains "$OUT" "ID_TOKEN=[acme]"
+
+# Alias-Disziplin: --label darf eine bereits gesetzte --uid NICHT überschreiben — beide Reihenfolgen
+OUT="$(add_args "$TMP/reg" --uid acme --label other)"
+it "Alias: --uid x --label y → ID bleibt x";        contains "$OUT" "ID_TOKEN=[acme]"
+it "… und --label landet NICHT in der ID";          not_contains "$OUT" "ID_TOKEN=[other]"
+OUT="$(add_args "$TMP/reg" --label other --uid acme)"
+it "Alias: --label y --uid x → ID bleibt x";        contains "$OUT" "ID_TOKEN=[acme]"
+it "… (label-zuerst) --label nicht in der ID";      not_contains "$OUT" "ID_TOKEN=[other]"
+
+# --name beeinflusst NUR die Registrierung, NICHT die Whitelist/Artefakte (Trennung Label↔Sync-Inhalt)
+PROJ_NM="$TMP/proj_nameonly"
+mkdir -p "$PROJ_NM"
+bash "$SYNC_SHARE" "$PROJ_NM" --uid acme --name "Acme Inc" --no-register >/dev/null 2>&1
+it "--name taucht NICHT in der .stignore auf";       not_ok grep -qF "Acme Inc" "$PROJ_NM/.stignore"
+# Whitelist mit --name muss byte-gleich der ohne --name sein (Anzeigename ≠ Sync-Inhalt)
+PROJ_NM2="$TMP/proj_noname"
+mkdir -p "$PROJ_NM2"
+bash "$SYNC_SHARE" "$PROJ_NM2" --uid acme --no-register >/dev/null 2>&1
+it ".stignore identisch mit/ohne --name";            eq "$(sed 's#'"$PROJ_NM"'#X#;s#'"$PROJ_NM2"'#X#' "$PROJ_NM/.stignore" | cksum)" "$(sed 's#'"$PROJ_NM"'#X#;s#'"$PROJ_NM2"'#X#' "$PROJ_NM2/.stignore" | cksum)"
+
+# --- usage/--help-Regression: die sed-Range (2,33) muss die NEUEN Optionen einschließen ---
+# (Der Commit weitete 2,29 → 2,33; eine spätere Verschiebung würde --uid/--name still abschneiden.)
+HELP="$(bash "$SYNC_SHARE" --help 2>&1)"
+it "--help: zeigt --uid";                            contains "$HELP" "--uid"
+it "--help: zeigt --name";                           contains "$HELP" "--name"
+it "--help: zeigt --label als DEPRECATED";           contains "$HELP" "DEPRECATED"
+it "--help: zeigt --device (Range-Ende nicht zu kurz)"; contains "$HELP" "--device"
+it "--help: leckt keinen Code (kein 'set -uo')";     not_contains "$HELP" "set -uo pipefail"
+
 summary
