@@ -76,6 +76,8 @@ Datei-Sync eingerichtet (Werkzeug: ein Continuous-Sync-Dienst à la Syncthing). 
    gesyncte `_inbox.md` nach §-Kanon oben (adressiert, signiert, datiert, append-only)
    und nutzen `share/` für Dateiübergaben. Sync-Konflikt-Dateien (`*.sync-conflict-*`)
    werden nicht ignoriert, sondern von der Standup-Routine gemerged/gemeldet.
+   **Onboarding-Vorlage:** `skills/init-bobs/templates/SYNCTHING_COWORKER.template.md`
+   — Platzhalter ersetzen, in den projekteigenen `share/` legen (synct selbst zum Coworker).
    **Der projektübergreifende `exchange`-Share ist KEIN Projekt-Zuhause** — niemals
    Projekt-Ordner dort ablegen, um sich eine eigene Share-Registrierung zu „sparen";
    jedes Projekt bekommt seinen EIGENEN Share auf der Projekt-Wurzel.
