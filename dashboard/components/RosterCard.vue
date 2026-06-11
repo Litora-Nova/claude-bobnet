@@ -2,7 +2,9 @@
 // Geteilte Roster-Kachel (Avatar + Name + Rolle + Zustands-Pille). Genutzt vom
 // Inbox-Hub ("Meine Page") und der Bob-Detail-Seite /team/<name>. Nur Zustand,
 // kein Heartbeat-Text (der lebt in der Heartbeats-Liste).
-const props = defineProps<{ agent: any; tag?: string; showAvatar?: boolean }>()
+const props = defineProps<{ agent: any; tag?: string; showAvatar?: boolean; avatarSize?: number }>()
+// Avatar-Größe pro Einsatzort (Default 52px Listen-Kachel; Profil-Header größer, PO: 180+).
+const avaPx = computed(() => `${props.avatarSize || 52}px`)
 const COLORS: Record<string, string> = { busy: '#3fb950', idle: '#8b949e', blocked: '#f85149', done: '#58a6ff' }
 const dot = (s?: string) => COLORS[s || ''] || '#6e7681'
 // Anzeigename kommt aus dem aktiven Theme (server-seitig am Agent); kein hardcoded
@@ -15,9 +17,9 @@ const DEFAULT_AVATAR = '/avatars/default.png'
 
 <template>
   <div class="me-card">
-    <div class="ava" v-if="showAvatar !== false">
-      <img v-if="!fail" :src="avatarUrl(agent.name)" :alt="displayName" @error="fail = true" />
-      <img v-else :src="DEFAULT_AVATAR" :alt="displayName" />
+    <div class="ava" v-if="showAvatar !== false" :style="{ width: avaPx, height: avaPx }">
+      <img v-if="!fail" :src="avatarUrl(agent.name)" :alt="displayName" :style="{ width: avaPx, height: avaPx }" @error="fail = true" />
+      <img v-else :src="DEFAULT_AVATAR" :alt="displayName" :style="{ width: avaPx, height: avaPx }" />
       <span class="sdot" :style="{ background: dot(agent.latest?.status) }" :title="agent.latest?.status || 'unbekannt'"></span>
     </div>
     <div class="who">
