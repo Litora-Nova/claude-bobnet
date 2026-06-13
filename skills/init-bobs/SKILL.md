@@ -112,6 +112,11 @@ Bobiverse        the whole installation (root variable, stored in ~/.claude/bobi
 - **New dirs** (e.g. a marketing site): own repo or monorepo subdir? which tech?
 - **Style/design references** for frontend work (shared layer, exemplar apps, color/preference docs).
 - **Comms:** Telegram/other via SCUT? who is the human (`{HUMAN}`) on the back-channel?
+- **Multiplexer (tmux/zellij):** **auto-detect, then confirm.** Probe what's installed — offer
+  **zellij** if present (incl. user-scope `~/.local/bin/zellij`), else **tmux** — show the detected
+  choice and let the user accept (Enter) or override by typing the other. Write the result as
+  `BOBNET_MUX=tmux|zellij` into `dev-team.env`. Daemons + dashboard read it via `scripts/lib/mux.sh`;
+  if left unset the engine falls back to `auto` (tmux-preferred, for backward-compat).
 
 ### 4. Propose a roster mapped to the repo
 **Keep names stable across projects** (same role → same persona every time). Always include the
