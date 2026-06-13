@@ -34,13 +34,33 @@ Die Inbox hat keines dieser Probleme: asynchron, auditierbar, kollisionsfrei.
 3. **Antworten ebenfalls via Inbox** — in die Inbox des *fragenden* Bobiverse. Niemand wartet
    synchron auf den anderen; wer eine Antwort braucht, schreibt sie sich auf die offene Liste
    und arbeitet weiter.
-4. **Prompt-Injection (`tmux send-keys`) NUR für echte Notfälle** — T4-Blocker oder der
-   `{HUMAN}` wartet live. Und dann mit voller Sorgfalts-Routine (siehe auch `lessons.md`,
-   tmux-Abschnitt):
-   - erst `capture-pane`: Zustand + ungesendete Eingaben prüfen;
-   - capture und send **NIE im selben Befehl**;
-   - `send-keys -l "<text>"` + **separates** `Enter`.
-   Alles andere: Inbox.
+4. **Prompt-Injection NUR für echte Notfälle** — T4-Blocker oder der `{HUMAN}` wartet live.
+   Und dann mit voller Sorgfalts-Routine (siehe auch `lessons.md`, Multiplexer-Abschnitt). Das
+   Prinzip ist **multiplexer-neutral** (tmux ODER zellij — Default `auto`, tmux-bevorzugt):
+   - **erst capturen**: Zustand + ungesendete Eingaben des Ziels prüfen;
+   - **capture und send NIE im selben Befehl**;
+   - **Text und Enter SEPARAT** senden (nie Text+Newline in einem Rutsch).
+
+   **Bevorzugter Weg = die `mux_*`-Verben aus `scripts/lib/mux.sh`** — die einzige Stelle, die
+   weiß, welches Backend aktiv ist (`BOBNET_MUX=tmux|zellij|auto`). Nie direkt `tmux`/`zellij`
+   aufrufen:
+   - `mux_capture <NAME>` → sichtbarer Pane-Inhalt nach STDOUT (Zustand prüfen);
+   - dann, in **getrenntem** Aufruf, `mux_send <NAME> "<text>"` (sendet Text + Enter).
+
+   Wer das Backend doch von Hand fährt (Debug), das verifizierte Befehls-Mapping:
+
+   | Schritt | tmux | zellij |
+   |---|---|---|
+   | Zustand capturen | `tmux capture-pane -p` | `zellij --session NAME action dump-screen` (→ STDOUT, **kein File-Arg** in 0.44) |
+   | Text senden | `tmux send-keys -l "<text>"` | `zellij --session NAME action write-chars -- "<text>"` |
+   | Enter (separat!) | `tmux send-keys Enter` | `zellij --session NAME action write 13` |
+   | Sessions listen | `tmux ls` | `zellij list-sessions --no-formatting --short` |
+
+   **zellij-Grenze (verifiziert):** `write-chars`/`dump-screen` wirken NUR zuverlässig auf
+   Sessions mit angebundenem **Client**; gegen rein detached Sessions sind send/capture
+   best-effort. Umso mehr gilt: der Injection-Pfad ist Notfall, nicht Normalweg.
+
+   Alles andere: Inbox. **Inbox-first bleibt der Default — über beide Multiplexer.**
 5. **Eskalation, wenn Inbox zu langsam wäre:** den eigenen Heartbeat-Status auf **`blocked`**
    setzen — das Dashboard zeigt blocked prominent/urgent, der Hilferuf ist sichtbar, ohne
    fremde Prompts zu kapern. Perspektivisch übernimmt ein Comms-Router-/Concierge-Dienst die
@@ -76,6 +96,8 @@ Datei-Sync eingerichtet (Werkzeug: ein Continuous-Sync-Dienst à la Syncthing). 
    gesyncte `_inbox.md` nach §-Kanon oben (adressiert, signiert, datiert, append-only)
    und nutzen `share/` für Dateiübergaben. Sync-Konflikt-Dateien (`*.sync-conflict-*`)
    werden nicht ignoriert, sondern von der Standup-Routine gemerged/gemeldet.
+   **Onboarding-Vorlage:** `skills/init-bobs/templates/SYNCTHING_COWORKER.template.md`
+   — Platzhalter ersetzen, in den projekteigenen `share/` legen (synct selbst zum Coworker).
    **Der projektübergreifende `exchange`-Share ist KEIN Projekt-Zuhause** — niemals
    Projekt-Ordner dort ablegen, um sich eine eigene Share-Registrierung zu „sparen";
    jedes Projekt bekommt seinen EIGENEN Share auf der Projekt-Wurzel.

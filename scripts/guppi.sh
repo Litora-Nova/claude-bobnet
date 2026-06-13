@@ -39,6 +39,8 @@ set -uo pipefail
 
 BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENGINE_ROOT="${ENGINE_ROOT:-$(cd "$BIN_DIR/.." && pwd)}"
+# shellcheck source=lib/mux.sh
+. "$BIN_DIR/lib/mux.sh"   # Multiplexer-Adapter (tmux|zellij) — nie direkt tmux/zellij rufen
 TOOLHUB="$(cd "$ENGINE_ROOT/.." && pwd)"
 BOBIVERSE_CONFIG="${BOBIVERSE_CONFIG:-$HOME/.claude/bobiverse.json}"
 BOBNET_URL="${BOBNET_URL:-http://localhost:3030}"
@@ -111,10 +113,12 @@ resolve_project() {
 # ── Check 1: Prozess-/Schedule-Watch ───────────────────────────────────────────────────────────────
 check_processes() {
   echo "[1/3] Prozess- / Schedule-Watch"
-  if command -v tmux >/dev/null 2>&1 && tmux ls >/dev/null 2>&1; then
-    pass "tmux-Sessions: $(tmux ls 2>/dev/null | cut -d: -f1 | paste -sd' ' -)"
+  local mux sessions
+  mux="$(mux_backend 2>/dev/null)"
+  if [ -n "$mux" ] && sessions="$(mux_list 2>/dev/null)" && [ -n "$sessions" ]; then
+    pass "$mux-Sessions: $(printf '%s' "$sessions" | paste -sd' ' -)"
   else
-    skip "kein tmux / keine Sessions"
+    skip "kein Multiplexer (tmux/zellij) / keine Sessions"
   fi
   # cron-Einträge, die Engine-Scripts referenzieren (Schedule-Sichtbarkeit, kein Eingriff).
   if command -v crontab >/dev/null 2>&1 && crontab -l >/dev/null 2>&1; then

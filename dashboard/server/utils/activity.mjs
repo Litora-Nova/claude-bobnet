@@ -49,3 +49,59 @@ export function thresholdsFrom(env = {}) {
     runningMin: num(env.NUXT_ACTIVITY_RUNNING_MIN, DEFAULT_THRESHOLDS.runningMin),
   }
 }
+
+// ---------------------------------------------------------------------------
+// Multiplexer-Session-Probe (backend-neutral) — spiegelt scripts/lib/mux.sh
+// im Node-Layer nach, weil das Dashboard mux.sh nicht sourcen kann.
+//
+// Backend-Wahl per BOBNET_MUX=tmux|zellij|auto (Default auto): auto = tmux falls
+// vorhanden (Rückwärtskompat), sonst zellij. Pro Multiplexer EIN list-Befehl:
+//   tmux   -> tmux ls -F '#{session_name}'
+//   zellij -> zellij list-sessions --no-formatting --short  (+ ~/.local/bin-Fallback,
+//             weil zellij oft user-scope liegt und im Node/Cron-PATH fehlt).
+// ---------------------------------------------------------------------------
+
+// Liefert den list-Befehl + die zu probierenden Binaries für ein Backend.
+// Reine Funktion (kein Prozess) — so für tests/node ohne echten Multiplexer prüfbar.
+export function muxListPlan(backend, env = {}) {
+  const home = env.HOME || ''
+  if (backend === 'zellij') {
+    // 'zellij' (PATH) zuerst, dann der user-scope-Fallback.
+    const bins = ['zellij']
+    if (home) bins.push(`${home}/.local/bin/zellij`)
+    return { bins, args: ['list-sessions', '--no-formatting', '--short'] }
+  }
+  // Default/tmux: das Bestehende.
+  return { bins: ['tmux'], args: ['ls', '-F', '#{session_name}'] }
+}
+
+// Backend aus BOBNET_MUX auflösen. has(): "ist dieses Binary aufrufbar?" — der
+// Aufrufer reicht eine Probe-Funktion rein (im Server: command-Existenz-Check),
+// damit diese Datei pur/testbar bleibt. auto bevorzugt tmux (Rückwärtskompat).
+export function resolveMuxBackend(env = {}, has = () => true) {
+  const want = (env.BOBNET_MUX || 'auto').toLowerCase()
+  const home = env.HOME || ''
+  const tmuxOk = () => has('tmux')
+  const zellijOk = () => has('zellij') || (home && has(`${home}/.local/bin/zellij`))
+  if (want === 'tmux') return 'tmux'
+  if (want === 'zellij') return 'zellij'
+  // auto (oder Unbekanntes): tmux bevorzugt, sonst zellij.
+  if (tmuxOk()) return 'tmux'
+  if (zellijOk()) return 'zellij'
+  return 'tmux'   // nichts da -> tmux-Plan, der Aufruf scheitert leise (kein Signal)
+}
+
+// Roh-Output einer Session-Liste -> normalisierte Session-Namen.
+// zellij hängt bei toten Sessions einen Marker an (z. B. "name (EXITED - 1m ago)").
+// EXITED-Zeilen sind KEINE laufende Session -> komplett raus (sonst gäbe die Probe
+// ein falsches "running"). Bei lebenden zellij-Sessions schneiden wir einen evtl.
+// vorhandenen runden Status-Klammer-Suffix ab. Namen lowercased, damit der
+// uid/name-Vergleich case-insensitiv bleibt (wie zuvor bei tmux).
+export function parseSessionList(raw) {
+  return String(raw ?? '')
+    .split('\n')
+    .map(s => s.trim())
+    .filter(s => s && !/\(\s*EXITED/i.test(s))   // tote zellij-Sessions verwerfen
+    .map(s => s.replace(/\s*\(.*\)\s*$/, '').trim().toLowerCase())  // Status-Suffix abschneiden
+    .filter(Boolean)
+}

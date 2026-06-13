@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # SCUT-Empfänger — pollt Telegram (long-poll getUpdates) und routet neue
-# Mensch-Nachrichten nach <STANDUP_DIR>/_inbox.md (+ guarded send-keys an die
-# tmux-Session des Team-Leads). Läuft als Dauerschleife (z. B. in tmux 'scut').
+# Mensch-Nachrichten nach <STANDUP_DIR>/_inbox.md (Inbox-first = Kanon) + optionale
+# best-effort Live-Injection in die Lead-Session via Multiplexer-Adapter (tmux|zellij,
+# lib/mux.sh). Läuft als Dauerschleife (z. B. in der Multiplexer-Session 'scut').
 #
 # Media (Foto/Voice/Audio/Dokument/Video/GIF/Video-Note/Sticker) werden via
 # getFile heruntergeladen nach <SCUT_INBOX> und als "[Typ -> pfad]" in die Inbox
@@ -11,13 +12,15 @@
 #   SCUT_SECRETS_DIR  telegram_token/chat_id/offset (Default: <root>/.secrets)
 #   STANDUP_DIR       Inbox-Ordner (Default: <root>/standup)
 #   SCUT_INBOX        Download-Ziel für Media (Default: <STANDUP_DIR>/../_inbox)
-#   SCUT_TMUX_TARGET  tmux-Session des Leads (Default: bob)
+#   SCUT_MUX_TARGET   Multiplexer-Session des Leads (Default: bob; Alias: SCUT_TMUX_TARGET)
 #   SCUT_PREFIX       Inject-Prefix in der Lead-Session (Default: [SCUT])
 #   TEAM_LEAD         Inbox-@-Empfänger (Default: Bob)
 #   DEV_TEAM_TZ       Zeitzone (Default: Europe/Berlin)
 set -uo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$DIR/.." && pwd)"
+# shellcheck source=lib/mux.sh
+. "$DIR/lib/mux.sh"   # Multiplexer-Adapter (tmux|zellij) — nie direkt tmux/zellij rufen
 SECRETS="${SCUT_SECRETS_DIR:-$ROOT/.secrets}"
 SDIR="${STANDUP_DIR:-$ROOT/standup}"
 INBOX="$SDIR/_inbox.md"
@@ -25,13 +28,13 @@ MEDIA_INBOX="${SCUT_INBOX:-$(cd "$SDIR/.." && pwd)/_inbox}"
 TOKEN="$(cat "$SECRETS/telegram_token" 2>/dev/null)"
 CHAT="$(cat "$SECRETS/telegram_chat_id" 2>/dev/null)"
 OFFSET_FILE="$SECRETS/telegram_offset"
-TARGET="${SCUT_TMUX_TARGET:-bob}"
+TARGET="${SCUT_MUX_TARGET:-${SCUT_TMUX_TARGET:-bob}}"
 PREFIX="${SCUT_PREFIX:-[SCUT]}"
 LEAD="${TEAM_LEAD:-Bob}"
 TZc="${DEV_TEAM_TZ:-Europe/Berlin}"
 [ -z "$TOKEN" ] && { echo "FEHLER: kein telegram_token in $SECRETS"; exit 1; }
 offset="$(cat "$OFFSET_FILE" 2>/dev/null || echo 0)"
-echo "SCUT-Empfänger läuft (offset=$offset) -> $INBOX + tmux:$TARGET (media -> $MEDIA_INBOX)"
+echo "SCUT-Empfänger läuft (offset=$offset) -> $INBOX + $(mux_backend 2>/dev/null || echo mux):$TARGET (media -> $MEDIA_INBOX)"
 while true; do
   resp="$(curl -s --max-time 70 "https://api.telegram.org/bot${TOKEN}/getUpdates?timeout=55&offset=${offset}")" || { sleep 3; continue; }
   [ -z "$resp" ] && { sleep 3; continue; }
@@ -119,13 +122,22 @@ for u in d.get("result", []):
     printf '%s | @%s | SCUT (via Telegram): %s\n' "$ts" "$LEAD" "$txt" >> "$INBOX"
     echo "[$ts] inbox <- $txt"
     now="$(date +%s)"; age=$(( now - ${mdate:-0} ))
-    if [ "$age" -lt 180 ] && tmux has-session -t "$TARGET" 2>/dev/null; then
-      cmd="$(tmux list-panes -t "$TARGET" -F '#{pane_current_command}' 2>/dev/null | head -1)"
-      if [ "$cmd" = "node" ] || [ "$cmd" = "claude" ]; then
-        tmux send-keys -t "$TARGET" -l -- "$PREFIX $txt"; tmux send-keys -t "$TARGET" Enter
-        echo "  -> an $LEAD (tmux:$TARGET) injiziert"
+    # OPTIONALE Live-Injection in die Lead-Session — ZUSÄTZLICH zur Inbox (oben, immer
+    # geschrieben). Inbox-first ist Kanon (comms.md); diese Bonus-Zustellung ist best-effort.
+    #   tmux:   prüft den pane-Command (nur node/claude, nie eine Shell) -> mux_send.
+    #   zellij: kein verlässlicher pane-Command-Check / detached-send (s. lib/mux.sh) -> nur Inbox.
+    if [ "$age" -lt 180 ] && mux_has "$TARGET" 2>/dev/null; then
+      if [ "$(mux_backend 2>/dev/null)" = tmux ]; then
+        # bewusst tmux-spezifisch: zellij hat kein pane_current_command-Äquivalent
+        cmd="$(tmux list-panes -t "$TARGET" -F '#{pane_current_command}' 2>/dev/null | head -1)"
+        if [ "$cmd" = "node" ] || [ "$cmd" = "claude" ]; then
+          mux_send "$TARGET" "$PREFIX $txt"
+          echo "  -> an $LEAD (tmux:$TARGET) injiziert"
+        else
+          echo "  ($TARGET im Shell-Modus [$cmd] -> nur Inbox)"
+        fi
       else
-        echo "  ($TARGET im Shell-Modus [$cmd] -> nur Inbox)"
+        echo "  (Backend ohne verlässliche Live-Injection -> nur Inbox, Kanon)"
       fi
     fi
   done <<< "$parsed"

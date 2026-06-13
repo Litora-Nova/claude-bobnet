@@ -97,6 +97,10 @@ Bobiverse        the whole installation (root variable, stored in ~/.claude/bobi
 - This is the **bidirectional link**: the project now references the Bobiverse (symlinks +
   `bobiverse.json` + `dev-team.env`) **and** the BobNet registers the project (registry) — so
   comms work both ways.
+- **External coworker (designer/marketing on a `{HUMAN}` device)?** Set up a file-sync share for
+  the project (`bin/sync-share <root> --uid <uid> --name "<Display>"`, see `team-rules/comms.md`
+  §6) and drop a filled-in copy of `skills/init-bobs/templates/SYNCTHING_COWORKER.template.md`
+  into the project's `share/` — it then syncs itself to the coworker.
 
 ### 3. Interview the user (inline, plain chat)
 - **Cap** on number of agents (Bob#1 = main window, not counted).
