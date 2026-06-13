@@ -37,15 +37,25 @@
   `DEPENDENCIES_VALIDATED`) setzen. Torso + `__dirlock` vorher löschen.
 - **`unzip -tq` vor dem Entpacken** — ein „fertiger" Download kann ein 24-Byte-Fehlerdokument sein.
 
-## tmux-Automatisierung (Agent steuert fremde Panes)
+## Multiplexer-Automatisierung (Agent steuert fremde Panes — tmux | zellij)
 
-- **Sessions exakt adressieren** (`session:window` oder `=name`): stirbt die Ziel-Session, fällt
-  Präfix-Matching still auf die nächstähnliche um — im schlimmsten Fall tippt man in die eigene.
+- **Engine ist multiplexer-agnostisch (tmux|zellij) über `scripts/lib/mux.sh`.** NIE direkt
+  `tmux` oder `zellij` aufrufen — immer die `mux_*`-Verben (`mux_spawn/has/list/send/capture/kill`).
+  Eine Stelle entscheidet das Backend (`BOBNET_MUX=tmux|zellij|auto`, Default auto = tmux-bevorzugt);
+  Direktaufrufe brechen auf dem jeweils anderen Backend und unterlaufen die Rückwärtskompat.
+- **zellij-send/capture wirkt NUR auf Sessions mit angebundenem Client.** `action write-chars` /
+  `action dump-screen` gegen rein **detached** Sessions sind best-effort — stiller Reinfall, kein
+  Fehler. Deshalb ist Inter-Bob-Comms ohnehin Inbox-first (`comms.md`); der Injection-Pfad bleibt
+  Notfall. (tmux hat diese Grenze nicht — wer sich darauf verlässt, scheitert beim Backend-Flip.)
+- **Sessions exakt adressieren** (tmux `session:window`/`=name`, zellij `--session NAME`): stirbt
+  die Ziel-Session, fällt Präfix-Matching still auf die nächstähnliche um — im schlimmsten Fall
+  tippt man in die eigene.
 - **`pkill -f <muster>` killt die eigene Shell**, wenn das Muster in der eigenen Kommandozeile
   steht (und das tut es beim Aufräumen fast immer). Muster splitten (`'foo''bar'`) oder per PID killen.
-- **Vor jedem `send-keys` in eine interaktive Session: Prompt-Zustand capturen.** Ein „leerer"
-  Prompt kann ein Non-Breaking-Space (`c2 a0`) tragen — byte-genau vergleichen statt `grep '^❯ *$'`.
-  Steht fremder ungesendeter Text im Buffer: NIE reinsenden, warten oder anderen Kanal nehmen.
+- **Vor jedem Send in eine interaktive Session: Prompt-Zustand capturen** (`mux_capture`). Ein
+  „leerer" Prompt kann ein Non-Breaking-Space (`c2 a0`) tragen — byte-genau vergleichen statt
+  `grep '^❯ *$'`. Steht fremder ungesendeter Text im Buffer: NIE reinsenden, warten oder anderen
+  Kanal nehmen. **Capture und Send NIE im selben Befehl; Text und Enter SEPARAT.**
 
 ## Parallele Hintergrund-Agenten im geteilten Working-Tree
 
