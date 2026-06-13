@@ -171,6 +171,15 @@ run_guard_cmd "cap production deploy" "$CMDPROJ2"
 it "ohne procedure-Override → trotzdem ask";                 contains "$GUARD_OUT" '"permissionDecision":"ask"'
 it "ohne procedure-Override → Engine-Default-Ablauf im ask"; contains "$GUARD_OUT" "Deploy nur nach ausdrücklicher Bestätigung"
 
+# Härtung: roher Control-Char (VT/FF) im procedure-Text bricht das JSON NICHT (→ Space).
+CMDPROJ3="$TMP/cmdproj3"
+mkdir -p "$CMDPROJ3/_dev_team/team-rules"
+printf '*cap *deploy*\n' > "$CMDPROJ3/_dev_team/team-rules/deploy-guard.commands"
+printf 'Schritt mit \x0b VT und \x0c FF.\n' > "$CMDPROJ3/_dev_team/team-rules/deploy-guard.procedure"
+run_guard_cmd "cap staging deploy" "$CMDPROJ3"
+it "procedure mit Control-Chars → ask bleibt valides JSON"; ok is_json "$GUARD_OUT"
+it "procedure mit Control-Chars → trotzdem ask";            contains "$GUARD_OUT" '"permissionDecision":"ask"'
+
 # Trennung der Stufen: Command-Stufe greift NUR bei echtem Bash-Tool (kein file_path).
 # Ein Write mit deploy-artigem Text im content darf NICHT via Command-Stufe asken.
 GUARD_OUT="$(printf '{"tool_name":"Write","tool_input":{"file_path":"/proj/notes.txt","content":"cap staging deploy"}}' \

@@ -132,11 +132,12 @@ build_command_reason() {
   fi
   msg="$base"
   [ -n "$proc" ] && msg="$base — Ablauf: $proc"
-  # JSON-sicher: erst Backslash, dann Anführungszeichen; Tab/CR neutralisieren.
+  # JSON-sicher: erst Backslash, dann Anführungszeichen; danach ALLE Control-Chars
+  # (0x01–0x1f, inkl. Tab/CR/NL/VT/FF) → Space. Sonst bräche ein roher Control-Char im
+  # projekt-gelieferten procedure-Text die JSON-Ausgabe (Härtung, Review 2026-06-13).
   msg="${msg//\\/\\\\}"
   msg="${msg//\"/\\\"}"
-  msg="${msg//$'\t'/ }"
-  msg="${msg//$'\r'/}"
+  msg="${msg//[$'\x01'-$'\x1f']/ }"
   printf '%s' "$msg"
 }
 
