@@ -12,7 +12,7 @@
 
 | Hook | Trigger | Zweck | Regel-Quelle (Daten/Env) | aktiv? |
 |---|---|---|---|---|
-| `deploy-guard.sh` | PreToolUse (Edit\|Write\|MultiEdit) | Zweistufig: **blockt** Edits an Production-/Secret-Pfaden (Exit 2, Tier-4 human-only) · **erzwingt Bestätigung** (`permissionDecision:"ask"`) für Deploy-Configs — `{HUMAN}` bestätigt jeden Edit einzeln, nie auto-accept (PO-Doktrin 2026-06-10, `tiers.md`). | `team-rules/deploy-guard.paths` (Block) + `team-rules/deploy-guard.ask.paths` (Ask); Fallback: eingebaute Defaults/Floors | ⊘ gebaut, NICHT verdrahtet (Stufe C) |
+| `deploy-guard.sh` | PreToolUse — Edit\|Write\|MultiEdit (Pfad) · Bash (Befehl) | Dreistufig: **blockt** Edits an Production-/Secret-Pfaden (Exit 2, Tier-4 human-only) · **erzwingt Bestätigung** (`permissionDecision:"ask"`) für Deploy-Config-Edits · **erzwingt Bestätigung + exakten Ablauf** für Deploy-*Befehle* (Bash, opt-in) — `{HUMAN}` bestätigt jeden Edit/Deploy einzeln, nie auto-accept (PO-Doktrin 2026-06-10 + §17 2026-06-13, `tiers.md`). | `deploy-guard.paths` (Block) + `deploy-guard.ask.paths` (Ask) + `deploy-guard.commands` (Befehl-Globs, opt-in, KEIN Floor) + `deploy-guard.procedure` (Ablauf-Text); Fallback: eingebaute Defaults/Floors | ⊘ gebaut, NICHT verdrahtet (Stufe C) |
 | `session-sync-reminder.sh` | SessionStart | Rendert den State-Sync-Reminder (Branch-Check + fetch/pull/push über die Repos). | `team-rules/sync.md` (`REMINDER:`-Block) + Env `PROJECT_NAME`, `CANONICAL_BRANCH`, `DEV_TEAM_REPOS` | ⊘ gebaut, NICHT verdrahtet (Stufe C) |
 | `session-heartbeat.sh` | SessionStart | Schreibt einen Heartbeat des arbeitenden Agents (`log.sh $AGENT busy session-start`) ins BobNet der Kollab-Instanz. Default-Agent = Lead; shared Services setzen `HEARTBEAT_AGENT`. Fail-safe, blockt nie. | Env `HEARTBEAT_AGENT` (Default `TEAM_LEAD`) + `STANDUP_DIR` aus `dev-team.env` + `team-rules/heartbeat.md` → `scripts/log.sh` | ⊘ gebaut, NICHT verdrahtet (Stufe C) |
 
@@ -28,8 +28,9 @@
 - **Env zuerst:** `source` das nächstgelegene `dev-team.env` (Projekt > Engine-Default), dann die `team-rules/`-Daten.
 - **Fail-safe:** SessionStart-Hooks dürfen die Session NIE blocken — bei Fehlern still `exit 0`.
   Nur `deploy-guard` darf bewusst blocken (`exit 2`), und nur bei echtem Pfad-Treffer.
-- **stdin-Vertrag (PreToolUse):** Hook bekommt das Tool-JSON auf stdin. `deploy-guard` zieht den
-  `file_path` jq-frei heraus (Regex), damit kein jq-Dependency nötig ist.
+- **stdin-Vertrag (PreToolUse):** Hook bekommt das Tool-JSON auf stdin. `deploy-guard` zieht
+  `file_path` UND `command` jq-frei heraus (Regex), damit kein jq-Dependency nötig ist. Die
+  Command-Stufe (Bash) ist opt-in und greift nur ohne `file_path` (echtes Bash-Tool).
 - **Pfad-Auflösung:** Hooks leiten ihr Engine-ROOT relativ zu `${BASH_SOURCE[0]}` ab — kein hartkodierter Pfad.
 - **Daten vor Code:** Globs/Texte/Repos kommen aus `team-rules/*` bzw. Env, nie aus dem Script-Body.
 

@@ -1,0 +1,17 @@
+# team-rules/deploy-guard.procedure — der ERZWUNGENE Deploy-Ablauf (deklarativer Text).
+#
+# Wenn ein Befehl team-rules/deploy-guard.commands trifft, hängt der Hook den Inhalt
+# dieser Datei an den Bestätigungs-Hinweis (permissionDecisionReason) an — der {HUMAN}
+# sieht im Moment der Bestätigung GENAU die Schritte, die einzuhalten sind. Zweck (§17):
+# nicht nur "bestätigen", sondern "genau dieser Ablauf, nicht anders".
+#
+# Mechanik: nicht-leere, nicht-'#'-Zeilen werden zu EINER Zeile verbunden ("; ") und
+# JSON-sicher escaped. Halte die Schritte deshalb kurz und imperativ.
+#
+# Engine-Default = generisch/white-label. Projekt überschreibt mit dem echten Ablauf
+# unter _dev_team/team-rules/deploy-guard.procedure (z.B. die Reihenfolge SSL/Zertifikat,
+# Migrationen, Health-Check). Fehlt die Datei ganz, nutzt der Hook einen Default-Hinweis.
+
+Deploy nur nach ausdrücklicher Bestätigung.
+Den projektdefinierten Ablauf exakt einhalten — keine Schritte umstellen oder auslassen.
+Nichts strukturell ändern; im Zweifel abbrechen und rückfragen.

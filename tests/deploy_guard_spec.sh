@@ -133,4 +133,58 @@ run_guard "/proj/config/deploy/production.rb" "$TMP/proj"
 it "Block UND Ask treffen → Block gewinnt (Exit 2)";       eq "$GUARD_RC" "2"
 it "Block-Gewinn liefert KEIN ask-JSON";                   not_contains "$GUARD_OUT" "permissionDecision"
 
+# --- Stufe ASK (Befehl, Bash): opt-in via Projekt-Override (§17, PO 2026-06-13) ---
+run_guard_cmd() { # $1 = command · $2 = PROJECT_ROOT (optional) → setzt GUARD_OUT + GUARD_RC
+  GUARD_OUT="$(printf '{"tool_name":"Bash","tool_input":{"command":"%s"}}' "$1" \
+    | DEV_TEAM_ENV="$EMPTY_ENV" PROJECT_ROOT="${2:-}" bash "$HOOK" 2>/dev/null)"
+  GUARD_RC=$?
+}
+
+# Engine-Default OHNE Override = keine Command-Asks (Beispiele in der Engine sind auskommentiert).
+run_guard_cmd "bundle exec cap staging deploy"
+it "Engine-Default (kein Override): Deploy-Befehl → kein ask"; not_contains "$GUARD_OUT" "permissionDecision"
+it "Engine-Default: Deploy-Befehl → Exit 0";                   eq "$GUARD_RC" "0"
+
+# Projekt schaltet die Bremse via Override scharf (commands + eigener procedure-Ablauf).
+CMDPROJ="$TMP/cmdproj"
+mkdir -p "$CMDPROJ/_dev_team/team-rules"
+printf '*cap *deploy*\n' > "$CMDPROJ/_dev_team/team-rules/deploy-guard.commands"
+printf 'Zuerst SSL/Zertifikat.\nDann Migrationen.\n' > "$CMDPROJ/_dev_team/team-rules/deploy-guard.procedure"
+
+run_guard_cmd "bundle exec cap staging deploy" "$CMDPROJ"
+it "Override aktiv: cap deploy → ask";           contains "$GUARD_OUT" '"permissionDecision":"ask"'
+it "Override aktiv: cap deploy → Exit 0";        eq "$GUARD_RC" "0"
+it "Command-ask trägt hookEventName PreToolUse"; contains "$GUARD_OUT" '"hookEventName":"PreToolUse"'
+it "Command-ask ist wohlgeformtes JSON";         ok is_json "$GUARD_OUT"
+it "Command-ask injiziert den Projekt-Ablauf";   contains "$GUARD_OUT" "Zuerst SSL/Zertifikat"
+
+# Harmloser Befehl unter aktivem Override → durchlassen (kein Output, Exit 0).
+run_guard_cmd "ls -la" "$CMDPROJ"
+it "harmloser Befehl trotz Override → kein ask"; not_contains "$GUARD_OUT" "permissionDecision"
+it "harmloser Befehl → Exit 0";                  eq "$GUARD_RC" "0"
+
+# commands-Override OHNE procedure-Override → Engine-Default-Ablauf greift als Fallback.
+CMDPROJ2="$TMP/cmdproj2"
+mkdir -p "$CMDPROJ2/_dev_team/team-rules"
+printf '*cap *deploy*\n' > "$CMDPROJ2/_dev_team/team-rules/deploy-guard.commands"
+run_guard_cmd "cap production deploy" "$CMDPROJ2"
+it "ohne procedure-Override → trotzdem ask";                 contains "$GUARD_OUT" '"permissionDecision":"ask"'
+it "ohne procedure-Override → Engine-Default-Ablauf im ask"; contains "$GUARD_OUT" "Deploy nur nach ausdrücklicher Bestätigung"
+
+# Härtung: roher Control-Char (VT/FF) im procedure-Text bricht das JSON NICHT (→ Space).
+CMDPROJ3="$TMP/cmdproj3"
+mkdir -p "$CMDPROJ3/_dev_team/team-rules"
+printf '*cap *deploy*\n' > "$CMDPROJ3/_dev_team/team-rules/deploy-guard.commands"
+printf 'Schritt mit \x0b VT und \x0c FF.\n' > "$CMDPROJ3/_dev_team/team-rules/deploy-guard.procedure"
+run_guard_cmd "cap staging deploy" "$CMDPROJ3"
+it "procedure mit Control-Chars → ask bleibt valides JSON"; ok is_json "$GUARD_OUT"
+it "procedure mit Control-Chars → trotzdem ask";            contains "$GUARD_OUT" '"permissionDecision":"ask"'
+
+# Trennung der Stufen: Command-Stufe greift NUR bei echtem Bash-Tool (kein file_path).
+# Ein Write mit deploy-artigem Text im content darf NICHT via Command-Stufe asken.
+GUARD_OUT="$(printf '{"tool_name":"Write","tool_input":{"file_path":"/proj/notes.txt","content":"cap staging deploy"}}' \
+  | DEV_TEAM_ENV="$EMPTY_ENV" PROJECT_ROOT="$CMDPROJ" bash "$HOOK" 2>/dev/null)"; GUARD_RC=$?
+it "Write mit deploy-Text im content → kein Command-ask"; not_contains "$GUARD_OUT" "permissionDecision"
+it "Write normale Datei → Exit 0";                        eq "$GUARD_RC" "0"
+
 summary
