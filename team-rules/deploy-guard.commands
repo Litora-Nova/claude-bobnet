@@ -1,0 +1,30 @@
+# team-rules/deploy-guard.commands — ASK-Globs für Deploy-BEFEHLE (deklarativ, opt-in).
+#
+# Der Hook hooks/deploy-guard.sh prüft bei einem Bash-Tool-Aufruf den `command`-String
+# gegen diese Globs. Bei Treffer antwortet er mit permissionDecision "ask" — der Befehl
+# landet als Permission-Prompt beim {HUMAN} und darf NIE wegautomatisiert werden
+# (keine Allow-Regel, kein bypass). Zweck: ein Deploy läuft nur nach ausdrücklicher
+# Bestätigung UND exakt nach dem definierten Ablauf (siehe team-rules/deploy-guard.procedure).
+#
+# Anders als die Pfad-Listen ist DIESE Datei bewusst OPT-IN: die Engine liefert nur
+# auskommentierte Beispiele aus, damit unbeteiligte Projekte keine Fehl-Asks bekommen.
+# Ein Projekt aktiviert die Bremse, indem es seine echten Deploy-Befehle als Override
+# unter _dev_team/team-rules/deploy-guard.commands einträgt (Beispiel-UID: acme).
+#
+# Format:
+#   - eine Glob pro Zeile
+#   - Leerzeilen + '#'-Kommentare werden ignoriert
+#   - Matching ist glob-basiert gegen den `command`-String (case-sensitive)
+#   - '*' matcht beliebige Zeichen — ein Pattern wird automatisch beidseitig mit '*'
+#     umschlossen, ein Treffer irgendwo im Befehl genügt (substring-Semantik)
+#
+# Es gibt KEINEN Command-Floor: Deploy-Befehle sind zu projektspezifisch für einen
+# nicht-überschreibbaren Kern. Engine-Default ohne Override = keine Command-Asks.
+
+# --- Beispiele (auskommentiert — pro Projekt im Override scharfschalten) ---
+# *cap *deploy*
+# *cap *setup*
+# *cap *certbot:generate*
+# *kubectl apply*production*
+# *terraform apply*
+# *docker compose*-f*prod*up*
