@@ -24,10 +24,12 @@
 #             z. B. bei der Erstinstallation abgefragt). Siehe README/onboard.
 #
 # Bekannte Backend-Unterschiede (wichtig für comms.md / scut-poll):
-#   - zellij `action write-chars` / `dump-screen` wirken NUR auf Sessions mit
-#     einem angebundenen Client zuverlässig; gegen rein detached Sessions sind
-#     send/capture best-effort. Für Inter-Bob-Comms ist ohnehin die Inbox Kanon
-#     (comms.md) — der Injection-Pfad ist nur Notfall.
+#   - zellij headless (Background-Session OHNE attached Client; empirisch 0.44.3, Issue #35):
+#     `mux_spawn`/`run` LÄUFT (der Command startet) — aber `write-chars`/`write` erreichen
+#     das Pane-stdin NICHT und `dump-screen` liefert leer, AUCH mit `--pane-id`. zellij
+#     rendert/treibt ein Pane-Terminal nur mit Client; tmux adressiert detached Panes
+#     server-seitig. → Boot geht headless, briefen/capturen NICHT. Darum: Inbox ist
+#     Comms-Kanon (comms.md), Liveness via Heartbeat — Injection/capture nur Notfall.
 #   - zellij liegt oft user-scope in ~/.local/bin (nicht im Cron-PATH) -> dieser
 #     Adapter findet das Binary selbst (siehe _mux_bin).
 
