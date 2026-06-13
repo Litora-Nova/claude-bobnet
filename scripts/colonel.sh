@@ -106,7 +106,7 @@ check_bobnet() {
   if command -v curl >/dev/null 2>&1; then
     sc="$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$BOBNET_URL" 2>/dev/null)"
   fi
-  # Prozess-Probe (Fallback / Ergänzung): tmux-Session 'bobnet' ODER ein Nuxt/Node am Dashboard.
+  # Prozess-Probe (Fallback / Ergänzung): Multiplexer-Session 'bobnet' ODER ein Nuxt/Node am Dashboard.
   local proc=""
   if pgrep -fa "claude-team-dashboard|bobnet" >/dev/null 2>&1; then proc="yes"; fi
 

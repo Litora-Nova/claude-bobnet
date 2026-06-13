@@ -9,7 +9,7 @@ Pro Projekt: `dev-team.env` aus dem Example ableiten + `source`-en (oder via Onb
 | `log.sh <Agent> <status> <msg>` | Heartbeat in `<STANDUP_DIR>/<Agent>.log` | `STANDUP_DIR`, `DEV_TEAM_TZ` |
 | `scut.sh "<msg>" [info\|mid\|urgent]` | Lead → Mensch (Telegram-Ping) | `SCUT_SECRETS_DIR` |
 | `scut-poll.sh` | Mensch → `_inbox.md` (+ optionale Live-Injection via `lib/mux.sh`), Long-Poll-Daemon | `SCUT_*`, `STANDUP_DIR`, `TEAM_LEAD` |
-| `lib/mux.sh` | Multiplexer-Adapter (tmux\|zellij): `mux_spawn/has/list/send/capture/kill` — Daemons & Dashboard rufen nie direkt tmux/zellij | `BOBNET_MUX` |
+| `lib/mux.sh` | Multiplexer-Adapter (tmux\|zellij): `mux_spawn/has/list/send/capture/kill` — Daemons & Dashboard rufen nie direkt tmux/zellij | `BOBNET_MUX` (tmux\|zellij\|auto; ungültig → Daemon failt hart, die Dashboard-Probe degradiert still) |
 | `qa-add.sh "<frage>" "<antwort>"` | Q&A-Eintrag in `<STANDUP_DIR>/qa/` | `STANDUP_DIR`, `QA_ASKED_BY`, `QA_ANSWERED_BY` |
 | `cron/*` | Geplante Jobs (standup/recap/health/bugcheck) | ⚠️ **noch hart-codiert** |
 

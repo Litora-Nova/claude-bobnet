@@ -52,7 +52,7 @@ Die Inbox hat keines dieser Probleme: asynchron, auditierbar, kollisionsfrei.
    | Schritt | tmux | zellij |
    |---|---|---|
    | Zustand capturen | `tmux capture-pane -p` | `zellij --session NAME action dump-screen` (→ STDOUT, **kein File-Arg** in 0.44) |
-   | Text senden | `tmux send-keys -l "<text>"` | `zellij --session NAME action write-chars "<text>"` |
+   | Text senden | `tmux send-keys -l "<text>"` | `zellij --session NAME action write-chars -- "<text>"` |
    | Enter (separat!) | `tmux send-keys Enter` | `zellij --session NAME action write 13` |
    | Sessions listen | `tmux ls` | `zellij list-sessions --no-formatting --short` |
 
