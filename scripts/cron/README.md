@@ -29,9 +29,9 @@ bash ~/Sites/<project>/standup/cron/cron-health.sh   # manueller Test (jeder Job
 ```
 - Skripte liegen auf Mac **und** LXC unter `standup/cron/` — nach Änderung syncen (`scp`).
 
-## Verwandte Daemons (kein cron, laufen in tmux)
-- **`scut` (tmux):** `scut-poll.sh` = SCUT-Inbound (Telegram → `_inbox.md` + inject `acme_bob`).
-- **`bobnet` (tmux):** BobNet-Dashboard `:3030`.
+## Verwandte Daemons (kein cron, laufen im Multiplexer: tmux|zellij, s. `lib/mux.sh`)
+- **`scut`:** `scut-poll.sh` = SCUT-Inbound (Telegram → `_inbox.md` + optionale Live-Injection an `acme_bob`).
+- **`bobnet`:** BobNet-Dashboard `:3030`.
 - **Outbound-Helfer:** `standup/scut.sh "<kurz>" [info|mid|urgent]` (Bob → Mensch).
 
 ## Mechanik-Notizen

@@ -155,8 +155,10 @@ mux_kill() {
 
 # ---------------------------------------------------------------------------
 # Self-Test (kein Gate, nur Sanity):  bash scripts/lib/mux.sh --self-test
+# Feuert NUR bei direkter Ausführung, nicht beim Sourcen (sonst würde der Test
+# bei `colonel.sh --self-test` o. ä. fälschlich mit-triggern).
 # ---------------------------------------------------------------------------
-if [ "${1:-}" = "--self-test" ]; then
+if [ "${BASH_SOURCE[0]}" = "${0}" ] && [ "${1:-}" = "--self-test" ]; then
   set -uo pipefail
   _mux_resolve || exit 1
   echo "mux self-test — Backend: $_MUX_BACKEND ($_MUX_BIN)"

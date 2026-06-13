@@ -60,6 +60,8 @@ set -uo pipefail
 
 BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENGINE_ROOT="${ENGINE_ROOT:-$(cd "$BIN_DIR/.." && pwd)}"
+# shellcheck source=lib/mux.sh
+. "$BIN_DIR/lib/mux.sh"   # Multiplexer-Adapter (tmux|zellij) — nie direkt tmux/zellij rufen
 BOBIVERSE_CONFIG="${BOBIVERSE_CONFIG:-$HOME/.claude/bobiverse.json}"
 BOBNET_URL="${BOBNET_URL:-http://localhost:3030}"
 GIT_WINDOW="${COLONEL_GIT_WINDOW:-24 hours ago}"
@@ -138,12 +140,19 @@ check_processes() {
     pass "keine Zombie-Prozesse"
   fi
 
-  # tmux-Sessions: Inventar (kein Kill, nur Beobachtung). Erwartete: bob/scut/bobnet/<projekt>_bob.
-  if command -v tmux >/dev/null 2>&1 && tmux ls >/dev/null 2>&1; then
-    local n; n="$(tmux ls 2>/dev/null | wc -l | tr -d ' ')"
-    pass "tmux: $n Session(s) aktiv — $(tmux ls 2>/dev/null | cut -d: -f1 | paste -sd' ' -)"
+  # Multiplexer-Sessions: Inventar (kein Kill, nur Beobachtung). Erwartete: bob/scut/bobnet/<projekt>_bob.
+  local mux sessions n
+  mux="$(mux_backend 2>/dev/null)"
+  if [ -n "$mux" ]; then
+    sessions="$(mux_list 2>/dev/null)"
+    n="$(printf '%s' "$sessions" | grep -c . || true)"
+    if [ "${n:-0}" -gt 0 ]; then
+      pass "$mux: $n Session(s) aktiv — $(printf '%s' "$sessions" | paste -sd' ' -)"
+    else
+      skip "kein $mux-Session aktiv (lokaler Lauf ohne Daemons?)"
+    fi
   else
-    skip "kein tmux / keine Sessions (lokaler Lauf ohne Daemons?)"
+    skip "kein Multiplexer (tmux/zellij) gefunden"
   fi
 }
 
