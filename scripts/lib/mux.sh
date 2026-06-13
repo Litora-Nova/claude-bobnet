@@ -148,8 +148,12 @@ mux_kill() {
   if [ "$_MUX_BACKEND" = tmux ]; then
     "$_MUX_BIN" kill-session -t "$name" 2>/dev/null
   else
+    # zellij: delete-session/kill-session liefern gegen sehr junge Sessions einen
+    # unzuverlässigen Exit-Code (Race: rc!=0 "not found", obwohl der Kill GREIFT).
+    # Darum am RESULTAT messen (Session weg?), nicht am rc des Kill-Verbs.
     "$_MUX_BIN" delete-session "$name" --force >/dev/null 2>&1 \
-      || "$_MUX_BIN" kill-session "$name" >/dev/null 2>&1
+      || "$_MUX_BIN" kill-session "$name" >/dev/null 2>&1 || true
+    ! mux_has "$name"   # rc 0 ⇔ Session ist tatsächlich weg
   fi
 }
 
