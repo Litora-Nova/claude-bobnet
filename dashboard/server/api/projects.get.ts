@@ -4,7 +4,7 @@ import { execSync } from 'node:child_process'
 import { listProjects } from '../utils/registry.mjs'
 import { tenantFromProject } from '../utils/tenant'
 import { teamOf } from '../utils/team'
-import { agentActivity, projectActivity, thresholdsFrom } from '../utils/activity.mjs'
+import { agentActivity, projectActivity, thresholdsFrom, resolveMuxBackend, muxListPlan, parseSessionList } from '../utils/activity.mjs'
 import { parseTail, teamTz } from '../utils/beats.mjs'
 
 // Bobiverse-Übersicht (#9 + #10): ALLE registrierten Projekte aus der Registry,
@@ -12,29 +12,51 @@ import { parseTail, teamTz } from '../utils/beats.mjs'
 // prominent) aus der Heartbeat-Frische plus die letzten Beats (Cross-Projekt-
 // Heartbeat-View). Tenant-NEUTRAL: liefert die Flotte, nicht das aktive Projekt.
 //
-// Optionale tmux-Probe (NUXT_TMUX_PROBE=1, Opt-in): "Session läuft"-Signal über
-// Session-Namen, die uid/name des Projekts enthalten (Heuristik, hebt den Status
-// mindestens auf 'running'). Default AUS — heartbeat-only bleibt portabel.
+// Optionale Multiplexer-Session-Probe (NUXT_TMUX_PROBE=1, Opt-in): "Session
+// läuft"-Signal über Session-Namen, die uid/name des Projekts enthalten
+// (Heuristik, hebt den Status mindestens auf 'running'). Default AUS — heartbeat-
+// only bleibt portabel. Welcher Multiplexer abgefragt wird, entscheidet
+// BOBNET_MUX=tmux|zellij|auto (Default auto: tmux falls vorhanden, sonst zellij)
+// — dieselbe Logik wie scripts/lib/mux.sh, hier im Node-Layer nachgebildet
+// (das Dashboard kann mux.sh nicht sourcen). Helper liegen in utils/activity.mjs.
 
 type Beat = { ts: string; status: string; msg: string; epoch: number; agent: string }
 // Zeilen-Parsing zentral in server/utils/beats.mjs: ISO-Stamps über die
 // Team-Zeitzone (DEV_TEAM_TZ), datumslose Alt-Zeilen nur als LETZTE Zeile
 // mtime-geankert, sonst stale (epoch 0 → sinkt im Sort, nie „frisch").
 
-// tmux-Sessions EINMAL pro Request listen (nur bei aktivierter Probe).
-function tmuxSessions(): string[] | null {
-  if (process.env.NUXT_TMUX_PROBE !== '1') return null
+// "Ist dieses Binary aufrufbar?" — leiser command-Existenz-Check (kein Fehler,
+// nur true/false), damit resolveMuxBackend pur bleiben kann. Absolute Pfade
+// (z. B. ~/.local/bin/zellij) werden direkt getestet.
+function hasBin(bin: string): boolean {
   try {
-    return execSync("tmux ls -F '#{session_name}'", { timeout: 2000 })
-      .toString().split('\n').map(s => s.trim().toLowerCase()).filter(Boolean)
-  } catch { return null }   // kein tmux/keine Sessions → kein Signal
+    if (bin.includes('/')) { execSync(`test -x ${JSON.stringify(bin)}`, { timeout: 1000 }); return true }
+    execSync(`command -v ${JSON.stringify(bin)}`, { timeout: 1000, stdio: 'ignore' }); return true
+  } catch { return false }
+}
+
+// Multiplexer-Sessions EINMAL pro Request listen (nur bei aktivierter Probe),
+// backend-neutral via BOBNET_MUX. Probiert die Binaries des gewählten Backends
+// der Reihe nach (zellij: PATH, dann ~/.local/bin-Fallback) — erstes, das eine
+// Liste liefert, gewinnt. Kein Multiplexer/keine Sessions → null (kein Signal).
+function muxSessions(): string[] | null {
+  if (process.env.NUXT_TMUX_PROBE !== '1') return null
+  const backend = resolveMuxBackend(process.env, hasBin)
+  const { bins, args } = muxListPlan(backend, process.env)
+  for (const bin of bins) {
+    try {
+      const out = execSync([bin, ...args].map(a => JSON.stringify(a)).join(' '), { timeout: 2000 }).toString()
+      return parseSessionList(out)
+    } catch { /* nächstes Binary probieren */ }
+  }
+  return null
 }
 
 export default defineEventHandler(async () => {
   const now = Date.now()
   const th = thresholdsFrom(process.env)
   const tz = teamTz()
-  const sessions = tmuxSessions()
+  const sessions = muxSessions()
   const BEATS_PER_PROJECT = 3   // #29: PO — 5 war zu viel, 3 reicht in der Übersicht
 
   const projects = (await Promise.all(listProjects().map(async (p: any) => {

@@ -58,7 +58,8 @@ Relevant `NUXT_*` env (all optional, sensible defaults):
 | `NUXT_REGISTRY` | Explicit path to `projects.registry.json` | `<cwd>/../../projects.registry.json` |
 | `NUXT_ACTIVITY_WORKING_MIN` | Minutes a `busy` beat counts as **working** | `10` |
 | `NUXT_ACTIVITY_RUNNING_MIN` | Minutes any beat keeps a project **running** | `60` |
-| `NUXT_TMUX_PROBE` | `1` opts into the tmux session-name probe (off by default) | — |
+| `NUXT_TMUX_PROBE` | `1` opts into the multiplexer session-name probe (off by default) | — |
+| `BOBNET_MUX` | Multiplexer the probe queries: `tmux` \| `zellij` \| `auto` (auto = tmux if present, else zellij) | `auto` |
 | `NUXT_ALLOWED_HOSTS` | Extra Vite-allowed hosts (comma-separated) | — |
 
 ## Multi-tenant — one hub, many projects
@@ -88,8 +89,10 @@ used. (Favicon auto-discovery is follow-up issue #21.)
 `busy` ≤ `NUXT_ACTIVITY_WORKING_MIN`, default 10) · **running** (any beat ≤
 `NUXT_ACTIVITY_RUNNING_MIN`, default 60) · **idle** · **registered** (known, no logs
 yet). **`blocked`** is a sticky special status — a blocked agent stays prominent until
-resolved. An optional, opt-in tmux probe (`NUXT_TMUX_PROBE=1`) can lift a project to
-`running` when a matching session is live.
+resolved. An optional, opt-in multiplexer probe (`NUXT_TMUX_PROBE=1`) can lift a
+project to `running` when a matching session is live; `BOBNET_MUX` (`tmux` | `zellij`
+| `auto`, default `auto` = tmux if present, else zellij) selects which multiplexer is
+queried.
 
 The PWA manifest is generated per active project (its title; `BobNet` if none), so an
 installed dashboard reflects the project you switched to.

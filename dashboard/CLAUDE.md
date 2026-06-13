@@ -93,7 +93,8 @@ Relevant `NUXT_*` env (all optional, sensible defaults):
 | `NUXT_REGISTRY` | Explicit path to `projects.registry.json` | `<cwd>/../../projects.registry.json` |
 | `NUXT_ACTIVITY_WORKING_MIN` | Minutes a `busy` beat counts as **working** | `10` |
 | `NUXT_ACTIVITY_RUNNING_MIN` | Minutes any beat keeps a project **running** | `60` |
-| `NUXT_TMUX_PROBE` | `1` opts into the tmux session-name probe (off by default) | — |
+| `NUXT_TMUX_PROBE` | `1` opts into the multiplexer session-name probe (off by default) | — |
+| `BOBNET_MUX` | Which multiplexer the probe queries: `tmux` \| `zellij` \| `auto` (auto = tmux if present, else zellij) | `auto` |
 | `NUXT_ALLOWED_HOSTS` | Extra Vite-allowed hosts (comma-separated) | — |
 
 ## Multi-tenant (one hub, many project Bobiverses)
@@ -142,9 +143,16 @@ stale). The project rollup adds **registered** (project known, no logs yet).
 **`blocked`** is a sticky special status: a `blocked` last beat stays prominent and
 age-independent (urgent-jump) until resolved — it must not get lost in the four-step
 scale. Thresholds are `NUXT_ACTIVITY_WORKING_MIN` (10) / `NUXT_ACTIVITY_RUNNING_MIN`
-(60). The optional tmux probe (`NUXT_TMUX_PROBE=1`, opt-in) lifts a project to at
-least `running` when a session name contains the project's `uid`/`name` (a heuristic;
-heartbeat-only is the portable default).
+(60). The optional multiplexer probe (`NUXT_TMUX_PROBE=1`, opt-in) lifts a project to
+at least `running` when a session name contains the project's `uid`/`name` (a
+heuristic; heartbeat-only is the portable default). Which multiplexer is queried is
+chosen by `BOBNET_MUX` (`tmux` | `zellij` | `auto`, default `auto` = tmux if present,
+else zellij) — the same backend-selection convention as `scripts/lib/mux.sh`,
+mirrored in the Node layer (the dashboard can't source the bash adapter). The probe
+helpers (`resolveMuxBackend`, `muxListPlan`, `parseSessionList`) live in
+`server/utils/activity.mjs`; for `zellij` it runs `zellij list-sessions
+--no-formatting --short` and falls back to `~/.local/bin/zellij` (zellij is often
+user-scope and missing from the Node/cron PATH).
 
 ### Dynamic manifest
 
