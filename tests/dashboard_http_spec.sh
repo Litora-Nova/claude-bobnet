@@ -83,7 +83,7 @@ contains "$PROJ_B" '"projects"'
 it "api/projects: trägt updatedAt (Frische-Stempel des Rollups)"
 contains "$PROJ_B" '"updatedAt"'
 
-it "api/projects: trägt das probe-Flag (tmux-Probe an/aus, #10)"
+it "api/projects: trägt das probe-Flag (multiplexer-Probe an/aus, #10)"
 contains "$PROJ_B" '"probe"'
 
 it "api/projects: Einträge tragen einen activity-Status (registered|running|working|idle|blocked)"
