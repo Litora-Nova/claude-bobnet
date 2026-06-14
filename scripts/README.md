@@ -12,6 +12,7 @@ Pro Projekt: `dev-team.env` aus dem Example ableiten + `source`-en (oder via Onb
 | `lib/mux.sh` | Multiplexer-Adapter (tmux\|zellij): `mux_spawn/has/list/send/capture/kill` — Daemons & Dashboard rufen nie direkt tmux/zellij | `BOBNET_MUX` (tmux\|zellij\|auto; ungültig → Daemon failt hart, die Dashboard-Probe degradiert still) |
 | `lib/boot.sh` (`mux_boot SESSION START_CMD [BRIEFING]`) | Inbox-first-Boot (#35): Lead headless spawnen (`mux_spawn`) + Briefing in die Ziel-Inbox droppen (vor dem Spawn, idempotent) statt Keystroke-Injection — clientlose zellij-Panes nehmen kein write/capture | `STANDUP_DIR` / `BOOT_INBOX`, `BOOT_TO`, `BOOT_FROM` |
 | `qa-add.sh "<frage>" "<antwort>"` | Q&A-Eintrag in `<STANDUP_DIR>/qa/` | `STANDUP_DIR`, `QA_ASKED_BY`, `QA_ANSWERED_BY` |
+| `gate-tier.sh [--require] [--diff <base>]` | Merge-Gate-Stufung (#32): klassifiziert einen Change nach geänderten Pfaden in A (voll) \| B (leicht) \| C (self-merge); `--require` = Exit 2 bei Tier A (nicht self-merge-bar). Pfade aus STDIN oder `git diff` | `team-rules/gate-tiers.paths` (Projekt-Override > Engine) |
 | `cron/*` | Geplante Jobs (standup/recap/health/bugcheck) | ⚠️ **noch hart-codiert** |
 
 **Secrets** (`telegram_token`, `telegram_chat_id`, `telegram_offset`) liegen in

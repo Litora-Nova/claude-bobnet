@@ -1,0 +1,57 @@
+# team-rules/gate-tiers.paths — Merge-Gate-Stufung nach geänderten Pfaden (deklarativ, #32 / Welle-2 §1).
+#
+# Das Script scripts/gate-tier.sh liest DIESE Datei und klassifiziert einen Change anhand der
+# geänderten Pfade in eine Tier-Stufe — deterministisch, nicht nach Bauchgefühl:
+#   A — voll      : Review (Riker) + Compliance (Dexter) + Tests (Marvin). Builder ≠ Reviewer.
+#                   NICHT self-merge-bar (Floor). Code/Verhalten, harte Regeln, deploy/security-nah.
+#   B — leicht    : 1 Check = Compliance (white-label/PII-Stichprobe). Self-merge erlaubt MIT
+#                   Spot-Check. Public-Docs + nicht-verhaltens-Config. Public-Docs IMMER spot-checken.
+#   C — self-merge: Self-merge + Stichprobe. Intern/nicht-public (standup, Instanz, Kosmetik, Comments).
+#
+# ── Auflösung ────────────────────────────────────────────────────────────────────────────────
+#   PRO PFAD: FIRST-Match gewinnt — die Liste ist von SPEZIFISCH → GENERISCH geordnet; die erste
+#             passende Glob bestimmt die Tier des Pfads. Kein Match → A (konservativer Floor).
+#   GESAMT  : die HÖCHSTE Tier über alle geänderten Pfade gewinnt (A > B > C) — ein einziger
+#             Tier-A-Pfad zieht den ganzen Change auf A. (Lieber über- als unter-gaten.)
+#
+# Format: "<TIER> <glob>" pro Zeile (TIER ∈ A|B|C). Leerzeilen + '#' ignoriert. '*' matcht auch '/'.
+# Globs tragen ein führendes '*' → sie matchen repo-relative Pfade (scripts/x.sh) UND tiefere.
+# Override: Projekt darf unter _dev_team/team-rules/gate-tiers.paths Regeln VORANSTELLEN (gewinnen
+# zuerst) — nur verschärfen (höhere Tier), nie lockern. Daten vor Code: Globs hier, nicht im Script.
+
+# ── C — intern / nicht-public (spezifisch zuerst) ──────────────────────────────────────────────
+C *standup/*
+C *_dev_team/*
+C *_inbox*
+C *NEXT_SESSION*
+C *MEMORY.md
+C *memory/*
+
+# ── B — public Docs + nicht-verhaltens-Config (vor den A-Code-Globs, damit z.B. scripts/README → B) ──
+B *README*
+B *.env.example
+B *projects.registry.json
+B *LICENSE*
+B *.gitignore
+B *CHANGELOG*
+
+# ── A — Code/Verhalten + harte Regeln (vor generischem *.md, damit team-rules/*.md = A bleibt) ──
+A *team-rules/*
+A *hooks/*
+A *schemas/*
+A *archetypes/*
+A *scripts/*
+A *bin/*
+A *dashboard/server/*
+A *SCHEMA_VERSION*
+
+# ── B — generische Docs (ein *.md AUSSERHALB der A-Code-Verzeichnisse = leichte Stufe) ──────────
+B *.md
+
+# ── A — generischer Code (Fallback für Verhaltens-Dateien außerhalb der Verzeichnis-Globs) ─────
+A *.sh
+A *.ts
+A *.mjs
+A *.vue
+A *.js
+A *.json
