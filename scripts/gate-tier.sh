@@ -92,7 +92,7 @@ fi
 MATRIX="$(load_matrix)"
 overall=""; overall_rank=0; top_path=""; n=0
 while IFS= read -r p; do
-  [ -z "$p" ] && continue
+  [ -z "${p//[[:space:]]/}" ] && continue   # leere + whitespace-only Zeilen überspringen
   n=$((n+1))
   t="$(classify_path "$p")"; r="$(tier_rank "$t")"
   printf '  %s  %s\n' "$t" "$p" >&2

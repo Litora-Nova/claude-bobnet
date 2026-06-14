@@ -54,6 +54,8 @@ it "unbekannter Pfad → A (konservativer Floor)"; contains "$GT_OUT" "TIER=A"
 run_gt "\n"
 it "leere Eingabe → paths=0"; contains "$GT_OUT" "paths=0"
 it "leere Eingabe → Exit 0";  eq "$GT_RC" "0"
+run_gt "scripts/x.sh\n   \n"
+it "whitespace-only-Zeile zählt nicht als Pfad"; contains "$GT_OUT" "paths=1"
 
 # --- --require erzwingt den Floor (Tier A nicht self-merge-bar) ---
 run_gt "scripts/x.sh\n" "--require"
