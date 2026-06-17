@@ -8,11 +8,13 @@
 #
 # Format: wie deploy-guard.paths (eine Glob pro Zeile, '#'-Kommentare, '*' matcht auch '/').
 #
-# 🔒 ASK-FLOOR: */config/deploy.rb + */config/deploy/* sind ein nicht-unterschreitbarer Floor —
-#   der Hook merged sie IMMER dazu (Funktion ask_floor). Ein Projekt-Override darf Globs
-#   ERGÄNZEN oder per deploy-guard.paths verschärfen (ask→block), aber nie freigeben.
-#   Block (deploy-guard.paths) schlägt Ask.
+# 🔒 ASK-FLOOR: */config/deploy.rb, */config/deploy/*, *Capfile, *configuration.yml sind ein
+#   nicht-unterschreitbarer ASK-Floor (PO 2026-06-15) — der Hook merged sie IMMER dazu (Funktion
+#   ask_floor). Der Bob editiert, der {HUMAN} stimmt JEDEM Edit zu. Ein Projekt-Override darf Globs
+#   ERGÄNZEN (ask) oder per deploy-guard.paths verschärfen (block), aber nie freigeben. Block schlägt Ask.
 
-# --- Deploy-/Capistrano-Konfiguration (globale + Stage-Configs, inkl. Templates darunter) ---
+# --- Deploy-/Capistrano-Konfiguration: bestätigungspflichtig pro Edit (ask, PO 2026-06-15) ---
 */config/deploy.rb
 */config/deploy/*
+*Capfile
+*configuration.yml

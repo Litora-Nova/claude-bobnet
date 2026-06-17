@@ -17,7 +17,7 @@
 |---|---|---|
 | `git fetch/pull/push` auf Arbeits-Branches (development/staging/Feature) | frei | Push = Standard, Teil jeder Sync-Routine (`sync.md`) |
 | Push auf den **Live-Branch** (der Branch, der die laufende App/Site/Service repräsentiert — je nach Projekt `main`/`master`/`production`) | Absprache | nur nach expliziter Absprache mit dem `{HUMAN}` |
-| **Deploy-Config-Edits** (`config/deploy.rb`, `config/deploy/*` inkl. Templates) | ask | Agent schlägt den konkreten Edit vor, `{HUMAN}` bestätigt **jeden Edit einzeln** (deploy-guard „ask" — nie wegautomatisieren). Wert-Anpassungen ja, **keine strukturellen Umbauten**. |
+| **Deploy-Config-Edits** (`config/deploy.rb`, `config/deploy/*` inkl. Templates, `Capfile`, `configuration.yml`) | ask | Agent schlägt den konkreten Edit vor, `{HUMAN}` bestätigt **jeden Edit einzeln** (deploy-guard „ask" — nie wegautomatisieren). Wert-Anpassungen ja, **keine strukturellen Umbauten**. |
 | **Staging-Deploy** (Ausführung, z. B. `cap staging …`) | Erlaubnis pro Aktion | möglich, aber NUR auf **ausdrückliche `{HUMAN}`-Erlaubnis pro Aktion/Änderung** — Ansage/Heartbeat allein reicht nicht. Keine Allow-Regel in Settings (würde den Prompt wegautomatisieren). |
 | **Production-Deploy** (Ausführung, z. B. `cap production …`) | T4 / Deny | Default: nur der `{HUMAN}` selbst. Einzige Ausnahme: das Remote-Go-Protokoll (unten) für Apps mit `remote-ok`. |
 | force-push / History-Rewrite / Remote-Branch-Delete / DNS / Secrets | T4 / Deny | nie autonom, keine Ausnahme. |
@@ -50,10 +50,11 @@ Für den Fall, dass der `{HUMAN}` einen Production-Deploy nur fern anstoßen kan
 T4 ist die EINE harte Grenze. Der **`deploy-guard`-Hook setzt sie maschinell durch — zweistufig:**
 
 - **Block (Exit 2):** Secrets/Credentials (`.secrets/`, `master.key`, `credentials.yml.enc`,
-  `*.env.production`), Deploy-Struktur (`Capfile`, `configuration.yml`, Recipes) und
-  Production-Infra — `{HUMAN}`-only, Edit nie erlaubt (`team-rules/deploy-guard.paths`).
-- **Ask:** Deploy-Configs (`config/deploy.rb`, `config/deploy/*`) — Edit nur mit expliziter
-  `{HUMAN}`-Bestätigung pro Edit (`team-rules/deploy-guard.ask.paths`).
+  `*.env.production`), shared Deploy-Recipes (`recipes2go`) und Production-Infra — `{HUMAN}`-only,
+  Edit nie erlaubt (`team-rules/deploy-guard.paths`).
+- **Ask:** Deploy-Configs (`config/deploy.rb`, `config/deploy/*`, `Capfile`, `configuration.yml`) —
+  Edit nur mit expliziter `{HUMAN}`-Bestätigung pro Edit (PO-Doktrin 2026-06-15: der Bob editiert,
+  der `{HUMAN}` bestätigt jeden Edit; `team-rules/deploy-guard.ask.paths`).
 
 Ein Projekt-Override darf beides nur **erweitern bzw. verschärfen** (ask→block ok), nie lockern —
 die Kern-Globs merged der Hook IMMER dazu (t4_floor/ask_floor). **Autonomie-Stufen T1–T3 sind

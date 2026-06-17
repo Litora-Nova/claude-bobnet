@@ -2,9 +2,10 @@
 # hooks/deploy-guard.sh — PreToolUse-Guard für Deploy-/Production-/Secret-Pfade. Zweistufig:
 #
 #   BLOCK  (Exit 2)              : Production-/Secret-Pfade — Tier-4, {HUMAN}-only, Edit nie erlaubt.
-#   ASK    (permissionDecision)  : Deploy-Configs — Edit erlaubt, aber NUR mit expliziter
-#                                  {HUMAN}-Bestätigung PRO Edit (nie auto-accept). Keine
-#                                  strukturellen Umbauten. (PO-Doktrin 2026-06-10, tiers.md.)
+#   ASK    (permissionDecision)  : Deploy-Configs (deploy.rb, config/deploy/*, Capfile,
+#                                  configuration.yml) — Edit erlaubt, aber NUR mit {HUMAN}-
+#                                  Bestätigung PRO Edit (Prompt, nie auto-accept/allow). Der Bob
+#                                  EDITIERT, der {HUMAN} stimmt JEDEM Schritt zu. (PO 2026-06-15.)
 #   ASK    (Befehl, opt-in)      : Deploy-BEFEHLE (Bash) — laufen nur nach {HUMAN}-Bestätigung
 #                                  UND exakt nach dem definierten Ablauf. (§17, PO 2026-06-13.)
 #
@@ -69,8 +70,6 @@ load_globs() {
   else
     # Fallback-Defaults (spiegeln team-rules/deploy-guard.paths)
     cat <<'DEFAULTS'
-*/Capfile
-*configuration.yml
 *recipes2go*
 */.secrets/*
 *credentials.yml.enc
@@ -99,17 +98,17 @@ t4_floor() {
 */config/master.key
 *credentials.yml.enc
 *.env.production
-*Capfile
-*configuration.yml
 FLOOR
 }
 
-# --- Ask-Floor: Deploy-Configs sind MINDESTENS bestätigungspflichtig (nie frei) ---
-# Ein Projekt-Override darf sie zusätzlich BLOCKEN (strenger), aber nie freigeben.
+# --- Ask-Floor: Deploy-Configs = bestätigungspflichtig PRO Edit (ask), NIE frei (PO 2026-06-15). ---
+# Der Bob editiert, der {HUMAN} stimmt jedem Edit zu. Floor = nicht-überschreibbar (kein allow/acceptEdits).
 ask_floor() {
   cat <<'FLOOR'
 */config/deploy.rb
 */config/deploy/*
+*Capfile
+*configuration.yml
 FLOOR
 }
 
