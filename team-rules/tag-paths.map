@@ -1,0 +1,27 @@
+# tag-paths.map — welche Globs welche Rolle-Regel (team-rules/tags/<tag>.md) triggern.
+#
+# bin/onboard generiert daraus pro Instanz path-scoped .claude/rules/<tag>.md (native Claude-Code-
+# `paths:`-Frontmatter) — die Regel lädt dann LAZY, nur wenn ein Agent eine passende Datei liest.
+# So bleibt der Always-on-Context klein (Engine-Diät, #34): Rolle-Regeln laden bedarfsweise statt
+# alle immer.
+#
+# Format:  <tag>: <glob> [<glob> ...]      ('#' = Kommentar, '*' matcht auch '/')
+#
+# NUR Tags mit klarer PFAD-Zuordnung gehören hierher. Cross-cutting Rollen-/Prozess-Tags
+# (dev, review, compliance, process, goal, release, ops, hiwi) sind NICHT pfad-gebunden — die
+# laden über die Agent-Definition (.claude/agents/<persona>.md), nicht hier.
+#
+# Defaults sind generisch (Multi-Stack-Monorepo). Projekt-Override: eine eigene
+# _dev_team/team-rules/tag-paths.map schlägt diese Engine-Defaults komplett.
+
+backend:   **/*backend*/** **/*.rb
+frontend:  **/*frontend*/** **/*.vue
+website:   **/*website*/**
+dashboard: **/dashboard/**
+tests:     **/tests/** **/spec/** **/*.spec.* **/*.test.*
+db:        **/db/** **/migrate/** **/*.sql
+api:       **/api/**
+js:        **/*.js **/*.ts **/*.mjs
+i18n:      **/locales/** **/lang/**
+content:   **/content/**
+docs:      **/docs/**
