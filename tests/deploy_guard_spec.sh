@@ -2,9 +2,10 @@
 # tests/deploy_guard_spec.sh — Black-Box-Spec für hooks/deploy-guard.sh.
 #
 # Spec-Quelle: team-rules/tiers.md („Push- & Deploy-Leitplanken" + „T4 = nicht-überschreibbarer
-# Floor", PO-Doktrin 2026-06-10) + die Header von deploy-guard.paths / deploy-guard.ask.paths:
-#   - Production-/Secret-Pfade  → BLOCK (Exit 2), nicht override-bar (t4_floor).
-#   - Deploy-Configs            → ASK (permissionDecision "ask", Exit 0), nicht unterschreitbar
+# Floor", PO-Doktrin 2026-06-15) + die Header von deploy-guard.paths / deploy-guard.ask.paths:
+#   - Secret-/Production-Pfade  → BLOCK (Exit 2), nicht override-bar (t4_floor); inkl. recipes2go.
+#   - Deploy-Configs (deploy.rb, config/deploy/*, Capfile, configuration.yml)
+#                               → ASK (permissionDecision "ask", Exit 0), nicht unterschreitbar
 #                                 (ask_floor), aber per Projekt-Override verschärfbar (ask→block).
 #   - alles andere              → durchlassen (Exit 0, kein Output).
 . "$(dirname "${BASH_SOURCE[0]}")/_helper.sh"
@@ -42,11 +43,9 @@ run_guard "/proj/config/credentials.yml.enc"
 it "blockt credentials.yml.enc (Exit 2)";      eq "$GUARD_RC" "2"
 run_guard "/proj/.env.production"
 it "blockt .env.production (Exit 2)";          eq "$GUARD_RC" "2"
-run_guard "/proj/Capfile"
-it "blockt Capfile (Exit 2)";                  eq "$GUARD_RC" "2"
-run_guard "/proj/config/configuration.yml"
-it "blockt configuration.yml (Exit 2)";        eq "$GUARD_RC" "2"
 it "Block liefert KEIN ask-JSON";              not_contains "$GUARD_OUT" "permissionDecision"
+run_guard "/proj/recipes2go/recipe.rb"
+it "blockt recipes2go (shared gem, Exit 2)";   eq "$GUARD_RC" "2"
 
 # --- Stufe ASK: Deploy-Configs = Exit 0 + permissionDecision "ask" ---
 run_guard "/proj/config/deploy/staging.rb"
@@ -59,6 +58,13 @@ it "globale deploy.rb → Exit 0";               eq "$GUARD_RC" "0"
 it "globale deploy.rb → ask";                  contains "$GUARD_OUT" '"permissionDecision":"ask"'
 run_guard "/proj/config/deploy/templates/nginx.conf.erb"
 it "Deploy-Template unter config/deploy/ → ask"; contains "$GUARD_OUT" '"permissionDecision":"ask"'
+# Capfile + configuration.yml: BLOCK→ASK (PO-Doktrin 2026-06-15 — Bob editiert, {HUMAN} bestätigt pro Edit)
+run_guard "/proj/Capfile"
+it "Capfile → Exit 0 (PO 2026-06-15)";         eq "$GUARD_RC" "0"
+it "Capfile → ask";                            contains "$GUARD_OUT" '"permissionDecision":"ask"'
+run_guard "/proj/config/configuration.yml"
+it "configuration.yml → Exit 0 (PO 2026-06-15)"; eq "$GUARD_RC" "0"
+it "configuration.yml → ask";                  contains "$GUARD_OUT" '"permissionDecision":"ask"'
 
 # --- Durchlassen: normale Dateien + fehlender file_path ---
 run_guard "/proj/app/models/user.rb"
