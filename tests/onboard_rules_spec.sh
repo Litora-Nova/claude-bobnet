@@ -42,3 +42,13 @@ P2="$TMP/p2"; mkdir -p "$P2/.claude/rules"
 printf 'eigene projekt-regel ohne marker\n' > "$P2/.claude/rules/backend.md"
 onboard_into "$P2"
 it "projekt-eigene Rule (kein Marker) unangetastet"; eq "eigene projekt-regel ohne marker" "$(cat "$P2/.claude/rules/backend.md" 2>/dev/null)"
+
+# --- Regression: Map-Globs dürfen NICHT der CWD-Pathname-Expansion zum Opfer fallen ---
+# Ohne `set -f` würde `**/*.ts` (=*/*.ts ohne globstar) gegen Dateien im CWD expandiert → konkreter
+# Dateiname statt Muster im Frontmatter. onboard daher aus einem CWD MIT passenden Dateien laufen lassen.
+CWD_TRAP="$TMP/cwd-with-matches"; mkdir -p "$CWD_TRAP/sub"
+: > "$CWD_TRAP/sub/x.ts"; : > "$CWD_TRAP/sub/y.rb"
+P3="$TMP/p3"; mkdir -p "$P3"
+( cd "$CWD_TRAP" && DEV_TEAM_REGISTRY="$TMP/reg3.json" PROJECT_UID=acme bash "$ONBOARD" "$P3" >/dev/null 2>&1 ) || true
+it "js-Glob bleibt literal trotz Match im CWD (**/*.ts)";      contains "$(cat "$P3/.claude/rules/js.md" 2>/dev/null)" '**/*.ts'
+it "backend-Glob bleibt literal trotz Match im CWD (**/*.rb)"; contains "$(cat "$P3/.claude/rules/backend.md" 2>/dev/null)" '**/*.rb'

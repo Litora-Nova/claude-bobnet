@@ -11,6 +11,8 @@
 #   6  registry         idempotenter JSON-Upsert (per uid) in die ZENTRALE Registry
 #                       ($TOOLHUB/projects.registry.json) — der Launcher liest GENAU diese.
 #   7  Self-Test        deploy-guard blockt einen .secrets/-Pfad (Exit 2) → Tier-4 scharf ab Minute 1.
+#   8  .claude/rules    path-scoped Rolle-Regeln aus team-rules/tag-paths.map + team-rules/tags/<tag>.md
+#                       (paths:-Frontmatter, lädt lazy; idempotent; projekt-eigene Rules bleiben). #34
 #
 # Usage:  bin/onboard [PROJECT_ROOT]
 #   PROJECT_ROOT  = Repo-Root des Ziel-Projekts (Default: $PROJECT_ROOT-Env, sonst CWD).
@@ -321,11 +323,14 @@ else
       note "⊘ $tag.md ist projekt-eigen (kein generated-Marker) — unangetastet"; continue
     fi
     tmp="$(mktemp)"
+    set -f   # noglob: Map-Globs (**/*.rb …) NICHT der Pathname-Expansion aussetzen — sonst landen
+             # konkrete CWD-Dateinamen statt der Muster im paths:-Frontmatter (Glob-Scope kaputt).
     { printf -- '---\npaths:\n'
       for g in $globs; do printf -- '  - "%s"\n' "$g"; done
       printf -- '---\n%s%s.md — re-run onboard to refresh; edit the source, not this file. -->\n\n' "$GEN_MARKER" "$tag"
       cat "$src"
     } > "$tmp"
+    set +f
     if [ -f "$target" ] && cmp -s "$tmp" "$target"; then
       ok "rule aktuell: $tag.md"; rm -f "$tmp"
     else
