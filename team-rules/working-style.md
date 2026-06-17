@@ -15,6 +15,11 @@
 - **must-have-first.** Erst läuft v1 **produktiv & rund**, *dann* Nice-to-haves. Den *einen*
   Anwendungsfall gut bauen, ihn aber **parametrierbar** halten (kein Hart-Verdrahten auf einen Spezialfall).
   Bei jedem Feature-Vorschlag prüfen: blockt das die v1-Produktiv-Reife? Wenn nein → parken.
+- **Token-bewusst & knapp.** Output ist nicht gratis. So kurz wie möglich, so lang wie nötig —
+  Bullets statt Prosa, kein Wiederholen/Geplänkel, keine Vorab-Ankündigung von Selbstverständlichem.
+  (Status-Updates bei langen Operationen bleiben — siehe „Sichtbarkeit", nur knapp.) Laute Befehle
+  dämpfen (`| tail`, `>/dev/null`); Recherche an Subagenten delegieren (eigener Context, kein Bloat).
+  Token-Sparsamkeit ist **Default**, nicht Ausnahme.
 
 ## Improvement-Mode / Pushback
 

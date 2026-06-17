@@ -35,8 +35,5 @@
 <!-- Der folgende Block wird vom Hook gerendert. Tokens: {PROJECT_NAME} {CANONICAL_BRANCH} {DEV_TEAM_REPOS} -->
 REMINDER:
 🔄 Sync-Reminder ({PROJECT_NAME}) — Session-Start
-  • Bist du auf dem canonical Branch ({CANONICAL_BRANCH})? lokal == origin?
-  • Repos syncen (fetch → pull → push): {DEV_TEAM_REPOS}
-  • Sync = origin (eine Wahrheit). Nicht stale extrahieren. Branch-Drift = teuerster Fehler.
-  • main/master ≠ automatisch der Stand — erst prüfen, welcher Branch vorn ist (development/staging/production?).
-  → `bin/sync` macht fetch+pull+push + Branch-Check über alle Repos.
+  • Branch-Check: auf canonical ({CANONICAL_BRANCH})? lokal == origin? welcher Branch ist vorn?
+  • Repos syncen (fetch → pull → push): {DEV_TEAM_REPOS} — `bin/sync` macht das + Branch-Check über alle Repos.
