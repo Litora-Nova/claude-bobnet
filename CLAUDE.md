@@ -2,7 +2,8 @@
 
 Guidance for anyone (human or agent) working **on this engine repo itself**. For *what* the
 engine is and how to use it in a project, read [`README.md`](README.md) first — it is written to
-be read front-to-back. This file is the contributor/agent layer on top of it.
+be read front-to-back. This file is the **small always-on core**; subsystem-specific guidance
+loads on demand (see §6).
 
 > This file is **not** the instance identity (who runs a given team). That lives in the instance
 > layer (`<project>/_dev_team/`), never in this public engine.
@@ -36,29 +37,17 @@ here. The canonical sources:
 
 - [`CONVENTIONS.md`](CONVENTIONS.md) — descriptive names & IDs (never opaque tokens like `agent1`),
   avatar = image / no-emoji, sync = Git (push is part of sync), and the **coordination model (§5)**.
-- [`team-rules/`](team-rules/) — the behavioral canon, pulled fresh into every agent's context:
+- [`team-rules/`](team-rules/) — the behavioral canon (referenced on demand, not all loaded every
+  session):
   - `tiers.md` / `circle-of-trust.md` — Circle-of-Trust 4 risk tiers + rings. **T4
-    (production / DNS / secrets) is a non-overridable floor, human-only.**
+    (production / DNS / secrets) is a non-overridable floor, human-only** — machine-enforced by
+    `hooks/deploy-guard.sh`, not just prose.
   - `working-style.md` · `autonomy.md` — tone, push-back, how far an agent goes alone.
   - `lessons.md` · `routines.md` · `commits.md` — accumulated lessons, standup/feierabend
     routines, commit conventions.
   - `tags/*` — per-role rule slices (backend, frontend, review, tests, docs, …).
 
-## 4. Working on the engine
-
-- **Tests / TDD** — the test gate lives in [`tests/`](tests/): run `bash tests/run.sh` (exit 0 =
-  green, 1 = red; pass a spec name to run one). Specs are black-box behavior tests against the
-  documented spec, kept separate from the scripts (**behavior > source-pattern**). New behavior →
-  new/updated spec. Some scripts also expose a `--self-test` mode for a quick sanity check, but
-  those are **not** counted as the gate (self-confirming).
-- **Dashboard** — the BobNet render-hub lives in [`dashboard/`](dashboard/) (Nuxt; `npm run dev`
-  on port 3030, `npm run build`). To launch a project's team via the hub use `bin/start <uid>`
-  (a thin wrapper on the external launcher). The dashboard is optional but recommended.
-- **Breaking changes** — bump `VERSION` (SemVer, for humans/changelog) and/or `SCHEMA_VERSION`
-  (integer, the machine compat anchor) when you change the instance contract. Run
-  `bin/check-compat` to verify engine↔instance schema compatibility before shipping a schema bump.
-
-## 5. White-label discipline (this repo is PUBLIC)
+## 4. White-label discipline (this repo is PUBLIC)
 
 This engine ships publicly and white-label. Keep it that way:
 
@@ -74,8 +63,22 @@ This engine ships publicly and white-label. Keep it that way:
   credit lines as ACCEPTED instead of failing them. The exception covers **only** the PO's
   own self-mention in the credits; it extends to no other person, file, or identifier.
 
-## 6. Coordination model (one line)
+## 5. Coordination model (one line)
 
 The Team-Lead orchestrates **typed subagents that report back** to the lead, who is the
 **single merge owner** — coordination comes from engine + discipline, not peer messaging. The
 "Agent Teams" peer-messaging beta is an **optional** upgrade. Full rationale: [`CONVENTIONS.md`](CONVENTIONS.md) §5.
+
+## 6. On-demand rules — the engine eats its own diet
+
+Subsystem-specific contributor guidance is **not** in this always-on core. It lives in
+[`.claude/rules/`](.claude/rules/) as **path-scoped rules** that load **only when you work in that
+area** (native Claude Code `paths:` frontmatter — lazy, not every session):
+
+- `tests.md` (`tests/**`) — the test gate / TDD flow.
+- `dashboard.md` (`dashboard/**`) — the BobNet render-hub (Nuxt).
+- `contract.md` (`schemas/**`, `archetypes/**`, `VERSION`, `SCHEMA_VERSION`) — breaking-change /
+  compat discipline.
+
+This dogfoods the **“small always-on core · everything else on-demand”** principle (issue #34).
+New subsystem guidance → a path-scoped rule, not more core prose.
