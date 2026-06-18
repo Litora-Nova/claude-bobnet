@@ -37,10 +37,13 @@
 3. **Alles committen + pushen** — `git status` sauber; besonders `_dev_team/` + `standup/` (wird
    chronisch vergessen). Committen reicht nicht — Push gehört dazu (siehe `sync.md`).
 4. **Memory / Docs sichern** — neue Patterns/Regeln ablegen, Doc-Drift gegen Code einpflegen.
-5. **Abschluss-Doc schreiben** — Tagesbilanz, Morgen-Sequenz, offene `{HUMAN}`-Items, neue Routinen.
+5. **Docs-Rolle nachziehen (Trigger `feierabend`)** — die docs-Rolle (Archetyp `docs`) MUSS bei
+   jedem Feierabend die Dokumentation für das am Tag Geshippte aktualisieren. Pflicht-Schritt,
+   kein Optional: `triggers: ["feierabend"]` macht diesen Lauf verpflichtend.
+6. **Abschluss-Doc schreiben** — Tagesbilanz, Morgen-Sequenz, offene `{HUMAN}`-Items, neue Routinen.
    Es ist der Anknüpfungspunkt für den nächsten Session-Start.
-6. **Team auf idle** — alle aktiven Mitglieder explizit auf `idle` heartbeaten.
-7. **Tasks aufräumen** — keine stalen `in_progress` über Nacht; offene Items klar markieren,
+7. **Team auf idle** — alle aktiven Mitglieder explizit auf `idle` heartbeaten.
+8. **Tasks aufräumen** — keine stalen `in_progress` über Nacht; offene Items klar markieren,
    erledigte `{HUMAN}`-Tasks abhaken.
 
 ## Harte Regeln
