@@ -9,7 +9,7 @@
   "modelTier": "HEAVEN",
   "model": "opus",
   "effort": "xhigh",
-  "tags": ["design", "ux"],
+  "tags": ["design"],
   "defaultTools": "all",
   "canSpawn": ["sonde"],
   "areaType": "repo-bound",
