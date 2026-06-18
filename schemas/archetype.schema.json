@@ -27,6 +27,10 @@
       "enum": ["opus", "sonnet", "haiku"],
       "description": "Konkretes Default-Provider-Model (maschinen-lesbare Aufloesung von modelTier): HEAVEN->opus, Cruiser->sonnet, Probe->haiku. Vom Spawn/init-bobs gelesen. Instanz/Theme darf ueberschreiben; Kosten/Qualitaet-Tuning ist PO-Call."
     },
+    "effort": {
+      "enum": ["low", "medium", "high", "xhigh", "max"],
+      "description": "Default reasoning-effort (Denk-Budget) der Rolle, orthogonal zum model. Generativ/Architekt = xhigh/high, Verifikation = high, Support/Recherche = medium/low. Vom Spawn gelesen; team.config/Instanz darf ueberschreiben (Kosten/Qualitaet = PO-Call)."
+    },
     "tags": {
       "type": "array",
       "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },

@@ -8,6 +8,7 @@
   "positionLong": "Customer Support",
   "modelTier": "Cruiser",
   "model": "sonnet",
+  "effort": "medium",
   "tags": ["docs"],
   "defaultTools": "all",
   "canSpawn": ["sonde"],

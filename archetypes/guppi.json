@@ -8,6 +8,7 @@
   "positionLong": "Routine-Executor (scheduled)",
   "modelTier": "Probe",
   "model": "haiku",
+  "effort": "low",
   "tags": ["ops"],
   "defaultTools": ["Bash", "Read", "Write", "Edit", "Grep", "Glob"],
   "canSpawn": [],
