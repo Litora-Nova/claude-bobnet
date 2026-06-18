@@ -8,6 +8,7 @@
   "positionLong": "Kurs-/Produkt-Content",
   "modelTier": "Cruiser",
   "model": "sonnet",
+  "effort": "medium",
   "tags": ["content", "i18n", "dev"],
   "defaultTools": "all",
   "canSpawn": ["sonde"],

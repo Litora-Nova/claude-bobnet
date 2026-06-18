@@ -8,6 +8,7 @@
   "gateTier": "prozess",
   "modelTier": "Cruiser",
   "model": "sonnet",
+  "effort": "medium",
   "tags": ["process"],
   "defaultTools": "all",
   "canSpawn": ["sonde"],

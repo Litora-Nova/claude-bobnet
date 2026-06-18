@@ -160,6 +160,10 @@ This is the durable contract every agent reads. **Stop here until the user says 
   tasks from the Team-Lead." Set the expectation that **constructive dissent is welcome**.
 - If a planned dir does not exist yet, spawn that agent in standby/research mode (study the
   reference apps), not file creation.
+- **Model + effort per role (#36):** when spawning each agent, resolve its model + reasoning-effort
+  from the archetype via `scripts/lib/model.sh <archetype-id>` (→ `<model> <effort>`) and pass them
+  to the spawn (Agent-tool `model`/`effort`, or `claude --model`). Precedence: instance override
+  (`BOBNET_MODEL_OVERRIDE`/`BOBNET_EFFORT_OVERRIDE` / team.config) → archetype default → modelTier.
 
 ### 8. Run the loop
 - Break work into **app-scoped tasks**; assign via `TaskCreate` + `TaskUpdate(owner=…)` / `SendMessage`.

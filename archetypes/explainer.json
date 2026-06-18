@@ -8,6 +8,7 @@
   "positionLong": "Read-only App-Explainer (Knowledge)",
   "modelTier": "Cruiser",
   "model": "sonnet",
+  "effort": "medium",
   "tags": ["docs"],
   "defaultTools": ["Read", "Grep", "Glob"],
   "canSpawn": ["sonde"],
