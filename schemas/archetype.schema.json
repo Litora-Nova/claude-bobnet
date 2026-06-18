@@ -10,7 +10,7 @@
     "archetype": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$", "description": "Archetyp-Slug = Dateiname (techlead, backend, review, process-auditor …)." },
     "category": {
       "enum": ["bob", "service", "coworker", "helper", "human"],
-      "description": "Art der Entitaet: bob=Team-Mitglied · service=eigene Session cross-project (Garfield/GUPPI/SCUT) · coworker=extern mensch-getrieben (Henry/Tim) · helper=ephemer (ROAMER/Sonde) · human=Mensch (Product Owner / 2-Beiner)."
+      "description": "Art der Entitaet: bob=Team-Mitglied · service=eigene Session cross-project (Infra-/Ops-Service, Connector-Poller) · coworker=extern mensch-getrieben (externe Person, eigene Session) · helper=ephemer (Roamer/Sonde) · human=Mensch (Product Owner / 2-Beiner)."
     },
     "ring": {
       "enum": ["core", "inner", "gate", "outer", "on-demand", "shared"],
