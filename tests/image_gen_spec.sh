@@ -8,8 +8,7 @@ t(){ local d="$1" exp="$2" got="$3"; if [ "$got" = "$exp" ]; then pass=$((pass+1
 
 ( bash "$SH" --help >/dev/null 2>&1 ); t "help-rc2"  "2" "$?"
 ( bash "$SH"        >/dev/null 2>&1 ); t "empty-rc2" "2" "$?"
-( env -u BOBNET_SECRETS bash "$SH" "prompt" >/dev/null 2>&1 ); rc=$?
-  t "no-secrets-dir-fails" "yes" "$([ "$rc" -ne 0 ] && echo yes || echo no)"
+( BOBNET_SECRETS=/nonexistent-xyz bash "$SH" "prompt" >/dev/null 2>&1 ); t "missing-dir-rc3" "3" "$?"
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 ( BOBNET_SECRETS="$tmp" bash "$SH" "prompt" >/dev/null 2>&1 ); t "missing-creds-rc3" "3" "$?"
 
