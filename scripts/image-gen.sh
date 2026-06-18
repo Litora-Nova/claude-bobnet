@@ -8,7 +8,7 @@
 #   cloudflare_account_id + cloudflare_api_token.
 #
 # Nutzung:  image-gen.sh "<prompt>" [outfile.jpg]      (Default-Outfile: image.jpg)
-#   Env:    BOBNET_SECRETS=/abs/zum/zentralen/secrets-dir   (Pflicht)
+#   Env:    BOBNET_SECRETS=/abs/zum/secrets-dir   (optional, Default ~/.claude/.secrets)
 #           GEN_MODEL=<cf-model>                            (optional, ueberschreibt Default)
 # Exit:  0 ok · 2 Usage · 3 Creds fehlen · 4 keine Bilddaten in Response.
 set -uo pipefail
@@ -16,7 +16,7 @@ set -uo pipefail
 prompt="${1:-}"; out="${2:-image.jpg}"
 if [ "$prompt" = "--help" ] || [ -z "$prompt" ]; then sed -n '2,13p' "$0"; exit 2; fi
 
-: "${BOBNET_SECRETS:?BOBNET_SECRETS (zentraler Secrets-Ordner mit cloudflare_account_id/_api_token) nicht gesetzt}"
+: "${BOBNET_SECRETS:=$HOME/.claude/.secrets}"
 acct_f="$BOBNET_SECRETS/cloudflare_account_id"; tok_f="$BOBNET_SECRETS/cloudflare_api_token"
 if [ ! -r "$acct_f" ] || [ ! -r "$tok_f" ]; then
   echo "image-gen: Creds fehlen in $BOBNET_SECRETS (cloudflare_account_id + cloudflare_api_token)" >&2; exit 3
