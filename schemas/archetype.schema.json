@@ -36,6 +36,11 @@
       "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
       "description": "Area-/Pflicht-Tags der Rolle. Geteilte Anweisungen leben pro Tag in team-rules/tags/<tag>.md (kein Duplizieren pro Agent). Dev-Tags (dev) loesen tdd+comments-Pflichten aus."
     },
+    "triggers": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+      "description": "Events/Bedingungen, bei denen diese on-demand-Rolle PFLICHT laufen muss (z.B. 'feierabend', 'new-screen'). Leer/absent = rein on-demand ohne harten Trigger. Vom Lead/Supervisor gelesen."
+    },
     "defaultTools": {
       "description": "Default-Tool-Zugriff: \"all\" oder eine Liste von Tool-Namen.",
       "oneOf": [ { "type": "string" }, { "type": "array", "items": { "type": "string" } } ]

@@ -10,6 +10,7 @@
   "model": "opus",
   "effort": "xhigh",
   "tags": ["design"],
+  "triggers": ["new-screen", "new-ui-flow", "visual-change", "how-should-it-look"],
   "defaultTools": "all",
   "canSpawn": ["sonde"],
   "areaType": "repo-bound",
