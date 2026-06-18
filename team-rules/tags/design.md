@@ -32,6 +32,9 @@ _shared/
 ### Logo
 Ein inline-SVG-Komponenten-File pro Typ (`currentColor` + CSS-Vars, App-Level). Nie als Bild-Asset hartcodieren.
 
+### Bild-Assets (Illustrationen / Heros)
+Raster-Bilder NICHT von Hand: **`scripts/image-gen.sh "<prompt>" [out.jpg]`** (shared Tool, Cloudflare Workers AI) — parametrische Prompts, gemeinsames Style-Template. Logos/Icons bleiben Vektor (siehe Logo).
+
 ---
 
 ## Design-Leitplanken (HART)
