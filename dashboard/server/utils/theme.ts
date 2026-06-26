@@ -100,7 +100,9 @@ export function themeOf(tenant: Tenant, team: TeamCtx): ThemeCtx {
   return {
     id,
     personaOf,
-    displayNameOf: (name) => personaOf(name)?.name || name,
+    // team.config-Name-Override gewinnt (Contract: members[].name = Anzeige fuer
+    // Commit + Dashboard; git-identity nimmt ihn schon). Theme bleibt fuer Avatar/Bio.
+    displayNameOf: (name) => team.TEAM[name]?.name || personaOf(name)?.name || name,
     bioOf: (name, locale = DEFAULT_LOCALE) => i18n(personaOf(name)?.bio, locale),
     // Liefert IMMER einen Dateinamen (nie null) → BobNet zeigt nie ein Emoji.
     avatarFileOf: (name) => personaOf(name)?.avatar || defaultAvatar,
