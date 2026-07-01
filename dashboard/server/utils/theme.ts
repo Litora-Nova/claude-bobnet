@@ -89,8 +89,14 @@ export function themeOf(tenant: Tenant, team: TeamCtx): ThemeCtx {
 
   const personaOf = (agentName: string): Persona | null => {
     const member = team.TEAM[agentName]
+    // Name → Gesicht: heisst ein Member (per team.config umbenannt) wie eine Theme-
+    // Persona, bekommt er DEREN Avatar/Bio — die "Name → automatisch Bild"-Mechanik,
+    // symmetrisch zu displayNameOf. Klare Rollenteilung: `id` bleibt der strukturelle
+    // Join (Archetyp/Kategorie, s. team.ts), `name` treibt die Identitaet (Persona).
+    // Kein Namens-Treffer → id-Persona (Theme-Default), sonst null.
+    if (byName[agentName]) return byName[agentName]
     if (member?.id && t.personas[member.id]) return t.personas[member.id]
-    return byName[agentName] || null
+    return null
   }
 
   const defaultAvatar = t.defaultAvatar || 'default.png'
