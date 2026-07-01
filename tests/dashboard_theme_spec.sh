@@ -150,6 +150,18 @@ eq "$(nth "th.bioOf('Basil')")" "basil"
 it "themeOf: unbekannter Name ohne Persona → defaultAvatar (nie leer/Emoji)"
 eq "$(nth "th.avatarFileOf('Ghost')")" "fallback.png"
 
+# uid-Log-Key → Persona (der `bobnet-infra.log → Garfield`-Fall): memberOf löst den
+# Log-Key (uid) auf den Member, Anzeige+Avatar folgen dessen Persona-Namen — NICHT dem uid.
+nthu() {  # team MIT memberOf (uid→Member); agentName = Log-Key
+  NUXT_THEMES_DIR="$SPEC_THEMES" node --experimental-strip-types --input-type=module -e \
+    "import {themeOf} from 'file://$THEME_TS'; const M={name:'Basil',id:'BOB-techlead',uid:'trend-lead'}; const team={config:{},TEAM:{Basil:M},memberOf:(k)=>({Basil:M,'trend-lead':M})[k]}; const th=themeOf({uid:'x',themeId:'t1'},team); console.log($1)" 2>/dev/null
+}
+it "themeOf: uid-Log-Key → Persona-Avatar (trend-lead → Basil.png, nicht default)"
+eq "$(nthu "th.avatarFileOf('trend-lead')")" "Basil.png"
+
+it "themeOf: uid-Log-Key → Anzeige-Name der Persona (trend-lead → Basil, nicht 'trend-lead')"
+eq "$(nthu "th.displayNameOf('trend-lead')")" "Basil"
+
 rm -rf "$SPEC_THEMES"
 
 summary

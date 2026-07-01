@@ -22,7 +22,10 @@ export type Category = 'bob' | 'service' | 'coworker' | 'helper' | 'human'
 // Namens-Lookup zurueck (rueckwaerts-kompatibel zu id-losen Alt-Configs).
 // `category` ueberschreibt (Instanz-Override) die aus dem Archetyp abgeleitete; `parent`
 // nennt bei Helfern den Eltern-Agent (Badge-Rendering am Roster-Member).
-export type TeamMember = { name: string; id?: string; role: string; order: number; external?: boolean; channel?: string; groups?: string[]; category?: Category; parent?: string }
+// `uid` = Log-/Routing-Key (z. B. `bobnet-infra`), falls er vom Anzeige-`name` (Persona,
+// z. B. `Garfield`) abweicht. Der Heartbeat-Log heisst dann `<uid>.log`; das Grid bildet
+// ihn auf diesen Member ab (Anzeige = name). Fehlt `uid`, IST der name der Log-Key (alt).
+export type TeamMember = { name: string; id?: string; uid?: string; role: string; order: number; external?: boolean; channel?: string; groups?: string[]; category?: Category; parent?: string }
 export type TeamConfig = {
   title?: string
   shortTitle?: string
@@ -41,6 +44,7 @@ export type TeamCtx = {
   PO: string
   AGENTS: string[]
   GROUPS: Record<string, string[]>
+  memberOf: (key: string) => TeamMember | undefined
   roleOf: (name: string) => string
   categoryOf: (name: string) => Category
   parentOf: (name: string) => string | null
@@ -97,6 +101,13 @@ function buildCtx(config: TeamConfig): TeamCtx {
   const TEAM: Record<string, TeamMember> = {}
   if (config.po) TEAM[config.po.name] = { name: config.po.name, role: config.po.role || '', order: 0 }
   for (const m of config.members) TEAM[m.name] = m
+  // Log-Key (uid) → Member. TEAM bleibt name-gekeyt (das Roster iteriert es); die uid-Karte
+  // wird separat aufgelöst, damit `Object.entries(TEAM)` keine Doppel-Einträge erzeugt.
+  const BY_UID: Record<string, TeamMember> = {}
+  for (const m of config.members) if (m.uid) BY_UID[m.uid] = m
+  // Member per Anzeige-Namen ODER Log-Key (uid) — rueckwaerts-kompatibel: name-gekeyte
+  // Alt-Configs (kein uid) treffen weiter ueber TEAM, uid-Configs zusaetzlich ueber BY_UID.
+  const memberOf = (key: string): TeamMember | undefined => TEAM[key] || BY_UID[key]
 
   const AGENTS = config.members.filter(m => !m.external).map(m => m.name)
   const GROUPS: Record<string, string[]> = { team: AGENTS.slice() }
@@ -114,7 +125,7 @@ function buildCtx(config: TeamConfig): TeamCtx {
       const poCat = (config.po as any).category
       return poCat && VALID_CATS.has(poCat) ? poCat : 'human'
     }
-    const member = TEAM[name]
+    const member = memberOf(name)
     if (member?.category && VALID_CATS.has(member.category)) return member.category   // Instanz-Override
     return categoryFromId(member?.id) || 'bob'                                        // Archetyp → Default
   }
@@ -126,9 +137,10 @@ function buildCtx(config: TeamConfig): TeamCtx {
     PO: config.po?.name || 'Owner',
     AGENTS,
     GROUPS,
-    roleOf: (name) => TEAM[name]?.role || '',
+    memberOf,
+    roleOf: (name) => memberOf(name)?.role || '',
     categoryOf,
-    parentOf: (name) => TEAM[name]?.parent || null,
+    parentOf: (name) => memberOf(name)?.parent || null,
   }
 }
 
