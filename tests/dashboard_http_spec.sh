@@ -55,6 +55,16 @@ body()   { curl -sS -m "$CURL_TIMEOUT" "$BASE$1" 2>/dev/null; }
 headers(){ curl -sS -m "$CURL_TIMEOUT" -D - -o /dev/null "$BASE$1" 2>/dev/null; }
 status() { curl -sS -m "$CURL_TIMEOUT" -o /dev/null -w '%{http_code}' "$BASE$1" 2>/dev/null; }
 
+# ── /api/health — Liveness-Probe (tenant-neutral, muss IMMER 200 sein) ────────
+it "api/health: HTTP 200 (Liveness für Supervisor/systemd)"
+eq "$(status /api/health)" "200"
+
+it "api/health: JSON ok:true (Prozess gesund)"
+contains "$(body /api/health)" '"ok":true'
+
+it "api/health: Cache-Control no-store (Probe nie gecacht)"
+contains "$(printf '%s' "$(headers /api/health)" | tr 'A-Z' 'a-z')" "cache-control: no-store"
+
 # ── /manifest.webmanifest — dynamisches Manifest ──────────────────────────────
 MAN_H="$(headers /manifest.webmanifest)"
 MAN_B="$(body /manifest.webmanifest)"
