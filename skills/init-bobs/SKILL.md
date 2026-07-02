@@ -10,7 +10,7 @@ Stands up a **Projekt-Bobiverse**: a team where **the main window is the Team-Le
 background agents, so the main window stays responsive instead of being blocked.
 
 The functionality lives in the **engine** (this repo); the project only *references* it
-(symlinks + a small instance config). An engine update reaches every project; the gates
+(symlinks + a small instance config). An engine update reaches every project (pull it in later with the `update-bobs` skill); the gates
 (Circle-of-Trust, deploy-guard) are baked into the engine and pulled fresh at init.
 
 > Renames + supersedes the legacy `init-dev-team` skill. The old `join-dev-team` skill is
