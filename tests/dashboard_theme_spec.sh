@@ -118,4 +118,50 @@ eq "$(np "[tenantFromProject({uid:'x', path:'/tmp/p', label:'L', icon:'i.png', r
 it "tenantFromProject: label-Fallback auf name, wenn label fehlt"
 eq "$(np "tenantFromProject({uid:'x', name:'theName', path:'/tmp/p'}).label")" "theName"
 
+# ── themeOf → personaOf/avatarFileOf/displayNameOf: Name-Override treibt das Gesicht ─
+# "mit dem Namen automatisch das Bild": heisst ein Member wie eine Theme-Persona (Rename
+# Bob→Basil), gewinnt DEREN Avatar/Bio — `id` bleibt der strukturelle Join, `name` treibt
+# die Identitaet. Temp-Theme mit id-Persona (Bob) + gleichnamiger Override-Persona (Basil).
+SPEC_THEMES="$(mktemp -d)"
+mkdir -p "$SPEC_THEMES/t1/avatars"
+cat > "$SPEC_THEMES/t1/theme.json" <<'JSON'
+{ "id":"t1", "defaultAvatar":"fallback.png", "personas": {
+  "BOB-techlead": { "name":"Bob",   "avatar":"Bob.png",   "bio":"lead"  },
+  "FUN-basil":    { "name":"Basil", "avatar":"Basil.png", "bio":"basil" }
+} }
+JSON
+nth() {  # nth <expr über th = themeOf(...)>
+  NUXT_THEMES_DIR="$SPEC_THEMES" node --experimental-strip-types --input-type=module -e \
+    "import {themeOf} from 'file://$THEME_TS'; const th=themeOf({uid:'x',themeId:'t1'},{config:{},TEAM:{Basil:{name:'Basil',id:'BOB-techlead'},Bob:{name:'Bob',id:'BOB-techlead'}}}); console.log($1)" 2>/dev/null
+}
+
+it "themeOf: Name-Override treibt den Avatar (Basil → Basil.png, NICHT Bobs Bild)"
+eq "$(nth "th.avatarFileOf('Basil')")" "Basil.png"
+
+it "themeOf: ohne Override bleibt die id-Persona (Bob → Bob.png)"
+eq "$(nth "th.avatarFileOf('Bob')")" "Bob.png"
+
+it "themeOf: displayName folgt dem Namen (Basil)"
+eq "$(nth "th.displayNameOf('Basil')")" "Basil"
+
+it "themeOf: bio folgt der Namens-Persona (Basil-Bio)"
+eq "$(nth "th.bioOf('Basil')")" "basil"
+
+it "themeOf: unbekannter Name ohne Persona → defaultAvatar (nie leer/Emoji)"
+eq "$(nth "th.avatarFileOf('Ghost')")" "fallback.png"
+
+# uid-Log-Key → Persona (der `bobnet-infra.log → Garfield`-Fall): memberOf löst den
+# Log-Key (uid) auf den Member, Anzeige+Avatar folgen dessen Persona-Namen — NICHT dem uid.
+nthu() {  # team MIT memberOf (uid→Member); agentName = Log-Key
+  NUXT_THEMES_DIR="$SPEC_THEMES" node --experimental-strip-types --input-type=module -e \
+    "import {themeOf} from 'file://$THEME_TS'; const M={name:'Basil',id:'BOB-techlead',uid:'trend-lead'}; const team={config:{},TEAM:{Basil:M},memberOf:(k)=>({Basil:M,'trend-lead':M})[k]}; const th=themeOf({uid:'x',themeId:'t1'},team); console.log($1)" 2>/dev/null
+}
+it "themeOf: uid-Log-Key → Persona-Avatar (trend-lead → Basil.png, nicht default)"
+eq "$(nthu "th.avatarFileOf('trend-lead')")" "Basil.png"
+
+it "themeOf: uid-Log-Key → Anzeige-Name der Persona (trend-lead → Basil, nicht 'trend-lead')"
+eq "$(nthu "th.displayNameOf('trend-lead')")" "Basil"
+
+rm -rf "$SPEC_THEMES"
+
 summary

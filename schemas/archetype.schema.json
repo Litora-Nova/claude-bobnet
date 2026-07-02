@@ -10,7 +10,7 @@
     "archetype": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$", "description": "Archetyp-Slug = Dateiname (techlead, backend, review, process-auditor …)." },
     "category": {
       "enum": ["bob", "service", "coworker", "helper", "human"],
-      "description": "Art der Entitaet: bob=Team-Mitglied · service=eigene Session cross-project (Garfield/GUPPI/SCUT) · coworker=extern mensch-getrieben (Henry/Tim) · helper=ephemer (ROAMER/Sonde) · human=Mensch (Product Owner / 2-Beiner)."
+      "description": "Art der Entitaet: bob=Team-Mitglied · service=eigene Session cross-project (Infra-/Ops-Service, Connector-Poller) · coworker=extern mensch-getrieben (externe Person, eigene Session) · helper=ephemer (Roamer/Sonde) · human=Mensch (Product Owner / 2-Beiner)."
     },
     "ring": {
       "enum": ["core", "inner", "gate", "outer", "on-demand", "shared"],
@@ -27,10 +27,19 @@
       "enum": ["opus", "sonnet", "haiku"],
       "description": "Konkretes Default-Provider-Model (maschinen-lesbare Aufloesung von modelTier): HEAVEN->opus, Cruiser->sonnet, Probe->haiku. Vom Spawn/init-bobs gelesen. Instanz/Theme darf ueberschreiben; Kosten/Qualitaet-Tuning ist PO-Call."
     },
+    "effort": {
+      "enum": ["low", "medium", "high", "xhigh", "max"],
+      "description": "Default reasoning-effort (Denk-Budget) der Rolle, orthogonal zum model. Generativ/Architekt = xhigh/high, Verifikation = high, Support/Recherche = medium/low. Vom Spawn gelesen; team.config/Instanz darf ueberschreiben (Kosten/Qualitaet = PO-Call)."
+    },
     "tags": {
       "type": "array",
       "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
       "description": "Area-/Pflicht-Tags der Rolle. Geteilte Anweisungen leben pro Tag in team-rules/tags/<tag>.md (kein Duplizieren pro Agent). Dev-Tags (dev) loesen tdd+comments-Pflichten aus."
+    },
+    "triggers": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+      "description": "Events/Bedingungen, bei denen diese on-demand-Rolle PFLICHT laufen muss (z.B. 'feierabend', 'new-screen'). Leer/absent = rein on-demand ohne harten Trigger. Vom Lead/Supervisor gelesen."
     },
     "defaultTools": {
       "description": "Default-Tool-Zugriff: \"all\" oder eine Liste von Tool-Namen.",

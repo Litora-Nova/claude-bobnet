@@ -37,7 +37,8 @@ export default defineEventHandler(async (event) => {
     // ts = HH:MM-Anzeigeform (kompatibel zur bestehenden UI), epoch = Sort-Key.
     const last3: Beat[] = parseTail(lines, mtimeMs, { tz, limit: 3 })
       .reverse().map(p => ({ ts: p.time, status: p.status, msg: p.msg, epoch: p.epoch }))
-    const meta = team.TEAM[name] || { role: '', order: 99 }
+    // name = Log-Dateiname = uid ODER Persona-Name → Member per beidem auflösen.
+    const meta = team.memberOf(name) || { role: '', order: 99 }
     agents.push({ name, role: meta.role, order: meta.order, latest: last3[0] || null, history: last3 })
   }
   // Roster-Mitglieder ohne Log trotzdem zeigen — mit zwei Sonderfällen:
@@ -47,7 +48,9 @@ export default defineEventHandler(async (event) => {
   //   - Interne ohne Log: leeres Card wie bisher.
   const EXT_FRESH_MS = 48 * 60 * 60 * 1000
   for (const [name, meta] of Object.entries(team.TEAM)) {
-    if (agents.some(a => a.name === name)) continue
+    // Schon als Log-Karte da? Match auf Persona-Namen ODER Log-Key (uid) — sonst
+    // erschiene der uid-geloggte Member (bobnet-infra.log) zusaetzlich als leere Persona-Karte.
+    if (agents.some(a => a.name === name || (meta.uid && a.name === meta.uid))) continue
     if (meta.external && meta.channel) {
       // Channel-Pfad: Tenant-Modus relativ zum standup-Dir des Projekts; Env-Modus
       // wie bisher relativ zum App-cwd (backward-kompatibel zu Alt-Configs).
@@ -72,8 +75,8 @@ export default defineEventHandler(async (event) => {
   for (const a of agents) {
     a.displayName = theme.displayNameOf(a.name)
     a.bio = theme.bioOf(a.name)
-    a.external = !!team.TEAM[a.name]?.external
-    a.id = team.TEAM[a.name]?.id            // stabiler Join-Key (Helfer-Icon-Wahl, Theme-Debug)
+    a.external = !!team.memberOf(a.name)?.external
+    a.id = team.memberOf(a.name)?.id        // stabiler Join-Key (Helfer-Icon-Wahl, Theme-Debug)
     a.category = team.categoryOf(a.name)    // bob | service | coworker | helper | human
     a.parent = team.parentOf(a.name)        // Eltern-Agent (nur Helfer), sonst null
   }

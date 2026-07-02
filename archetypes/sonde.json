@@ -8,6 +8,7 @@
   "positionLong": "Read-only Erkundungs-Sonde (Icon 🛰️)",
   "modelTier": "Probe",
   "model": "haiku",
+  "effort": "low",
   "tags": [],
   "defaultTools": ["Read", "Grep", "Glob", "Bash"],
   "canSpawn": [],

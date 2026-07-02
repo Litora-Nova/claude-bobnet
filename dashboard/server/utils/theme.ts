@@ -88,7 +88,14 @@ export function themeOf(tenant: Tenant, team: TeamCtx): ThemeCtx {
   for (const p of Object.values(t.personas)) if (p?.name) byName[p.name] = p
 
   const personaOf = (agentName: string): Persona | null => {
-    const member = team.TEAM[agentName]
+    // agentName kann der Log-/Routing-Key (uid, z. B. `bobnet-infra`) ODER der Anzeige-Name
+    // sein. Member per uid ODER name auflösen, dann über den ANZEIGE-Namen die Persona finden
+    // (Name → Gesicht; heisst ein Member wie eine Theme-Persona, kriegt er deren Avatar/Bio).
+    // Klare Rollenteilung: `id` = struktureller Join (Archetyp/Kategorie, s. team.ts), `name`
+    // = Identitaet. Kein Namens-Treffer → id-Persona (Theme-Default), sonst reiner Fallback.
+    const member = team.memberOf ? team.memberOf(agentName) : team.TEAM[agentName]
+    const display = member?.name || agentName
+    if (byName[display]) return byName[display]
     if (member?.id && t.personas[member.id]) return t.personas[member.id]
     return byName[agentName] || null
   }
@@ -100,7 +107,9 @@ export function themeOf(tenant: Tenant, team: TeamCtx): ThemeCtx {
   return {
     id,
     personaOf,
-    displayNameOf: (name) => personaOf(name)?.name || name,
+    // Anzeige = Member-Name (per uid ODER name aufgelöst; Contract: members[].name = Anzeige
+    // fuer Commit + Dashboard, git-identity nimmt ihn schon), sonst Persona-Name, sonst Key.
+    displayNameOf: (name) => (team.memberOf ? team.memberOf(name) : team.TEAM[name])?.name || personaOf(name)?.name || name,
     bioOf: (name, locale = DEFAULT_LOCALE) => i18n(personaOf(name)?.bio, locale),
     // Liefert IMMER einen Dateinamen (nie null) → BobNet zeigt nie ein Emoji.
     avatarFileOf: (name) => personaOf(name)?.avatar || defaultAvatar,

@@ -6,24 +6,25 @@
 | Archetyp | category | ring | Gate-Tier | Model-Tier | Bobiverse-Persona (Beispiel-id) |
 |---|---|---|---|---|---|
 | `techlead` | bob | core | — | HEAVEN | Bob (`BOB-techlead`) |
-| `backend` | bob | inner | — | Cruiser | Bill (`BOB-backend`) |
-| `frontend` | bob | inner | — | Cruiser | Luke (`BOB-frontend`) |
-| `website` | bob | inner | — | Cruiser | Linus (`BOB-website`) |
+| `backend` | bob | inner | — | HEAVEN | Bill (`BOB-backend`) |
+| `frontend` | bob | inner | — | HEAVEN | Luke (`BOB-frontend`) |
+| `website` | bob | inner | — | HEAVEN | Linus (`BOB-website`) |
+| `design` | bob | inner | — | HEAVEN | *(component-first Design)* |
 | `review` | bob | gate | 1–3 | Cruiser | Riker (`BOB-review`) |
-| `compliance` | bob | gate | 3 | Cruiser | Dexter (`BOB-compliance`) |
+| `compliance` | bob | gate | 3 | HEAVEN | Dexter (`BOB-compliance`) |
 | `tests` | bob | gate | 2–3 | Cruiser | Marvin (`BOB-tests`) |
 | `release` | bob | gate | 2–4 | Cruiser | Bender (`BOB-release`) |
-| `dashboard` | service | outer | — | Cruiser | Garfield (`BOB-dashboard`) |
+| `dashboard` | service | outer | — | HEAVEN | Garfield (`BOB-dashboard`) |
 | `docs` | bob | outer | — | Cruiser | Homer (`BOB-docs`) |
 | `content` | bob | outer | — | Cruiser | Bridget (`BOB-content`) |
-| `hiwi` | bob | on-demand | 1–3 | Cruiser | Mario (`BOB-hiwi`) — Routinen-/Runbook-Executor |
+| `hiwi` | bob | on-demand | 1–3 | Probe | Mario (`BOB-hiwi`) — Routinen-/Runbook-Executor |
 | `explainer` | bob | outer | 1 | Cruiser | Howard (`BOB-explainer`) — read-only App-Explainer |
 | `support` | bob | outer | 1 | Cruiser | *(reserviert)* — Ticket-Triage |
-| `marketing` | bob | outer | — | Cruiser | *(geplant)* |
-| `plan-judge` | service | gate | goal | HEAVEN | Anek (`SVC-plan-judge`) — Hüter des GOAL |
+| `marketing` | bob | outer | — | HEAVEN | *(geplant)* |
+| `plan-judge` | service | gate | goal | Cruiser | Anek (`SVC-plan-judge`) — Hüter des GOAL |
 | `process-auditor` | service | gate | prozess | Cruiser | *(Colonel Butterworth)* |
 | `guppi` | service | shared | — | Probe | GUPPI (`SVC-guppi`) — Routine + Concierge |
-| `coworker` | coworker | outer | — | — | Henry / Tim (`EXT-*`) |
+| `coworker` | coworker | outer | — | — | *(externe Instanz, `EXT-*`)* |
 | `human` | human | core | — | — | Owner (`HUMAN-bob`) |
 | `roamer` | helper | on-demand | — | Probe | ROAMER 🕷️ (ephemer, kein Roster) |
 | `sonde` | helper | on-demand | — | Probe | Sonde 🛰️ (ephemer, kein Roster) |

@@ -8,6 +8,7 @@
   "gateTier": "2-4",
   "modelTier": "Cruiser",
   "model": "sonnet",
+  "effort": "high",
   "tags": ["release"],
   "defaultTools": "all",
   "canSpawn": ["roamer", "sonde"],

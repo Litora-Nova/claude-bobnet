@@ -8,6 +8,7 @@
   "positionLong": "Ephemere Arbeits-Drohne (Icon 🕷️)",
   "modelTier": "Probe",
   "model": "haiku",
+  "effort": "low",
   "tags": [],
   "defaultTools": ["Read", "Edit", "Write", "Bash", "Grep", "Glob"],
   "canSpawn": [],

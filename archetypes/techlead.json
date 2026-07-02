@@ -8,6 +8,7 @@
   "positionLong": "Tech-Lead / Orchestrator",
   "modelTier": "HEAVEN",
   "model": "opus",
+  "effort": "xhigh",
   "tags": ["docs"],
   "defaultTools": "all",
   "canSpawn": ["roamer", "sonde", "mario", "guppi"],
