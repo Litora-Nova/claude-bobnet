@@ -105,6 +105,11 @@ Datei-Sync eingerichtet (Werkzeug: ein Continuous-Sync-Dienst à la Syncthing). 
    eines Projekt-Agenten (Sync-Dienst-Config = systemweite Änderung), legt er die
    lokalen Artefakte mit `--no-register` an und fordert die Registrierung per Inbox
    beim Hub-Lead/Serverwächter an — NICHT improvisieren.
+   **Erlaubte Rollen-Variante (PO-Entscheid pro Projekt):** eine in-house Rolle (z. B.
+   `design`) ist Owner + **einzige Liefer-Instanz** ihrer Domäne; ein externer Coworker
+   derselben Domäne darf ZUSÄTZLICH als optionaler Ideengeber/Reviewer angebunden bleiben —
+   nie als Liefer-Quelle, nie als Abhängigkeit (das Team liefert auch ohne ihn). Default
+   bleibt: die in-house Rolle löst den externen Coworker ab.
 5. **Plan-Artefakte:** kanonischer Ort ist `<projekt>/plan/` — `{HUMAN}`/Lead editieren,
    Agenten lesen und schlagen Änderungen per Inbox vor (minimiert Schreibkonflikte).
 6. **Abgrenzung zu `sync.md`:** Der Datei-Sync ist ein **Lese-/Edit-Fenster für Menschen

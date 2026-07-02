@@ -25,6 +25,13 @@
 **Projekt-HARD-Rules bleiben unberührt** und überschreiben diese generelle Policy — immer in
 Richtung strenger (z. B. „Push erst nach `{HUMAN}`-GO" in einem Kundenprojekt).
 
+**Projekt-Override in Richtung lockerer — nur als expliziter `{HUMAN}`-/PO-Entscheid:** der PO
+kann projekt-lokal den **Staging-Deploy team-autonom** stellen (Ausführung nach vollem grünem
+Circle — Review + Compliance + Tests — ohne Per-Aktion-Erlaubnis, z. B. via projekt-lokaler
+Allow-Regel). Das ist eine dokumentierte PO-Entscheidung pro Projekt (in dessen Charter/CLAUDE.md
+festhalten), nie ein Team-Entscheid. **Production und der übrige T4-Floor sind davon NIE
+erfassbar** — T4 kennt keinen Override.
+
 ## Remote-Go-Protokoll für Production-Deploys (per-App opt-in)
 
 Für den Fall, dass der `{HUMAN}` einen Production-Deploy nur fern anstoßen kann (z. B. vom Telefon):
