@@ -7,7 +7,7 @@
   "positionShort": "Frontend",
   "positionLong": "Frontend (SPA / App)",
   "modelTier": "HEAVEN",
-  "model": "opus",
+  "model": "sonnet",
   "effort": "xhigh",
   "tags": ["frontend", "js", "dev", "i18n"],
   "defaultTools": "all",

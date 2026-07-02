@@ -28,8 +28,9 @@
 | `human` | human | core | — | — | Owner (`HUMAN-bob`) |
 | `roamer` | helper | on-demand | — | Probe | ROAMER 🕷️ (ephemer, kein Roster) |
 | `sonde` | helper | on-demand | — | Probe | Sonde 🛰️ (ephemer, kein Roster) |
+| `advisor` | helper | on-demand | — | HEAVEN (`fable`) | Advisor 🦉 (ephemer, kein Roster) |
 
-**Neu in Phase 2:** `support`, `marketing`, `process-auditor` (Butterworth). **Helper** (`roamer`/`sonde`)
+**Neu in Phase 2:** `support`, `marketing`, `process-auditor` (Butterworth). **Helper** (`roamer`/`sonde`/`advisor`)
 + **service** (`guppi`/`plan-judge`) erscheinen nicht im Roster-Bauer-Grid — sie sind ephemer bzw. laufen
 als Badge/Daemon/Event-getriggert.
 
@@ -48,10 +49,15 @@ Jeder Archetyp trägt jetzt zusätzlich (additiv, `gateTier` unangetastet):
   [`../team-rules/tags/<tag>.md`](../team-rules/tags/) (kein Duplizieren pro Agent). Der Agent-Init lädt
   Rolle (Archetyp) + die `.md` zu jedem seiner Tags. Der Tag **`dev`** ist der Bauer-Marker → löst
   TDD + Kommentare aus.
-- **`model`** — konkretes Provider-Model (maschinen-lesbare Auflösung von `modelTier`):
-  **HEAVEN→`opus`** (Tech-Lead), **Cruiser→`sonnet`** (alle Team-/QM-Bobs), **Probe→`haiku`**
-  (Helfer roamer/sonde + Service guppi). `coworker`/`human` haben kein `model` (extern/Mensch, keine
-  von uns gespawnte Provider-Instanz). Instanz/Theme darf überschreiben — Kosten/Qualität-Tuning ist PO-Call.
+- **`model`** — konkretes Provider-Model, explizit pro Archetyp (Fallback über `modelTier`:
+  HEAVEN→`opus`, Cruiser→`sonnet`, Probe→`haiku`). **Cut seit Sonnet 5 (PO 2026-07-02):**
+  `opus`/xhigh nur noch für `techlead` + `design`; die generativen Team-Bobs (backend/frontend/
+  dashboard/website/marketing) und `compliance` fahren `sonnet`/xhigh — Sonnet 5 liefert nahe
+  Opus-Qualität bei Coding/Agentic zu ~40% des Preises. Gates bleiben `sonnet`/high, Helfer +
+  Service `haiku`/low. **`fable`** (Mythos-Class, ~2× Opus) ist dem `advisor` vorbehalten bzw.
+  bewusster Override (`BOBNET_MODEL_OVERRIDE=fable`). `coworker`/`human` haben kein `model`
+  (extern/Mensch, keine von uns gespawnte Provider-Instanz). Instanz/Theme darf überschreiben —
+  Kosten/Qualität-Tuning ist PO-Call.
 - **`duties[]`** — beginnen mit Heartbeat + Circle-of-Trust und referenzieren die Tag-Dateien
   (`dev: … siehe tags/dev.md`) statt deren Inhalt zu duplizieren.
 
@@ -60,7 +66,7 @@ website `{website,js,dev,i18n,seo}` · content `{content,i18n,dev}` · hiwi `{de
 review `{review}` · compliance `{compliance}` · tests `{tests}` · release `{release}` ·
 dashboard `{dashboard,js,dev}` · docs `{docs}` · support `{docs}` · explainer `{docs}` ·
 marketing `{content,i18n,seo}` · process-auditor `{process}` · plan-judge `{goal}` · techlead `{docs}` ·
-guppi `{ops}` · roamer/sonde `{}` (ephemer).
+guppi `{ops}` · roamer/sonde/advisor `{}` (ephemer).
 
 **Spawn-UID vs. Archetyp-id:** die `idPattern` hier (`BOB-backend`) ist die themen-unabhängige
 Persona-Bindung. Die **Spawn-Instanz** im BobNet bekommt zusätzlich eine projekt-präfixierte UID

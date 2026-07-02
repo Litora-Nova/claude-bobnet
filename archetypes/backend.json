@@ -7,7 +7,7 @@
   "positionShort": "Backend",
   "positionLong": "Backend / JSON-API",
   "modelTier": "HEAVEN",
-  "model": "opus",
+  "model": "sonnet",
   "effort": "xhigh",
   "tags": ["backend", "dev", "db", "api"],
   "defaultTools": "all",

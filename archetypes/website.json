@@ -7,7 +7,7 @@
   "positionShort": "Website",
   "positionLong": "Marketing-Sites",
   "modelTier": "HEAVEN",
-  "model": "opus",
+  "model": "sonnet",
   "effort": "xhigh",
   "tags": ["website", "js", "dev", "i18n", "seo"],
   "defaultTools": "all",
