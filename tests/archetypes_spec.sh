@@ -12,7 +12,7 @@
 # Geprüfte Invarianten (Behavior > Source-Pattern: wir parsen + asserten Werte, greppen nicht):
 #   1. Jeder archetypes/*.json ist valides JSON.
 #   2. Schema-Konformität der NEUEN Felder:
-#        - `model` (falls vorhanden) ∈ {opus, sonnet, haiku}.
+#        - `model` (falls vorhanden) ∈ {fable, opus, sonnet, haiku}.
 #        - `tags`  (falls vorhanden) = Array von Slug-Strings (^[a-z0-9][a-z0-9-]*$).
 #   3. Vollständigkeit: jeder Archetyp AUSSER coworker/human hat `model` UND `tags`
 #        (`tags` darf leer sein, z.B. roamer/sonde — Feld muss aber DA sein).
@@ -38,7 +38,7 @@ echo "archetypes/*.json — Struktur-/Schema-Spec (Phase C: model+tags)"
 
 # Archetypen, die per Definition KEIN model/tags/gateTier haben (extern/Mensch):
 EXEMPT_RE='^(coworker|human)$'
-MODELS_VALID="opus sonnet haiku"
+MODELS_VALID="fable opus sonnet haiku"
 TAG_SLUG_RE='^[a-z0-9][a-z0-9-]*$'
 
 # ── Vorbedingungen ──────────────────────────────────────────────────────────────────────────
@@ -77,7 +77,7 @@ d = json.load(open(sys.argv[1]))
 a = d.get("archetype", "")
 has_model = "model" in d
 model = d.get("model", "")
-model_ok = (model in ("opus", "sonnet", "haiku")) if has_model else True
+model_ok = (model in ("fable", "opus", "sonnet", "haiku")) if has_model else True
 has_tags = "tags" in d
 tags = d.get("tags", None)
 tags_is_array = isinstance(tags, list) if has_tags else True
@@ -95,8 +95,8 @@ for f in "${ARCH_FILES[@]}"; do
   st="$(archetype_status "$f")"
   IFS='|' read -r a has_model model model_ok has_tags tags_is_array tags_all_slug has_gate bad_tags <<<"$st"
 
-  # 2a. model (falls vorhanden) ∈ {opus,sonnet,haiku}
-  it "2-schema: model ist {opus|sonnet|haiku} oder absent — $base"
+  # 2a. model (falls vorhanden) ∈ {fable,opus,sonnet,haiku}
+  it "2-schema: model ist {fable|opus|sonnet|haiku} oder absent — $base"
   eq "$model_ok" "1"
   if [ "$has_model" = "1" ]; then
     it "2-schema: model-Wert '$model' ist ein gültiger Enum-Member — $base"

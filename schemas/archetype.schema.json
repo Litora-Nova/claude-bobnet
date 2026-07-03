@@ -24,8 +24,8 @@
       "description": "Default-Schiff-Klasse (Model-Tiering, Theme-Flavour): HEAVEN=Opus/high · Cruiser=Sonnet/med-high · Probe=Haiku/low. Instanz darf ueberschreiben."
     },
     "model": {
-      "enum": ["opus", "sonnet", "haiku"],
-      "description": "Konkretes Default-Provider-Model (maschinen-lesbare Aufloesung von modelTier): HEAVEN->opus, Cruiser->sonnet, Probe->haiku. Vom Spawn/init-bobs gelesen. Instanz/Theme darf ueberschreiben; Kosten/Qualitaet-Tuning ist PO-Call."
+      "enum": ["fable", "opus", "sonnet", "haiku"],
+      "description": "Konkretes Default-Provider-Model (maschinen-lesbare Aufloesung von modelTier): HEAVEN->opus, Cruiser->sonnet, Probe->haiku; fable = Mythos-Class ueber Opus (advisor / bewusster Override, kein Tier-Fallback). Vom Spawn/init-bobs gelesen. Instanz/Theme darf ueberschreiben; Kosten/Qualitaet-Tuning ist PO-Call."
     },
     "effort": {
       "enum": ["low", "medium", "high", "xhigh", "max"],

@@ -83,3 +83,9 @@ Die Koordination ruht auf zwei Säulen:
 - **Die „Agent Teams"-Beta** (unabhängige Peer-Sessions, die sich Nachrichten schicken + Tasks selbst
   claimen) ist ein **optionales Upgrade** — smootheres Peer-Handoff, aber experimentell + höhere
   Token-Kosten. Der Wert ist Engine + Disziplin; die Beta ergänzt nur, sie ist keine Voraussetzung.
+
+- **Engine-Beiträge von Projekt-Teams — Inbox statt Direkt-Commit:** Bobs anderer Teams
+  committen NICHT direkt in Engine-/Hub-Repos, auch nicht bei trivialen Fixes. Der Weg ist ein
+  Vorschlag (gern mit Patch/Diff) in die **Inbox des Engine-Maintainers**; der integriert über
+  die normalen Gates. Gründe: Single-Merge-Owner, Gate-Disziplin, white-label-Pflicht des
+  public Repos.

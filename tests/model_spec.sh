@@ -11,10 +11,12 @@ tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 printf '{"id":"gen","modelTier":"HEAVEN","model":"opus","effort":"xhigh"}' > "$tmp/gen.json"
 printf '{"id":"probe","modelTier":"Probe","model":"haiku"}'               > "$tmp/probe.json"  # effort -> Fallback low
 printf '{"id":"bare","modelTier":"Cruiser"}'                              > "$tmp/bare.json"   # model+effort -> Fallback sonnet/medium
+printf '{"id":"adv","modelTier":"HEAVEN","model":"fable","effort":"xhigh"}' > "$tmp/adv.json"   # fable = Mythos-Class (advisor)
 
 t "explizit"        "opus xhigh"     "$(BOBNET_ARCHETYPES=$tmp bash "$LIB" gen)"
 t "effort-fallback" "haiku low"      "$(BOBNET_ARCHETYPES=$tmp bash "$LIB" probe)"
 t "tier-fallback"   "sonnet medium"  "$(BOBNET_ARCHETYPES=$tmp bash "$LIB" bare)"
+t "fable-explizit"  "fable xhigh"    "$(BOBNET_ARCHETYPES=$tmp bash "$LIB" adv)"
 t "--model-flag"    "--model opus"   "$(BOBNET_ARCHETYPES=$tmp bash "$LIB" --model gen)"
 t "env-override"    "sonnet high"    "$(BOBNET_ARCHETYPES=$tmp BOBNET_MODEL_OVERRIDE=sonnet BOBNET_EFFORT_OVERRIDE=high bash "$LIB" gen)"
 BOBNET_ARCHETYPES=$tmp bash "$LIB" nope >/dev/null 2>&1; t "missing-rc3" "3" "$?"
