@@ -25,6 +25,10 @@
 #                                       resettet den Offset — Dedupe-Anker analog telegram_offset)
 #   SCUT_MAIL_ONESHOT   1 = einmal pollen + raus (Tests/Cron); sonst Dauerschleife.
 #   SCUT_MAIL_POLL_INTERVAL   Sekunden zwischen Polls in der Dauerschleife (Default 120).
+#   SCUT_MAIL_BACKFILL  1 = beim Erstlauf (kein Offset-File) ALLE Altmails zustellen.
+#                       Default: Erstlauf setzt nur den Offset-Anker auf die höchste UID und
+#                       stellt NICHTS zu — verhindert die Altmail-Flut (Betriebs-Learning
+#                       aus dem ersten produktiven projekt-lokalen Poller, PO-Fleet 2026-06).
 #   SCUT_MAIL_EML_DIR   TESTMODUS: statt IMAP alle *.eml in diesem Ordner parsen (sortiert,
 #                       kein Offset-Write) — macht Parsing/Triage ohne Server spec-bar.
 #
@@ -65,9 +69,38 @@ if [ -z "$EML_DIR" ] && { [ -z "$HOST" ] || [ -z "$USER_" ] || [ -z "$PASS" ]; }
   exit 1
 fi
 
+# Erstlauf-Anker: ohne Offset-File NICHT das ganze Postfach zustellen (Altmail-Flut),
+# sondern nur die höchste UID als Anker schreiben. SCUT_MAIL_BACKFILL=1 überspringt das.
+if [ -z "$EML_DIR" ] && [ ! -f "$OFFSET_FILE" ] && [ "${SCUT_MAIL_BACKFILL:-0}" != 1 ]; then
+  anchor="$(MAIL_HOST="$HOST" MAIL_USER="$USER_" MAIL_PASS="$PASS" MAIL_PORT="$PORT" \
+            MAIL_MAILBOX="$MAILBOX" python3 - <<'PY'
+import imaplib, os
+M = imaplib.IMAP4_SSL(os.environ["MAIL_HOST"], int(os.environ["MAIL_PORT"]))
+try:
+    M.login(os.environ["MAIL_USER"], os.environ["MAIL_PASS"])
+    M.select(os.environ["MAIL_MAILBOX"], readonly=True)
+    uidval = (M.response("UIDVALIDITY")[1][0] or b"").decode()
+    typ, data = M.uid("search", None, "ALL")
+    uids = [int(u) for u in (data[0] or b"").split()]
+    print("%s:%d" % (uidval, max(uids) if uids else 0))
+finally:
+    try:
+        M.logout()
+    except Exception:
+        pass
+PY
+)" || { echo "email-channel: Offset-Init fehlgeschlagen (IMAP nicht erreichbar?)" >&2; exit 1; }
+  mkdir -p "$(dirname "$OFFSET_FILE")"
+  printf '%s\n' "$anchor" > "$OFFSET_FILE"
+  echo "email-channel: Erstlauf — Offset-Anker $anchor gesetzt, Altmails übersprungen (SCUT_MAIL_BACKFILL=1 stellt stattdessen ab Anfang zu)" >&2
+fi
+
 # emit_event <channel> <ext_id> <ts> <sender> <rawtext>
 #   extrahiert führendes [uid] und/oder @Agent → target; gibt normalisierte TSV-Zeile aus.
-#   (identisch zu channels/telegram.sh — die Triage-Vorstufe ist Kanal-übergreifend gleich)
+#   (Variante von channels/telegram.sh — BEWUSSTE Abweichung: nach @Agent wird auch ein
+#    Doppelpunkt gestrippt ([[:space:]:]* statt [[:space:]]*), weil Email-Betreffs
+#    "[uid]@Agent: Text" schreiben. Bei einem Refactor auf einen geteilten Helper den
+#    Doppelpunkt-Strip als Parameter mitnehmen — sonst stille Regression.)
 emit_event() {
   local channel="$1" ext="$2" ts="$3" sender="$4" raw="$5"
   local target="" rest="$raw"
@@ -216,6 +249,8 @@ PY
     [ "$offtok" != "-" ] && printf '%s\n' "$offtok" > "$OFFSET_FILE"
   done <<< "$parsed"
 }
+
+[ -z "$EML_DIR" ] && mkdir -p "$(dirname "$OFFSET_FILE")" 2>/dev/null
 
 if [ -n "$EML_DIR" ] || [ "$ONESHOT" = 1 ]; then
   poll_once
