@@ -20,7 +20,7 @@ channel   external_id   ts_epoch   sender   target   text
 
 | Feld | Bedeutung |
 |---|---|
-| `channel` | Herkunft: `telegram` \| `email` \| `github` \| `teams` |
+| `channel` | Herkunft: `telegram` \| `email` \| `github` \| `teams` \| `bridge` |
 | `external_id` | channel-eigene ID (Dedup/Offset) — vom Adapter verwaltet |
 | `ts_epoch` | Unix-Timestamp des Events |
 | `sender` | Absender-Identität des Channels |
@@ -40,6 +40,7 @@ channel   external_id   ts_epoch   sender   target   text
 |---|---|
 | `telegram.sh` | **funktional** (long-poll getUpdates → Events; baut auf `../scut.sh`/`../scut-poll.sh`-Secrets). `SCUT_TG_ONESHOT=1` für einmaliges Pollen. |
 | `email.sh` | **funktional** (IMAP readonly-Poll → Events; Secrets env-var ODER `SCUT_SECRETS_DIR/email_*`; UID+UIDVALIDITY-Offset; Subject-Tag/Plus-Adresse-Triage; `SCUT_MAIL_ONESHOT=1` für einmaliges Pollen, `SCUT_MAIL_EML_DIR` = Testmodus ohne Server). Attachments in v1 nur gezählt, nicht gespeichert. |
+| `bridge.sh` | **funktional** (Cross-Installation: stdin-Zeilen → Events; forced-command-Ziel eines dedizierten Bridge-SSH-Keys; Flutschutz `BRIDGE_MAX_LINES`/`_LEN`; Sender = `../bobnet-send.sh` + `peers.json`). Host/Trust-Verdrahtung = Instanz + `{HUMAN}` (T4). |
 | `github.sh` | Stub (`--demo`) — TODO `gh api notifications` + Repo→uid. |
 | `teams.sh` | Stub (`--demo`) — TODO Graph-API/Webhook. |
 
