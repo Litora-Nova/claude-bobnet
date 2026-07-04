@@ -19,7 +19,7 @@ see `.claude/rules/contract.md`. `skills/update-bobs` points teams here after an
   §7.4; key creation/authorization stays human-only (T4). `tests/bridge_spec.sh` (38 checks,
   incl. an ssh-argv shim and a send→receive roundtrip without SSH).
 - `tests/exec_mode_spec.sh` — repo-wide guard that every script is executable in the git
-  index (a script had shipped as 100644; 10 legacy files fixed along the way).
+  index (a script had shipped as 100644; 12 legacy files fixed along the way).
 
 ### Fixed
 - `news.sh read` rejects a non-numeric count cleanly (usage + exit 2) instead of a cryptic
