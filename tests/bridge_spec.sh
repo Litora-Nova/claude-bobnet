@@ -15,15 +15,18 @@ ok "bash -n bridge-receive.sh" bash -n "$RECV"
 ok "bash -n bobnet-send.sh" bash -n "$SEND"
 
 # ── Fixtures: Registry (Projekt alpha, Lead Zed) + peers.json (codex-2, Lead Rob) ───────────
-mkdir -p "$tmp/alpha/_dev_team/standup"
+mkdir -p "$tmp/alpha/_dev_team/standup" "$tmp/beta/_dev_team/standup" "$tmp/locked/standup"
 cat > "$tmp/registry.json" <<JSON
 { "version":1, "projects":[
-  {"uid":"alpha","name":"alpha","path":"$tmp/alpha","standup":"$tmp/alpha/_dev_team/standup","status":"active"}
+  {"uid":"alpha","name":"alpha","path":"$tmp/alpha","standup":"$tmp/alpha/_dev_team/standup","status":"active"},
+  {"uid":"beta","name":"beta","path":"$tmp/beta","standup":"$tmp/beta/_dev_team/standup","status":"active"},
+  {"uid":"locked","name":"locked","path":"$tmp/locked","standup":"$tmp/locked/standup","status":"active"}
 ]}
 JSON
 printf 'export TEAM_LEAD="Zed"\n' > "$tmp/alpha/_dev_team/dev-team.env"
 cat > "$tmp/peers.json" <<JSON
-{ "codex-2": { "host": "203.0.113.7", "user": "acme", "key": "$tmp/fakekey", "lead": "Rob" } }
+{ "codex-2": { "host": "203.0.113.7", "user": "acme", "key": "$tmp/fakekey", "lead": "Rob" },
+  "plainpeer": { "host": "203.0.113.8" } }
 JSON
 INBOX="$tmp/alpha/_dev_team/standup/_inbox.md"
 LOG="$tmp/bridge.log"
@@ -54,6 +57,24 @@ t "ohne Peer-Argument → REJECT 2" "2" "$(SSH_ORIGINAL_COMMAND='[alpha]@Bill: h
 t "Audit: ACCEPTs geloggt" "4" "$(grep -c '| ACCEPT |' "$LOG")"
 ok "Audit: REJECTs geloggt mit Grund" grep -q 'REJECT: kein/ungültiges Target' "$LOG"
 ok "Audit: Peer ausgewiesen" grep -q 'peer=codex-2' "$LOG"
+
+# ── Reject-Blätter + Stempel-Varianten (Review-M1 + Test-Gate-Backlog) ──────────────────────
+SSH_ORIGINAL_COMMAND="$(printf '[alpha]@Bill: vor\rnach dem CR')" recv codex-2 >/dev/null 2>&1
+t "CR (0x0D) wird gestrippt (Review-M1)" "1" "$(grep -c 'vornach dem CR' "$INBOX")"
+t "leere Nachricht (kein SOC, stdin leer) → REJECT 2" "2" "$(recv codex-2 < /dev/null >/dev/null 2>&1; echo $?)"
+t "nur Control-Chars → REJECT 2 (leer nach Sanitize)" "2" \
+  "$(SSH_ORIGINAL_COMMAND="$(printf '\001\002\003')" recv codex-2 >/dev/null 2>&1; echo $?)"
+t "Traversal-uid [../etc] → REJECT 2 (explizit)" "2" \
+  "$(SSH_ORIGINAL_COMMAND='[../etc]@x: boese' recv codex-2 >/dev/null 2>&1; echo $?)"
+SSH_ORIGINAL_COMMAND='[beta] ohne env-file' recv codex-2 >/dev/null 2>&1
+t "uid ohne dev-team.env → Agent-Default Bob" "1" "$(grep -c '| @Bob | BRIDGE (codex-2): ohne env-file' "$tmp/beta/_dev_team/standup/_inbox.md")"
+SSH_ORIGINAL_COMMAND='[alpha]@Bill: vom plainpeer' recv plainpeer >/dev/null 2>&1
+t "Peer ohne lead → Zeile OHNE Signatur" "1" "$(grep -cE 'BRIDGE \(plainpeer\): vom plainpeer$' "$INBOX")"
+touch "$tmp/locked/standup/_inbox.md"; chmod 444 "$tmp/locked/standup/_inbox.md"
+t "unschreibbare Inbox → REJECT 2 (Append fehlgeschlagen)" "2" \
+  "$(SSH_ORIGINAL_COMMAND='[locked]@x: hi' recv codex-2 >/dev/null 2>&1; echo $?)"
+chmod 644 "$tmp/locked/standup/_inbox.md"
+ok "Audit: Append-Fehlschlag geloggt" grep -q 'REJECT: Append fehlgeschlagen' "$LOG"
 
 # ── Sender: Vor-Validierung + Auflösung ─────────────────────────────────────────────────────
 t "send: ohne [uid]-Adressierung → exit 2 (lokal, vor Netz)" "2" \

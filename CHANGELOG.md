@@ -4,6 +4,27 @@ All notable engine changes are documented here. Versioning follows SemVer (`VERS
 human-facing); machine compatibility is anchored separately by `SCHEMA_VERSION` (integer) —
 see `.claude/rules/contract.md`. `skills/update-bobs` points teams here after an update.
 
+## [0.8.0] — 2026-07-04
+
+### Added
+- **BobNet bridge** (`scripts/bridge-receive.sh` + `scripts/bobnet-send.sh`) — connect two
+  bobiverse installations inbox-first and agent-agnostic. The receiver runs as the **forced
+  command** of a dedicated, direction-scoped SSH key (`restrict` + `from=` pinned): peer
+  identity comes from the authorized_keys line (never from the client), the message arrives
+  as pure data (`SSH_ORIGINAL_COMMAND`, max 4 KB, exactly one line, control chars stripped),
+  addressing is mandatory (`[<uid>]` / `[<uid>]@<Agent>`), the receiver resolves the target
+  inbox from the registry itself (no client paths), stamps timestamp + peer server-side,
+  appends with `flock`, and audit-logs every accept/reject. The sender resolves peers from a
+  `peers.json` and propagates remote rejects (no blind retries). Canon: `team-rules/comms.md`
+  §7.4; key creation/authorization stays human-only (T4). `tests/bridge_spec.sh` (38 checks,
+  incl. an ssh-argv shim and a send→receive roundtrip without SSH).
+- `tests/exec_mode_spec.sh` — repo-wide guard that every script is executable in the git
+  index (a script had shipped as 100644; 10 legacy files fixed along the way).
+
+### Fixed
+- `news.sh read` rejects a non-numeric count cleanly (usage + exit 2) instead of a cryptic
+  `tail` error.
+
 ## [0.7.0] — 2026-07-04
 
 ### Added

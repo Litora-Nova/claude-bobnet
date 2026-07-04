@@ -51,7 +51,7 @@ bytes="${#raw}"
 [ "$bytes" -le 4096 ] || reject "über 4KB (${bytes}B)" "—" "$bytes"
 raw="${raw%$'\n'}"                                   # EIN trailing newline (stdin) ist ok
 case "$raw" in *$'\n'*) reject "mehr als eine Zeile" "—" "$bytes";; esac
-text="$(printf '%s' "$raw" | tr '\t' ' ' | tr -d '\000-\010\013\014\016-\037\177')"
+text="$(printf '%s' "$raw" | tr '\t' ' ' | tr -d '\000-\010\012-\037\177')"
 [ -n "${text// /}" ] || reject "leer nach Sanitize" "—" "$bytes"
 
 # ── Pflicht-Target extrahieren + validieren ─────────────────────────────────────────────────

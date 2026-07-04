@@ -41,6 +41,7 @@ channel   external_id   ts_epoch   sender   target   text
 | `telegram.sh` | **funktional** (long-poll getUpdates → Events; baut auf `../scut.sh`/`../scut-poll.sh`-Secrets). `SCUT_TG_ONESHOT=1` für einmaliges Pollen. |
 | `email.sh` | **funktional** (IMAP readonly-Poll → Events; Secrets env-var ODER `SCUT_SECRETS_DIR/email_*`; UID+UIDVALIDITY-Offset; Subject-Tag/Plus-Adresse-Triage; `SCUT_MAIL_ONESHOT=1` für einmaliges Pollen, `SCUT_MAIL_EML_DIR` = Testmodus ohne Server). Attachments in v1 nur gezählt, nicht gespeichert. |
 | `github.sh` | Stub (`--demo`) — TODO `gh api notifications` + Repo→uid. |
+| `teams.sh` | Stub (`--demo`) — TODO Graph-API/Webhook. |
 
 ## Verwandt, aber KEIN Router-Channel
 
@@ -48,7 +49,6 @@ Die **Cross-Installation-Bridge** (Issue #45) läuft bewusst NICHT über den Rou
 `../bridge-receive.sh` (forced-command-Ziel, Pflicht-Adressierung `[uid]`, stempelt
 serverseitig, flock-Append + Audit) + `../bobnet-send.sh` (peers.json). Eigener
 Trust-Pfad — Schlüssel/`authorized_keys` = Instanz + `{HUMAN}` (T4).
-| `teams.sh` | Stub (`--demo`) — TODO Graph-API/Webhook. |
 
 ## Verifikation
 
