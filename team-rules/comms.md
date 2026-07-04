@@ -134,3 +134,7 @@ normalisiert zu Events, `scripts/scut-router.sh` triagiert datengetrieben (Regis
    = `{HUMAN}`-only (T4)**.
 3. **Letzte Meile:** Neue Inbox-Einträge weckt der Inbox-Watcher (Issue #44) — Leads werden
    bei idle genudged statt Prompts zu kapern (konsistent mit §Kanon Inbox-first).
+4. **Cross-Installation (BobNet-Bridge, #45):** `bobnet-send.sh <peer> "[uid][@Agent]: …"` →
+   drüben forced-command `bridge-receive.sh <peer>` (Pflicht-Adressierung, Empfänger stempelt
+   ts/Identität selbst, flock-Append, Audit-Log beidseitig). Läuft bewusst NICHT über den
+   Router; Schlüssel/`authorized_keys`/Rollout = Instanz + `{HUMAN}` (T4).

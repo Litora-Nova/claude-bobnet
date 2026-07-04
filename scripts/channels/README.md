@@ -43,6 +43,13 @@ channel   external_id   ts_epoch   sender   target   text
 | `github.sh` | Stub (`--demo`) — TODO `gh api notifications` + Repo→uid. |
 | `teams.sh` | Stub (`--demo`) — TODO Graph-API/Webhook. |
 
+## Verwandt, aber KEIN Router-Channel
+
+Die **Cross-Installation-Bridge** (Issue #45) läuft bewusst NICHT über den Router:
+`../bridge-receive.sh` (forced-command-Ziel, Pflicht-Adressierung `[uid]`, stempelt
+serverseitig, flock-Append + Audit) + `../bobnet-send.sh` (peers.json). Eigener
+Trust-Pfad — Schlüssel/`authorized_keys` = Instanz + `{HUMAN}` (T4).
+
 ## Verifikation
 
 ```bash
