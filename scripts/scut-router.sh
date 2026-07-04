@@ -184,7 +184,9 @@ self_test() {
   # EXIT- statt RETURN-Trap: der RETURN-Trap-Befehl (rm) kann unter `set -o pipefail`
   # den Funktions-Return-Status verschleiern → Self-Test meldete „ROT", Script exitete aber 0.
   # Mit EXIT-Trap + explizitem `exit` (siehe case unten) propagiert der Status zuverlässig.
-  local tmp; tmp="$(mktemp -d "${TMPDIR:-/tmp}/scut-router-test.XXXXXX")"
+  # tmp bewusst GLOBAL (kein local): der EXIT-Trap feuert nach Funktions-Ende — ein local
+  # wäre dort out-of-scope und knallt unter `set -u` ("tmp: unbound variable").
+  tmp="$(mktemp -d "${TMPDIR:-/tmp}/scut-router-test.XXXXXX")"
   trap 'rm -rf "$tmp"' EXIT
   mkdir -p "$tmp/alpha/_dev_team/standup" "$tmp/beta/_dev_team/standup"
   cat > "$tmp/registry.json" <<JSON

@@ -117,4 +117,8 @@ not_ok bash "$ROUTER" bogus-subcommand
 it "mitgelieferter --self-test läuft GRÜN durch (Garfields eingebauter Sanity-Check)"
 ok bash "$ROUTER" --self-test
 
+it "--self-test: stderr ohne unbound-variable (EXIT-Trap-Cleanup, Fleet-Finding 2026-07-04)"
+selftest_err="$(bash "$ROUTER" --self-test 2>&1 >/dev/null)"
+ok test -z "$(printf '%s' "$selftest_err" | grep 'unbound variable')"
+
 summary
