@@ -1,64 +1,98 @@
 #!/usr/bin/env bash
-# tests/bridge_spec.sh — BobNet-Bridge: channels/bridge.sh (Empfänger) + bobnet-send.sh (Sender).
+# tests/bridge_spec.sh — BobNet-Bridge (#45): bridge-receive.sh (forced command) + bobnet-send.sh.
+# Kontrakt-Quelle: Trust-Design der Host-Seite (max 4KB · 1 Zeile · Pflicht-Target-Regex ·
+# Empfänger stempelt/löst Pfade selbst · Audit-Pflicht · exit 0/2).
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BRIDGE="$HERE/../scripts/channels/bridge.sh"
+RECV="$HERE/../scripts/bridge-receive.sh"
 SEND="$HERE/../scripts/bobnet-send.sh"
-ROUTER="$HERE/../scripts/scut-router.sh"
 pass=0; fail=0
 t(){ local d="$1" exp="$2" got="$3"; if [ "$got" = "$exp" ]; then pass=$((pass+1)); else fail=$((fail+1)); echo "FAIL: $d — erwartet '$exp', bekam '$got'"; fi; }
 ok(){ local d="$1"; shift; if "$@" >/dev/null 2>&1; then pass=$((pass+1)); else fail=$((fail+1)); echo "FAIL: $d"; fi; }
 
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
-ok "bash -n bridge.sh" bash -n "$BRIDGE"
+ok "bash -n bridge-receive.sh" bash -n "$RECV"
 ok "bash -n bobnet-send.sh" bash -n "$SEND"
 
-# ── Empfänger: stdin-Zeilen → normalisierte Events ────────────────────────────────────────
-t "--demo: 2 Events, channel=bridge" "2" "$(bash "$BRIDGE" --demo | grep -c '^bridge	')"
-
-out="$(printf '%s\n' "[acme]@Bill: bitte Review" | BRIDGE_PEER=codex bash "$BRIDGE")"
-t "gerichtet: target aus [uid]@Agent" "[acme]@Bill" "$(printf '%s\n' "$out" | cut -f5)"
-t "gerichtet: Doppelpunkt gestrippt" "bitte Review" "$(printf '%s\n' "$out" | cut -f6)"
-t "sender = BRIDGE_PEER" "codex" "$(printf '%s\n' "$out" | cut -f4)"
-
-t "ungerichtet: target leer" "" "$(printf 'nur eine notiz\n' | bash "$BRIDGE" | cut -f5)"
-t "Leerzeilen übersprungen" "1" "$(printf '\n\nhallo\n\n' | bash "$BRIDGE" | wc -l | tr -d ' ')"
-t "Tab im Text → Space (TSV-Integrität, 6 Felder)" "6" "$(printf 'a\tb\n' | bash "$BRIDGE" | awk -F'\t' '{print NF}')"
-t "MAX_LINES kappt Flut" "2" "$(printf '1\n2\n3\n4\n' | BRIDGE_MAX_LINES=2 bash "$BRIDGE" 2>/dev/null | wc -l | tr -d ' ')"
-t "MAX_LEN kappt Zeile" "5" "$(printf 'abcdefgh\n' | BRIDGE_MAX_LEN=5 bash "$BRIDGE" | cut -f6 | tr -d '\n' | wc -c | tr -d ' ')"
-
-# Ende-zu-Ende: bridge → router (Dry-Run) triagiert gerichtet + ungerichtet
-route="$(printf '%s\n%s\n' "[acme]@Bill: hi" "lose Notiz" | BRIDGE_PEER=codex bash "$BRIDGE" \
-  | SCUT_ROUTER_DRYRUN=1 DEV_TEAM_REGISTRY="$tmp/keine.json" CONTEXT_UID=ctx bash "$ROUTER" 2>/dev/null)"
-t "Router-Smoke: gerichtet → inbox[acme]" "1" "$(printf '%s\n' "$route" | grep -c 'inbox\[acme\]')"
-t "Router-Smoke: ungerichtet → review-queue" "1" "$(printf '%s\n' "$route" | grep -c 'review-queue\[ctx\]')"
-
-# ── Sender: peers-Auflösung + Transport-Override ──────────────────────────────────────────
-cat > "$tmp/peers.json" <<JSON
-{ "peers": [ { "name": "codex", "host": "203.0.113.7", "user": "acme", "key": "~/.ssh/nope" } ] }
+# ── Fixtures: Registry (Projekt alpha, Lead Zed) + peers.json (codex-2, Lead Rob) ───────────
+mkdir -p "$tmp/alpha/_dev_team/standup"
+cat > "$tmp/registry.json" <<JSON
+{ "version":1, "projects":[
+  {"uid":"alpha","name":"alpha","path":"$tmp/alpha","standup":"$tmp/alpha/_dev_team/standup","status":"active"}
+]}
 JSON
+printf 'export TEAM_LEAD="Zed"\n' > "$tmp/alpha/_dev_team/dev-team.env"
+cat > "$tmp/peers.json" <<JSON
+{ "codex-2": { "host": "203.0.113.7", "user": "acme", "key": "$tmp/fakekey", "lead": "Rob" } }
+JSON
+INBOX="$tmp/alpha/_dev_team/standup/_inbox.md"
+LOG="$tmp/bridge.log"
+recv(){ DEV_TEAM_REGISTRY="$tmp/registry.json" BOBNET_PEERS="$tmp/peers.json" BRIDGE_LOG="$LOG" bash "$RECV" "$@"; }
 
+# ── Empfänger: ACCEPT-Pfade ─────────────────────────────────────────────────────────────────
+t "accept [uid]@Agent via SSH_ORIGINAL_COMMAND: exit 0" "0" \
+  "$(SSH_ORIGINAL_COMMAND='[alpha]@Bill: hallo drüben' recv codex-2 >/dev/null 2>&1; echo $?)"
+t "Kanon-Zeile serverseitig gestempelt + Peer-Lead-Signatur" "1" \
+  "$(grep -cE '^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} \| @Bill \| BRIDGE \(codex-2\): hallo drüben — \(Rob@codex-2\)$' "$INBOX")"
+SSH_ORIGINAL_COMMAND='[alpha] nur ans Projekt' recv codex-2 >/dev/null 2>&1
+t "[uid] ohne Agent → TEAM_LEAD aus dev-team.env" "1" "$(grep -c '| @Zed | BRIDGE (codex-2): nur ans Projekt' "$INBOX")"
+printf '[alpha]@Bill: über stdin\n' | recv codex-2 >/dev/null 2>&1
+t "stdin-Fallback (ohne SSH_ORIGINAL_COMMAND)" "1" "$(grep -c 'über stdin' "$INBOX")"
+SSH_ORIGINAL_COMMAND="$(printf '[alpha]@Bill: mit\007klingel und\ttab')" recv codex-2 >/dev/null 2>&1
+t "Control-Chars gestrippt, Tab → Space" "1" "$(grep -c 'mitklingel und tab' "$INBOX")"
+
+# ── Empfänger: REJECT-Pfade (alle exit 2 + Audit) ───────────────────────────────────────────
+t "ohne Target → REJECT 2" "2" "$(SSH_ORIGINAL_COMMAND='hallo ohne adresse' recv codex-2 >/dev/null 2>&1; echo $?)"
+t "Großschreibung in uid → REJECT 2 (Regex lowercase)" "2" "$(SSH_ORIGINAL_COMMAND='[Alpha]@Bill: hi' recv codex-2 >/dev/null 2>&1; echo $?)"
+t "unbekannte uid → REJECT 2" "2" "$(SSH_ORIGINAL_COMMAND='[ghost]@Bill: hi' recv codex-2 >/dev/null 2>&1; echo $?)"
+t "leerer Text nach Target → REJECT 2" "2" "$(SSH_ORIGINAL_COMMAND='[alpha]@Bill:' recv codex-2 >/dev/null 2>&1; echo $?)"
+t "mehr als eine Zeile → REJECT 2" "2" "$(printf '[alpha]@Bill: a\nzweite\n' | recv codex-2 >/dev/null 2>&1; echo $?)"
+t "über 4KB → REJECT 2" "2" "$(SSH_ORIGINAL_COMMAND="[alpha]@Bill: $(printf 'x%.0s' $(seq 1 4200))" recv codex-2 >/dev/null 2>&1; echo $?)"
+t "ohne Peer-Argument → REJECT 2" "2" "$(SSH_ORIGINAL_COMMAND='[alpha]@Bill: hi' recv >/dev/null 2>&1; echo $?)"
+
+# Audit-Pflicht: ACCEPTs + REJECTs geloggt, Peer ausgewiesen
+t "Audit: ACCEPTs geloggt" "4" "$(grep -c '| ACCEPT |' "$LOG")"
+ok "Audit: REJECTs geloggt mit Grund" grep -q 'REJECT: kein/ungültiges Target' "$LOG"
+ok "Audit: Peer ausgewiesen" grep -q 'peer=codex-2' "$LOG"
+
+# ── Sender: Vor-Validierung + Auflösung ─────────────────────────────────────────────────────
+t "send: ohne [uid]-Adressierung → exit 2 (lokal, vor Netz)" "2" \
+  "$(BOBNET_PEERS="$tmp/peers.json" bash "$SEND" codex-2 "hallo ohne adresse" >/dev/null 2>&1; echo $?)"
 t "send: unbekannter Peer → exit 2" "2" \
-  "$(BOBNET_PEERS="$tmp/peers.json" bash "$SEND" niemand "hi" >/dev/null 2>&1; echo $?)"
-t "send: ohne Nachricht → usage exit 2" "2" "$(bash "$SEND" codex 2>/dev/null; echo $?)"
+  "$(BOBNET_PEERS="$tmp/peers.json" bash "$SEND" niemand "[alpha] hi" >/dev/null 2>&1; echo $?)"
 t "send: fehlende peers.json → exit 2" "2" \
-  "$(BOBNET_PEERS="$tmp/gibtsnicht.json" bash "$SEND" codex "hi" >/dev/null 2>&1; echo $?)"
+  "$(BOBNET_PEERS="$tmp/nix.json" bash "$SEND" codex-2 "[alpha] hi" >/dev/null 2>&1; echo $?)"
+t "send: usage → exit 2" "2" "$(bash "$SEND" codex-2 2>/dev/null; echo $?)"
 
-# Transport-Override: Zeile landet im File, Platzhalter werden ersetzt
+# Transport-Override: Zeile (geplättet) auf stdin, Platzhalter ersetzt
 BOBNET_PEERS="$tmp/peers.json" BRIDGE_TRANSPORT_CMD="cat > $tmp/sent-{user}.txt" \
-  bash "$SEND" codex "[acme]@Bill: über die Brücke" >/dev/null
-t "send: Transport bekommt die Zeile" "[acme]@Bill: über die Brücke" "$(cat "$tmp/sent-acme.txt" 2>/dev/null | tr -d '\n')"
+  bash "$SEND" codex-2 "$(printf '[alpha]@Bill: zeile1\nzeile2')" >/dev/null
+t "send: Override bekommt geplättete Zeile" "[alpha]@Bill: zeile1 zeile2" "$(tr -d '\n' < "$tmp/sent-acme.txt")"
+t "send: Remote-REJECT (rc 2) propagiert als 2" "2" \
+  "$(BOBNET_PEERS="$tmp/peers.json" BRIDGE_TRANSPORT_CMD="exit 2" bash "$SEND" codex-2 "[alpha] hi" >/dev/null 2>&1; echo $?)"
 
-# Mehrzeiliges wird geplättet (EINE Zeile über die Brücke)
-BOBNET_PEERS="$tmp/peers.json" BRIDGE_TRANSPORT_CMD="cat > $tmp/flat.txt" \
-  bash "$SEND" codex "$(printf 'zeile1\nzeile2')" >/dev/null
-t "send: Newlines geplättet" "1" "$(wc -l < "$tmp/flat.txt" | tr -d ' ')"
+# ── ssh-Shim (PATH-Fake): exakte argv + Fehlerzweige des ECHTEN ssh-Pfads ───────────────────
+mkdir -p "$tmp/bin"
+cat > "$tmp/bin/ssh" <<SH
+#!/usr/bin/env bash
+printf '%s\n' "\$@" > "$tmp/ssh-argv.txt"
+exit "\${FAKE_SSH_RC:-0}"
+SH
+chmod +x "$tmp/bin/ssh"
+PATH="$tmp/bin:$PATH" BOBNET_PEERS="$tmp/peers.json" bash "$SEND" codex-2 "[alpha]@Bill: echt per ssh" >/dev/null
+ok "ssh-argv: -i <key>" grep -qx -- "$tmp/fakekey" "$tmp/ssh-argv.txt"
+ok "ssh-argv: BatchMode=yes" grep -qx -- "BatchMode=yes" "$tmp/ssh-argv.txt"
+ok "ssh-argv: user@host" grep -qx -- "acme@203.0.113.7" "$tmp/ssh-argv.txt"
+t "ssh-argv: Nachricht als Kommando-String (letztes Arg)" "[alpha]@Bill: echt per ssh" "$(tail -1 "$tmp/ssh-argv.txt")"
+t "ssh rc=255 → Transportfehler exit 1" "1" \
+  "$(PATH="$tmp/bin:$PATH" FAKE_SSH_RC=255 BOBNET_PEERS="$tmp/peers.json" bash "$SEND" codex-2 "[alpha] hi" >/dev/null 2>&1; echo $?)"
+t "ssh rc=2 (Remote-REJECT) → exit 2" "2" \
+  "$(PATH="$tmp/bin:$PATH" FAKE_SSH_RC=2 BOBNET_PEERS="$tmp/peers.json" bash "$SEND" codex-2 "[alpha] hi" >/dev/null 2>&1; echo $?)"
 
-# Sende→Empfangs-Roundtrip ohne SSH: Transport pipet direkt in bridge.sh
-BOBNET_PEERS="$tmp/peers.json" BRIDGE_TRANSPORT_CMD="BRIDGE_PEER={user} bash $BRIDGE > $tmp/roundtrip.tsv" \
-  bash "$SEND" codex "[acme]@Bill: roundtrip" >/dev/null
-t "Roundtrip: Event korrekt (target)" "[acme]@Bill" "$(cut -f5 "$tmp/roundtrip.tsv")"
-t "Roundtrip: Event korrekt (sender)" "acme" "$(cut -f4 "$tmp/roundtrip.tsv")"
+# ── Roundtrip ohne SSH: Sender-Override pipet in den Empfänger (stdin-Fallback) ─────────────
+BOBNET_PEERS="$tmp/peers.json" BRIDGE_TRANSPORT_CMD="DEV_TEAM_REGISTRY=$tmp/registry.json BOBNET_PEERS=$tmp/peers.json BRIDGE_LOG=$LOG bash $RECV codex-2" \
+  bash "$SEND" codex-2 "[alpha]@Bill: roundtrip komplett" >/dev/null
+t "Roundtrip: Zeile landet in der Ziel-Inbox" "1" "$(grep -c 'BRIDGE (codex-2): roundtrip komplett' "$INBOX")"
 
 echo "bridge_spec: $pass passed, $fail failed"
 [ "$fail" = 0 ]
