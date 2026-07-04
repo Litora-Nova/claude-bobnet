@@ -4,6 +4,28 @@ All notable engine changes are documented here. Versioning follows SemVer (`VERS
 human-facing); machine compatibility is anchored separately by `SCHEMA_VERSION` (integer) —
 see `.claude/rules/contract.md`. `skills/update-bobs` points teams here after an update.
 
+## [0.7.0] — 2026-07-04
+
+### Added
+- **Email channel goes functional** (`scripts/channels/email.sh`, was a stub): IMAP readonly
+  poll feeding the existing `scut-router.sh` (registry-driven inbox-first routing, review
+  queue for undirected mail). UID+UIDVALIDITY offset dedupe; addressing via subject tag
+  `[<uid>]@<Agent>` or plus-address; first run anchors the offset instead of flooding old
+  mail (`SCUT_MAIL_BACKFILL=1` to deliver from scratch). Attachments are counted, not
+  stored (v1). `SCUT_MAIL_EML_DIR` test mode + `tests/email_channel_spec.sh` (17 checks).
+- **`scripts/inbox-watch.sh`** — periodic watcher over every registered project's inbound
+  channels (`_inbox.md` + `_inbox/` drops): nudges the lead via `mux_send` only when it is
+  idle/done (or stale-busy), leaves fresh-busy/blocked leads alone, optional wake-on-new
+  via `INBOX_WATCH_BOOT=1`. Instance contract via `dev-team.env`
+  (`TEAM_LEAD`/`MUX_SESSION`/`BOOT_CMD`); host timer example in `scripts/cron/README.md`.
+  `tests/inbox_watch_spec.sh` (15 checks).
+- Canon: `team-rules/comms.md` §7 — external channels run adapter→router, inbox-first;
+  secrets + enabling stay human-only (T4).
+
+### Fixed
+- `scut-router.sh --self-test` no longer trips `set -u` in its EXIT-trap cleanup
+  (regression check added; gate now at 25 specs).
+
 ## [0.6.0] — 2026-07-03
 
 ### Added
