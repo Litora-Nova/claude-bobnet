@@ -39,6 +39,7 @@ t "path: Default ohne Config" "$tmp/home2/.claude/bobiverse-news.md" "$(HOME="$t
 # Fehlbedienung: exit 2 + usage
 t "post ohne Text: exit 2" "2" "$(BOBNET_NEWS="$NEWS" bash "$BIN" post 2>/dev/null; echo $?)"
 t "ohne Kommando: exit 2" "2" "$(BOBNET_NEWS="$NEWS" bash "$BIN" 2>/dev/null; echo $?)"
+t "read mit nicht-numerischem N: exit 2 statt tail-Crash" "2" "$(BOBNET_NEWS="$NEWS" bash "$BIN" read abc 2>/dev/null; echo $?)"
 
 echo "news_spec: $pass passed, $fail failed"
 [ "$fail" = 0 ]

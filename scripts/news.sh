@@ -41,6 +41,7 @@ case "${1:-}" in
     ;;
   read)
     n="${2:-10}"
+    case "$n" in *[!0-9]*|"") echo "usage: news.sh read [N] — N muss eine Zahl sein (bekam '$n')" >&2; exit 2;; esac
     [ -f "$FILE" ] || { echo "(News-Box leer — $FILE existiert noch nicht)"; exit 0; }
     tail -n "$n" "$FILE"
     ;;
