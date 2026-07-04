@@ -39,7 +39,7 @@ channel   external_id   ts_epoch   sender   target   text
 | Adapter | Stand |
 |---|---|
 | `telegram.sh` | **funktional** (long-poll getUpdates → Events; baut auf `../scut.sh`/`../scut-poll.sh`-Secrets). `SCUT_TG_ONESHOT=1` für einmaliges Pollen. |
-| `email.sh` | Stub (`--demo` zeigt das Format) — TODO IMAP/maildir. |
+| `email.sh` | **funktional** (IMAP readonly-Poll → Events; Secrets env-var ODER `SCUT_SECRETS_DIR/email_*`; UID+UIDVALIDITY-Offset; Subject-Tag/Plus-Adresse-Triage; `SCUT_MAIL_ONESHOT=1` für einmaliges Pollen, `SCUT_MAIL_EML_DIR` = Testmodus ohne Server). Attachments in v1 nur gezählt, nicht gespeichert. |
 | `github.sh` | Stub (`--demo`) — TODO `gh api notifications` + Repo→uid. |
 | `teams.sh` | Stub (`--demo`) — TODO Graph-API/Webhook. |
 

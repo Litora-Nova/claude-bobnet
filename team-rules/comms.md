@@ -116,3 +116,21 @@ Datei-Sync eingerichtet (Werkzeug: ein Continuous-Sync-Dienst à la Syncthing). 
    und externe Coworker**, KEIN State-Sync — der State-Sync der Maschinen bleibt Git über
    `origin` (`sync.md`). Gesyncte, git-versionierte Artefakte (z. B. `plan/`) committet
    die normale Standup-/Feierabend-Routine als Human-Edits.
+
+## §7 Externe Kanäle (SCUT) — Adapter → Router, inbox-first (PO-Prio 2026-07-04)
+
+Externe Eingänge (Telegram · Email · GitHub · Teams …) laufen NICHT direkt in Sessions,
+sondern **inbox-first über die Channel-Architektur**: `scripts/channels/<kanal>.sh`
+normalisiert zu Events, `scripts/scut-router.sh` triagiert datengetrieben (Registry) in die
+`_inbox.md` des Ziel-Bobiverse bzw. die `_review-queue.md` (ungerichtet). Details/Format:
+`scripts/channels/README.md`.
+
+1. **Email (v1, inbound-only):** `channels/email.sh` pollt ein Team-IMAP-Postfach readonly
+   (Dedupe via UID-Offset). Adressierung per Subject-Tag `[<uid>]@<Agent>` oder Plus-Adresse
+   (`team+<uid>[-<agent>]@…`); ohne Ziel → Review-Queue. Outbound-Mail folgt später als
+   eigenes `scut-mail.sh` (Symmetrie zu `scut.sh`/Telegram).
+2. **Schichtung:** Engine liefert Adapter + Router + Spec; die Host-Verdrahtung (systemd-
+   Template pro Projekt, Env aus `dev-team.env`) ist Instanz-Sache; **Secrets + Scharfschalten
+   = `{HUMAN}`-only (T4)**.
+3. **Letzte Meile:** Neue Inbox-Einträge weckt der Inbox-Watcher (Issue #44) — Leads werden
+   bei idle genudged statt Prompts zu kapern (konsistent mit §Kanon Inbox-first).
