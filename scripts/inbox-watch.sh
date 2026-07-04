@@ -57,7 +57,9 @@ lead_state() {
   local ts st
   ts="$(printf '%s' "$last" | cut -d'|' -f1 | sed 's/[[:space:]]*$//')"
   st="$(printf '%s' "$last" | cut -d'|' -f2 | tr -d ' ')"
-  local es now age=0
+  # Unparsbarer Timestamp → als STALE behandeln (age=99999): ein kaputter Heartbeat darf
+  # den Nudge nicht ewig unterdrücken (busy-frisch wäre die falsche Default-Annahme).
+  local es now age=99999
   es="$(date -d "$ts" +%s 2>/dev/null || echo 0)"; now="$(date +%s)"
   [ "$es" -gt 0 ] && age=$(( (now-es)/60 ))
   printf '%s:%s' "${st:-none}" "$age"

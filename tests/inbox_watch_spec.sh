@@ -71,6 +71,12 @@ rm "$A/Zed.log"
 out="$(run)"
 t "kein Heartbeat-Log → NUDGE" "1" "$(printf '%s\n' "$out" | grep -c 'alpha: NUDGE')"
 
+# unparsbarer Timestamp + busy → stale behandeln → NUDGE (kaputter Heartbeat unterdrückt nicht)
+echo "kaputter ts eintrag" >> "$A/_inbox.md"
+echo "GARBAGE-TS | busy | haengt" > "$A/Zed.log"
+out="$(run)"
+t "Müll-Timestamp + busy → NUDGE (stale)" "1" "$(printf '%s\n' "$out" | grep -c 'alpha: NUDGE')"
+
 # _inbox/-Dateidrop zählt als Neues
 mkdir -p "$B/_inbox"; echo bild > "$B/_inbox/foto.txt"
 echo "$(now) | idle | warte" > "$B/Yui.log"
