@@ -129,6 +129,13 @@ normalisiert zu Events, `scripts/scut-router.sh` triagiert datengetrieben (Regis
    (Dedupe via UID-Offset). Adressierung per Subject-Tag `[<uid>]@<Agent>` oder Plus-Adresse
    (`team+<uid>[-<agent>]@…`); ohne Ziel → Review-Queue. Outbound-Mail folgt später als
    eigenes `scut-mail.sh` (Symmetrie zu `scut.sh`/Telegram).
+   **Known-Sender-Mapping (#53):** die Haupt-Kundenmail kommt in der Praxis OHNE Tag/Plus-
+   Adresse — als dritter, niedrigster Fallback matcht der Adapter die `From:`-Adresse
+   case-insensitive gegen `<projekt>/_dev_team/team-rules/scut-mail.senders` (eine Adresse
+   pro Zeile, optional `@Agent`, `#`-Kommentare/Leerzeilen ignoriert — **Instanz-Daten, NIE
+   ins Engine-Repo committen**) und adressiert bei Treffer gerichtet an `@<Agent>` (Default
+   `TEAM_LEAD`) statt ungerichtet in die Review-Queue. Fehlt die Datei/kein Treffer →
+   Verhalten wie bisher. Details/Env: Kopf von `scripts/channels/email.sh`.
 2. **Schichtung:** Engine liefert Adapter + Router + Spec; die Host-Verdrahtung (systemd-
    Template pro Projekt, Env aus `dev-team.env`) ist Instanz-Sache; **Secrets + Scharfschalten
    = `{HUMAN}`-only (T4)**.
