@@ -20,6 +20,9 @@
 #   "forced": true   der Empfänger ist ein forced-command-Key, der stdin liest → kein Kommando.
 #   "recv": "<cmd>"  explizites Remote-Empfangskommando (TRUSTED config) → stdin geht dort rein.
 # Fehlt beides → EXIT 2 (wir würden sonst an eine Login-Shell pipen = unsicher).
+# HINWEIS: "forced":true ist eine ZUSICHERUNG über die verifizierte Verdrahtung des eigenen
+# Peers — ist der Key in Wahrheit eine Login-Shell, geht der Payload doch dorthin. Im Zweifel
+# "recv" nutzen (immun gegen forced-Fehldeklaration, weil das Kommando explizit gesetzt ist).
 #
 # peers.json (Map; Daten vor Code, Auflösung wie news.sh):
 #   { "codex-2": { "host": "<tailscale-ip-oder-name>", "user": "<ssh-user>",
