@@ -83,5 +83,10 @@ echo "$(now) | idle | warte" > "$B/Yui.log"
 out="$(run)"
 t "_inbox/-Drop → NEU (beta report-only)" "1" "$(printf '%s\n' "$out" | grep -c 'beta: NEU.*report-only')"
 
+# Review-Queue-Eintrag zählt als Neues (ungerichtete Router-Mails dürfen nicht liegenbleiben)
+echo "x | UNGERICHTET (via email, von kunde) | anfrage" >> "$B/_review-queue.md"
+out="$(run)"
+t "_review-queue.md → NEU (beta report-only)" "1" "$(printf '%s\n' "$out" | grep -c 'beta: NEU.*report-only')"
+
 echo "inbox_watch_spec: $pass passed, $fail failed"
 [ "$fail" = 0 ]

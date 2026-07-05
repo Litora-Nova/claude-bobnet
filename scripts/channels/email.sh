@@ -29,6 +29,14 @@
 #                       Default: Erstlauf setzt nur den Offset-Anker auf die höchste UID und
 #                       stellt NICHTS zu — verhindert die Altmail-Flut (Betriebs-Learning
 #                       aus dem ersten produktiven projekt-lokalen Poller, PO-Fleet 2026-06).
+#   SCUT_MAIL_ATTACH_DIR   OPT-IN Persistenz (Issue #46, Feld-Muster „Digest+Volltext-Duo"):
+#                       pro Mail Volltext als <prefix>-body.txt + jeden Anhang als
+#                       <prefix>-<ascii-sanitierter Name> in diesen Ordner (Empfehlung:
+#                       <projekt-standup>/_inbox/mail — dann zählt inbox-watch die Drops mit);
+#                       die Event-Zeile referenziert die Dateien. Unset = v1-Verhalten
+#                       (Anhänge nur gezählt, bleiben im Postfach).
+#   SCUT_MAIL_ATTACH_MAX   max. Bytes pro Anhang (Default 10485760 = 10MB); größere werden
+#                       übersprungen und in der Zeile vermerkt (bleiben im Postfach).
 #   SCUT_MAIL_EML_DIR   TESTMODUS: statt IMAP alle *.eml in diesem Ordner parsen (sortiert,
 #                       kein Offset-Write) — macht Parsing/Triage ohne Server spec-bar.
 #
@@ -121,8 +129,12 @@ poll_once() {
   local parsed
   parsed="$(SCUT_MAIL_EML_DIR="$EML_DIR" MAIL_HOST="$HOST" MAIL_USER="$USER_" MAIL_PASS="$PASS" \
             MAIL_PORT="$PORT" MAIL_MAILBOX="$MAILBOX" MAIL_OFFSET_FILE="$OFFSET_FILE" \
+            MAIL_ATTACH_DIR="${SCUT_MAIL_ATTACH_DIR:-}" MAIL_ATTACH_MAX="${SCUT_MAIL_ATTACH_MAX:-10485760}" \
             python3 - <<'PY'
-import email, email.header, email.utils, glob, imaplib, os, re, sys, time
+import email, email.header, email.utils, glob, imaplib, os, re, sys, time, unicodedata
+
+ATTACH_DIR = os.environ.get("MAIL_ATTACH_DIR", "")
+ATTACH_MAX = int(os.environ.get("MAIL_ATTACH_MAX") or 10485760)
 
 def norm(s):
     return " ".join(str(s or "").split())
@@ -141,12 +153,12 @@ def dec_header(raw):
     return norm("".join(out))
 
 def body_and_attachments(msg):
-    body, n_att = "", 0
+    body, atts = "", []
     for part in msg.walk():
         if part.get_content_maintype() == "multipart":
             continue
         if part.get_filename():
-            n_att += 1
+            atts.append(part)
             continue
         if part.get_content_type() == "text/plain" and not body:
             payload = part.get_payload(decode=True) or b""
@@ -154,7 +166,46 @@ def body_and_attachments(msg):
     if not body and not msg.is_multipart():
         payload = msg.get_payload(decode=True) or b""
         body = payload.decode(msg.get_content_charset() or "utf-8", "replace")
-    return norm(body)[:400], n_att
+    return body, atts
+
+def sanitize_name(name):
+    # ASCII-Sanitize (Feld-Learning: Umlaut-Falle in Anhangs-Namen)
+    name = unicodedata.normalize("NFKD", str(name or "")).encode("ascii", "ignore").decode()
+    name = re.sub(r"[^A-Za-z0-9._-]+", "_", name).strip("._")
+    return (name or "anhang")[:80]
+
+def persist_mail(prefix, sender, date_hdr, subject, body, atts):
+    # Digest+Volltext-Duo: Volltext + Anhänge als Dateien, Rückgabe = Zeilen-Suffix.
+    os.makedirs(ATTACH_DIR, exist_ok=True)
+    with open(os.path.join(ATTACH_DIR, "%s-body.txt" % prefix), "w",
+              encoding="utf-8", errors="replace") as fh:
+        fh.write("From: %s\nDate: %s\nSubject: %s\n\n%s" % (sender, date_hdr, subject, body))
+    saved, skipped, seen = [], 0, set()
+    for part in atts:
+        data = part.get_payload(decode=True) or b""
+        if len(data) > ATTACH_MAX:
+            skipped += 1
+            continue
+        # Kollisions-Dedup NUR innerhalb der Mail (Review-A1); bewusst nicht gegen die
+        # Disk, damit ein Batch-Retry idempotent überschreibt statt -2-Duplikate zu stapeln.
+        fname = sanitize_name(part.get_filename())
+        base, ext = os.path.splitext(fname)
+        n = 1
+        while fname in seen:
+            n += 1
+            fname = "%s-%d%s" % (base, n, ext)
+        seen.add(fname)
+        with open(os.path.join(ATTACH_DIR, "%s-%s" % (prefix, fname)), "wb") as fh:
+            fh.write(data)
+        saved.append("%s-%s" % (prefix, fname))
+    note = " [Volltext: %s-body.txt" % prefix
+    if saved:
+        note += " · Anhänge: " + (", ".join(saved) if len(saved) <= 3
+                                  else "%d Dateien (%s-*)" % (len(saved), prefix))
+    if skipped:
+        cap = "%dMB" % (ATTACH_MAX // 1048576) if ATTACH_MAX >= 1048576 else "%dB" % ATTACH_MAX
+        note += " · %d übersprungen (>%s, im Postfach)" % (skipped, cap)
+    return note + "]"
 
 PLUS_RE = re.compile(r"[A-Za-z0-9._%-]+\+([A-Za-z0-9_-]+)@")
 
@@ -170,9 +221,9 @@ def plus_tag(msg):
             return t
     return ""
 
-def line_for(key, msg):
+def line_for(key, msg, prefix):
     subject = dec_header(msg.get("Subject", "")) or "(kein Betreff)"
-    body, n_att = body_and_attachments(msg)
+    body, atts = body_and_attachments(msg)
     frm = dec_header(msg.get("From", "")) or "email"
     name, addr = email.utils.parseaddr(frm)
     sender = norm(name or addr or "email")
@@ -181,9 +232,20 @@ def line_for(key, msg):
         ts = int(email.utils.parsedate_to_datetime(msg.get("Date", "")).timestamp())
     except Exception:
         ts = int(time.time())
-    text = subject + (" — " + body if body else "")
-    if n_att:
-        text += " [%d Anhang/Anhänge im Postfach]" % n_att
+    digest = norm(body)[:400]
+    text = subject + (" — " + digest if digest else "")
+    if ATTACH_DIR:
+        # Fehler PRO MAIL degradieren (Review-A2/Test-Gate-Fund): ein Schreibfehler
+        # (Disk voll, Rechte) darf nie den ganzen Poll-Batch versenken — die Mail wird
+        # trotzdem zugestellt, die Dateien bleiben im Postfach und die Zeile sagt es.
+        try:
+            text += persist_mail(prefix, sender, msg.get("Date", ""), subject, body, atts)
+        except Exception as e:
+            print("email-channel: Persistenz fehlgeschlagen (%s) — Dateien bleiben im Postfach" % e,
+                  file=sys.stderr)
+            text += " [Persistenz fehlgeschlagen — %d Anhang/Anhänge im Postfach]" % len(atts)
+    elif atts:
+        text += " [%d Anhang/Anhänge im Postfach]" % len(atts)
     if not subject.startswith(("[", "@")):
         tag = plus_tag(msg)
         if tag:
@@ -193,9 +255,9 @@ def line_for(key, msg):
 
 eml_dir = os.environ.get("SCUT_MAIL_EML_DIR", "")
 if eml_dir:
-    for path in sorted(glob.glob(os.path.join(eml_dir, "*.eml"))):
+    for i, path in enumerate(sorted(glob.glob(os.path.join(eml_dir, "*.eml"))), 1):
         with open(path, "rb") as fh:
-            line_for("-", email.message_from_bytes(fh.read()))
+            line_for("-", email.message_from_bytes(fh.read()), "eml%03d" % i)
     sys.exit(0)
 
 off_file = os.environ["MAIL_OFFSET_FILE"]
@@ -220,7 +282,7 @@ try:
         raw = next((p[1] for p in fetched if isinstance(p, tuple)), None)
         if raw is None:
             continue
-        line_for("%s:%d" % (uidval, uid), email.message_from_bytes(raw))
+        line_for("%s:%d" % (uidval, uid), email.message_from_bytes(raw), "%05d" % uid)
 finally:
     try:
         M.logout()
@@ -245,8 +307,10 @@ PY
     cut_field; sender="$_F"
     text="$rest"
     emit_event "email" "$ext" "$ts" "$sender" "$text"
-    # Offset erst NACH dem Emit fortschreiben (at-least-once, wie telegram.sh)
-    [ "$offtok" != "-" ] && printf '%s\n' "$offtok" > "$OFFSET_FILE"
+    # Offset erst NACH dem Emit fortschreiben (at-least-once, wie telegram.sh).
+    # if statt &&-Kurzschluss: der falsy Guard (EML-Modus) darf nicht als rc der
+    # letzten Loop-Iteration nach außen lecken (poll_once wäre sonst faelschlich rot).
+    if [ "$offtok" != "-" ]; then printf '%s\n' "$offtok" > "$OFFSET_FILE"; fi
   done <<< "$parsed"
 }
 

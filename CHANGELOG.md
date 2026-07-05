@@ -4,6 +4,25 @@ All notable engine changes are documented here. Versioning follows SemVer (`VERS
 human-facing); machine compatibility is anchored separately by `SCHEMA_VERSION` (integer) —
 see `.claude/rules/contract.md`. `skills/update-bobs` points teams here after an update.
 
+## [0.9.0] — 2026-07-05
+
+### Added
+- **Email attachments are persisted** (`scripts/channels/email.sh`, #46 — field-proven
+  "digest + full text" pattern): with `SCUT_MAIL_ATTACH_DIR` set, every mail writes its full
+  text as `<prefix>-body.txt` (with From/Date/Subject header) and each attachment as
+  `<prefix>-<name>` into the media dir. Filenames are ASCII-sanitized (RFC-2231 decoded,
+  NFKD, traversal-safe — regression-asserted), same-name attachments of one mail get a
+  dedup suffix, oversized ones are skipped and noted (`SCUT_MAIL_ATTACH_MAX`, default
+  10 MB). Persistence errors degrade per mail (noted in the line, files stay in the
+  mailbox) — a write failure never stalls the poll batch. Unset = previous count-only
+  behavior. `tests/email_channel_spec.sh` now at 35 checks.
+
+### Fixed
+- `inbox-watch` also watches the **review queue** (`_review-queue.md`) — undirected
+  router mail (e.g. customer mail without a `[uid]` tag) no longer sits unnoticed; the
+  state-format change causes one harmless re-announce round on rollout.
+- EML test mode no longer leaks a false non-zero exit from the last poll iteration.
+
 ## [0.8.0] — 2026-07-04
 
 ### Added
