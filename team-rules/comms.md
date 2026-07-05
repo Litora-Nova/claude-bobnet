@@ -136,5 +136,9 @@ normalisiert zu Events, `scripts/scut-router.sh` triagiert datengetrieben (Regis
    bei idle genudged statt Prompts zu kapern (konsistent mit §Kanon Inbox-first).
 4. **Cross-Installation (BobNet-Bridge, #45):** `bobnet-send.sh <peer> "[uid][@Agent]: …"` →
    drüben forced-command `bridge-receive.sh <peer>` (Pflicht-Adressierung, Empfänger stempelt
-   ts/Identität selbst, flock-Append, Audit-Log beidseitig). Läuft bewusst NICHT über den
-   Router; Schlüssel/`authorized_keys`/Rollout = Instanz + `{HUMAN}` (T4).
+   ts/Identität selbst, flock-Append, Audit-Log beidseitig). Die beiden Seiten wiegen dabei
+   unterschiedlich schwer (#51): der **Empfänger-Audit ist fail-closed** — schlägt der Write
+   für eine Annahme fehl, wird NICHT zugestellt (kein Audit-Trail, keine Zustellung) — der
+   **Sender-Audit ist best-effort** (`BOBNET_SEND_LOG`, append-only ts·peer·bytes·rc) und
+   blockiert das Senden nie. Läuft bewusst NICHT über den Router; Schlüssel/`authorized_keys`/
+   Rollout = Instanz + `{HUMAN}` (T4).
