@@ -170,6 +170,17 @@ t "Fail-loud: Batch überlebt (exit 0)" "0" "$frc"
 t "Fail-loud: alle Events trotzdem emittiert" "6" "$(printf '%s\n' "$fout" | wc -l | tr -d ' ')"
 t "Fail-loud: Vermerk in der Zeile" "1" "$(printf '%s\n' "$fout" | sed -n 4p | grep -c 'Persistenz fehlgeschlagen')"
 
+# H2/#50 STRICT-Modus: bei Persistenz-Fehler stoppt der Poll VOR dem Emit (Offset rückt nicht vor).
+# Default (oben, Zeile 170) emittiert alle 6 trotz Fehler; STRICT bricht bei der ersten Fehl-Mail ab.
+sout="$(chmod 555 "$rodir"; SCUT_MAIL_EML_DIR="$eml" SCUT_MAIL_ATTACH_DIR="$rodir" SCUT_MAIL_ATTACH_STRICT=1 bash "$BIN" 2>/dev/null; chmod 755 "$rodir")"
+serr="$(chmod 555 "$rodir"; SCUT_MAIL_EML_DIR="$eml" SCUT_MAIL_ATTACH_DIR="$rodir" SCUT_MAIL_ATTACH_STRICT=1 bash "$BIN" 2>&1 >/dev/null; chmod 755 "$rodir")"
+t "STRICT: Poll stoppt bei erster Fehl-Mail (0 emittiert)" "0" "$(printf '%s' "$sout" | grep -c .)"
+t "STRICT: exit 0 (kein Crash, laut in stderr)" "0" "$(chmod 555 "$rodir"; SCUT_MAIL_EML_DIR="$eml" SCUT_MAIL_ATTACH_DIR="$rodir" SCUT_MAIL_ATTACH_STRICT=1 bash "$BIN" >/dev/null 2>&1; echo $?; chmod 755 "$rodir")"
+t "STRICT: stderr nennt Offset-nicht-vorgerückt" "1" "$(printf '%s\n' "$serr" | grep -c 'STRICT.*Offset NICHT vorgerückt')"
+# STRICT ohne Fehler (beschreibbarer Dir) verhält sich wie Default: alle emittiert
+sokdir="$tmp/strictok"; sok="$(SCUT_MAIL_EML_DIR="$eml" SCUT_MAIL_ATTACH_DIR="$sokdir" SCUT_MAIL_ATTACH_STRICT=1 bash "$BIN" 2>/dev/null)"
+t "STRICT ohne Fehler: alle 6 emittiert" "6" "$(printf '%s\n' "$sok" | wc -l | tr -d ' ')"
+
 # Size-Cap: zu großer Anhang wird übersprungen + vermerkt, Datei NICHT geschrieben
 cdir="$tmp/capfiles"
 cout="$(SCUT_MAIL_EML_DIR="$eml" SCUT_MAIL_ATTACH_DIR="$cdir" SCUT_MAIL_ATTACH_MAX=4 bash "$BIN")"

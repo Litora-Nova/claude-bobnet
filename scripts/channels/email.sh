@@ -37,6 +37,14 @@
 #                       (Anhänge nur gezählt, bleiben im Postfach).
 #   SCUT_MAIL_ATTACH_MAX   max. Bytes pro Anhang (Default 10485760 = 10MB); größere werden
 #                       übersprungen und in der Zeile vermerkt (bleiben im Postfach).
+#   SCUT_MAIL_ATTACH_STRICT  Verhalten bei fehlgeschlagener Persistenz (Issue #50, Codex-H2):
+#                       DEFAULT (unset/0) = best-effort: Mail wird zugestellt, Offset rückt vor,
+#                       die Zeile trägt „Persistenz fehlgeschlagen"; RECOVERY = Anker manuell auf
+#                       die letzte gute UID zurückdrehen (Runbook), nächster Poll liefert erneut.
+#                       =1 STRICT: bei Persistenz-Fehler wird der Offset NICHT vorgerückt und der
+#                       Poll gestoppt — die UID kommt automatisch beim nächsten Poll erneut (kein
+#                       Anhang-Verlust). Preis: DAUER-Fehler (Disk voll) stallt den Kanal
+#                       head-of-line (laut in stderr/Journal, kein stiller Verlust).
 #   SCUT_MAIL_EML_DIR   TESTMODUS: statt IMAP alle *.eml in diesem Ordner parsen (sortiert,
 #                       kein Offset-Write) — macht Parsing/Triage ohne Server spec-bar.
 #
@@ -234,6 +242,7 @@ def line_for(key, msg, prefix):
         ts = int(time.time())
     digest = norm(body)[:400]
     text = subject + (" — " + digest if digest else "")
+    pfail = "0"   # 1 = geforderte Persistenz fehlgeschlagen (Bash-Seite entscheidet Offset, H2/#50)
     if ATTACH_DIR:
         # Fehler PRO MAIL degradieren (Review-A2/Test-Gate-Fund): ein Schreibfehler
         # (Disk voll, Rechte) darf nie den ganzen Poll-Batch versenken — die Mail wird
@@ -244,13 +253,14 @@ def line_for(key, msg, prefix):
             print("email-channel: Persistenz fehlgeschlagen (%s) — Dateien bleiben im Postfach" % e,
                   file=sys.stderr)
             text += " [Persistenz fehlgeschlagen — %d Anhang/Anhänge im Postfach]" % len(atts)
+            pfail = "1"
     elif atts:
         text += " [%d Anhang/Anhänge im Postfach]" % len(atts)
     if not subject.startswith(("[", "@")):
         tag = plus_tag(msg)
         if tag:
             text = tag + " " + text
-    row = [key, ext, str(ts), sender, text]
+    row = [key, ext, str(ts), sender, pfail, text]
     print("\t".join(f.replace("\t", " ") for f in row))
 
 eml_dir = os.environ.get("SCUT_MAIL_EML_DIR", "")
@@ -291,7 +301,7 @@ finally:
 PY
 )" || return 1
   [ -z "$parsed" ] && return 0
-  local offtok ext ts sender text rest _F
+  local offtok ext ts sender pfail text rest _F
   cut_field() {
     case "$rest" in
       *$'\t'*) _F="${rest%%$'\t'*}"; rest="${rest#*$'\t'}";;
@@ -305,7 +315,18 @@ PY
     cut_field; ext="$_F"
     cut_field; ts="$_F"
     cut_field; sender="$_F"
+    cut_field; pfail="$_F"
     text="$rest"
+    # H2/#50 STRICT (opt-in): geforderte Persistenz fehlgeschlagen → Offset NICHT vorrücken
+    # und stoppen. Die UID wird beim nächsten Poll erneut geliefert (mit Anhängen, sobald das
+    # Schreiben wieder klappt). Kein Emit hier → keine Doppelzustellung bei permanentem Fehler;
+    # Preis: bei DAUER-Fehler (Disk voll) stallt der Kanal head-of-line (laut in stderr/Journal).
+    # Default (STRICT!=1): best-effort — Emit + Offset vor, Zeile trägt den „Persistenz
+    # fehlgeschlagen"-Vermerk; Recovery = Anker manuell zurückdrehen (Runbook).
+    if [ "${SCUT_MAIL_ATTACH_STRICT:-0}" = 1 ] && [ "$pfail" = 1 ]; then
+      echo "email-channel: STRICT — Persistenz fehlgeschlagen, Offset NICHT vorgerückt (UID kommt nächsten Poll erneut)" >&2
+      break
+    fi
     emit_event "email" "$ext" "$ts" "$sender" "$text"
     # Offset erst NACH dem Emit fortschreiben (at-least-once, wie telegram.sh).
     # if statt &&-Kurzschluss: der falsy Guard (EML-Modus) darf nicht als rc der
