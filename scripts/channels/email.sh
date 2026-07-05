@@ -180,16 +180,24 @@ def persist_mail(prefix, sender, date_hdr, subject, body, atts):
     with open(os.path.join(ATTACH_DIR, "%s-body.txt" % prefix), "w",
               encoding="utf-8", errors="replace") as fh:
         fh.write("From: %s\nDate: %s\nSubject: %s\n\n%s" % (sender, date_hdr, subject, body))
-    saved, skipped = [], 0
+    saved, skipped, seen = [], 0, set()
     for part in atts:
         data = part.get_payload(decode=True) or b""
         if len(data) > ATTACH_MAX:
             skipped += 1
             continue
-        with open(os.path.join(ATTACH_DIR, "%s-%s" % (prefix, sanitize_name(part.get_filename()))),
-                  "wb") as fh:
+        # Kollisions-Dedup NUR innerhalb der Mail (Review-A1); bewusst nicht gegen die
+        # Disk, damit ein Batch-Retry idempotent überschreibt statt -2-Duplikate zu stapeln.
+        fname = sanitize_name(part.get_filename())
+        base, ext = os.path.splitext(fname)
+        n = 1
+        while fname in seen:
+            n += 1
+            fname = "%s-%d%s" % (base, n, ext)
+        seen.add(fname)
+        with open(os.path.join(ATTACH_DIR, "%s-%s" % (prefix, fname)), "wb") as fh:
             fh.write(data)
-        saved.append("%s-%s" % (prefix, sanitize_name(part.get_filename())))
+        saved.append("%s-%s" % (prefix, fname))
     note = " [Volltext: %s-body.txt" % prefix
     if saved:
         note += " · Anhänge: " + (", ".join(saved) if len(saved) <= 3
@@ -227,7 +235,15 @@ def line_for(key, msg, prefix):
     digest = norm(body)[:400]
     text = subject + (" — " + digest if digest else "")
     if ATTACH_DIR:
-        text += persist_mail(prefix, sender, msg.get("Date", ""), subject, body, atts)
+        # Fehler PRO MAIL degradieren (Review-A2/Test-Gate-Fund): ein Schreibfehler
+        # (Disk voll, Rechte) darf nie den ganzen Poll-Batch versenken — die Mail wird
+        # trotzdem zugestellt, die Dateien bleiben im Postfach und die Zeile sagt es.
+        try:
+            text += persist_mail(prefix, sender, msg.get("Date", ""), subject, body, atts)
+        except Exception as e:
+            print("email-channel: Persistenz fehlgeschlagen (%s) — Dateien bleiben im Postfach" % e,
+                  file=sys.stderr)
+            text += " [Persistenz fehlgeschlagen — %d Anhang/Anhänge im Postfach]" % len(atts)
     elif atts:
         text += " [%d Anhang/Anhänge im Postfach]" % len(atts)
     if not subject.startswith(("[", "@")):
@@ -291,8 +307,10 @@ PY
     cut_field; sender="$_F"
     text="$rest"
     emit_event "email" "$ext" "$ts" "$sender" "$text"
-    # Offset erst NACH dem Emit fortschreiben (at-least-once, wie telegram.sh)
-    [ "$offtok" != "-" ] && printf '%s\n' "$offtok" > "$OFFSET_FILE"
+    # Offset erst NACH dem Emit fortschreiben (at-least-once, wie telegram.sh).
+    # if statt &&-Kurzschluss: der falsy Guard (EML-Modus) darf nicht als rc der
+    # letzten Loop-Iteration nach außen lecken (poll_once wäre sonst faelschlich rot).
+    if [ "$offtok" != "-" ]; then printf '%s\n' "$offtok" > "$OFFSET_FILE"; fi
   done <<< "$parsed"
 }
 

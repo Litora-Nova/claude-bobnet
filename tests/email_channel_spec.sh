@@ -112,6 +112,36 @@ Content-Disposition: attachment; filename*=UTF-8''b%C3%B6se%20datei%3F.png
 FAKEPNG
 --B--
 EOF
+cat > "$eml/06-kollision-traversal.eml" <<'EOF'
+From: partner@example.com
+To: team@example.com
+Subject: [acme] drei Anhänge
+Message-ID: <a6@example.com>
+Date: Fri, 04 Jul 2026 10:05:00 +0200
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="B"
+
+--B
+Content-Type: text/plain
+
+Anbei.
+--B
+Content-Type: application/pdf
+Content-Disposition: attachment; filename="doc.pdf"
+
+AAA
+--B
+Content-Type: application/pdf
+Content-Disposition: attachment; filename="doc.pdf"
+
+BBB
+--B
+Content-Type: text/plain
+Content-Disposition: attachment; filename="../../evil.txt"
+
+EVIL
+--B--
+EOF
 mdir="$tmp/mailfiles"
 aout="$(SCUT_MAIL_EML_DIR="$eml" SCUT_MAIL_ATTACH_DIR="$mdir" bash "$BIN")"
 ok "Duo: Volltext-File geschrieben" test -s "$mdir/eml004-body.txt"
@@ -121,6 +151,24 @@ t "Zeile referenziert Volltext+Anhang" "1" \
   "$(printf '%s\n' "$aout" | sed -n 4p | grep -c 'Volltext: eml004-body.txt · Anhänge: eml004-doc.pdf')"
 ok "Umlaut-Name ASCII-sanitiert" test -s "$mdir/eml005-bose_datei_.png"
 t "sanitierter Name in der Zeile" "1" "$(printf '%s\n' "$aout" | sed -n 5p | grep -c 'eml005-bose_datei_.png')"
+
+# Kollisions-Dedup (Review-A1): zwei gleichnamige Anhänge einer Mail → -2-Suffix, beide Inhalte da
+ok "Kollision: erste Datei" test -s "$mdir/eml006-doc.pdf"
+ok "Kollision: zweite Datei mit Suffix" test -s "$mdir/eml006-doc-2.pdf"
+t "Kollision: Inhalte verschieden" "1" "$(cmp -s "$mdir/eml006-doc.pdf" "$mdir/eml006-doc-2.pdf"; [ $? -ne 0 ] && echo 1 || echo 0)"
+
+# Traversal-Assert (Review-A3): "../../evil.txt" landet sanitiert IN ATTACH_DIR, nichts außerhalb
+ok "Traversal: Datei sanitiert im Zielordner" test -s "$mdir/eml006-evil.txt"
+ok "Traversal: NICHTS außerhalb geschrieben" test ! -e "$tmp/evil.txt"
+ok "Traversal: auch nicht eine Ebene höher" test ! -e "$(dirname "$tmp")/evil.txt"
+
+# Fail-Degradation (Review-A2/Test-Gate-Fund): unbeschreibbarer ATTACH_DIR versenkt NICHT den Batch
+rodir="$tmp/ro"; mkdir -p "$rodir"; chmod 555 "$rodir"
+fout="$(SCUT_MAIL_EML_DIR="$eml" SCUT_MAIL_ATTACH_DIR="$rodir" bash "$BIN" 2>/dev/null)"; frc=$?
+chmod 755 "$rodir"
+t "Fail-loud: Batch überlebt (exit 0)" "0" "$frc"
+t "Fail-loud: alle Events trotzdem emittiert" "6" "$(printf '%s\n' "$fout" | wc -l | tr -d ' ')"
+t "Fail-loud: Vermerk in der Zeile" "1" "$(printf '%s\n' "$fout" | sed -n 4p | grep -c 'Persistenz fehlgeschlagen')"
 
 # Size-Cap: zu großer Anhang wird übersprungen + vermerkt, Datei NICHT geschrieben
 cdir="$tmp/capfiles"
@@ -138,7 +186,7 @@ t "ohne Creds: exit 1" "1" \
 
 # Ende-zu-Ende-Smoke: Adapter → Router (Dry-Run) triagiert gerichtet + ungerichtet
 route="$(SCUT_MAIL_EML_DIR="$eml" bash "$BIN" | SCUT_ROUTER_DRYRUN=1 DEV_TEAM_REGISTRY="$tmp/keine.json" CONTEXT_UID=ctx bash "$ROUTER" 2>/dev/null)"
-t "Router-Smoke: gerichtet → inbox[acme]" "4" "$(printf '%s\n' "$route" | grep -c 'inbox\[acme\]')"
+t "Router-Smoke: gerichtet → inbox[acme]" "5" "$(printf '%s\n' "$route" | grep -c 'inbox\[acme\]')"
 t "Router-Smoke: ungerichtet → review-queue" "1" "$(printf '%s\n' "$route" | grep -c 'review-queue\[ctx\]')"
 
 echo "email_channel_spec: $pass passed, $fail failed"
