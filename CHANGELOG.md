@@ -4,6 +4,17 @@ All notable engine changes are documented here. Versioning follows SemVer (`VERS
 human-facing); machine compatibility is anchored separately by `SCHEMA_VERSION` (integer) —
 see `.claude/rules/contract.md`. `skills/update-bobs` points teams here after an update.
 
+## [0.11.0] — 2026-07-05
+
+### Added
+- **Email persistence-failure semantics are now operator-selectable** (`email.sh`, #50, from
+  the cross-model review). Default stays best-effort (deliver, advance the offset, note the
+  failure in the line) with a documented recovery path (rewind the anchor to the last good
+  UID). `SCUT_MAIL_ATTACH_STRICT=1` instead keeps the offset put and stops the poll on a
+  persistence failure, so the UID is re-delivered on the next poll (no attachment loss, at
+  the cost of a head-of-line stall on a permanent failure — loud on stderr, never a silent
+  loss). `tests/email_channel_spec.sh` at 39 checks.
+
 ## [0.10.0] — 2026-07-05
 
 ### Fixed
