@@ -144,8 +144,11 @@ normalisiert zu Events, `scripts/scut-router.sh` triagiert datengetrieben (Regis
 4. **Cross-Installation (BobNet-Bridge, #45):** `bobnet-send.sh <peer> "[uid][@Agent]: …"` →
    drüben forced-command `bridge-receive.sh <peer>` (Pflicht-Adressierung, Empfänger stempelt
    ts/Identität selbst, flock-Append, Audit-Log beidseitig). Die beiden Seiten wiegen dabei
-   unterschiedlich schwer (#51): der **Empfänger-Audit ist fail-closed** — schlägt der Write
-   für eine Annahme fehl, wird NICHT zugestellt (kein Audit-Trail, keine Zustellung) — der
+   unterschiedlich schwer (#51/#52): der **Empfänger-Audit ist fail-closed vor der
+   Zustellung** — ist der Audit-Log-Pfad nicht schreibbar (Preflight), wird NICHT zugestellt
+   (Exit 3); der ACCEPT-Eintrag selbst wird erst NACH dem erfolgreichen Inbox-Append
+   geschrieben (scheitert erst dieser Write, ist die Nachricht bereits zugestellt — Warnung
+   auf stderr, Details im Kopf von `bridge-receive.sh`) — der
    **Sender-Audit ist best-effort** (`BOBNET_SEND_LOG`, append-only ts·peer·bytes·rc) und
    blockiert das Senden nie. Läuft bewusst NICHT über den Router; Schlüssel/`authorized_keys`/
    Rollout = Instanz + `{HUMAN}` (T4).
