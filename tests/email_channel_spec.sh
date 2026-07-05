@@ -298,6 +298,46 @@ t "M6 Total-Cap: zweiter Anhang übersprungen (Summe >50B)" "1" "$(printf '%s\n'
 ok "M6 Total-Cap: erster Anhang (40B) unter dem Cap gespeichert" test -s "$totaldir/eml001-big1.bin"
 ok "M6 Total-Cap: zweiter Anhang NICHT gespeichert (40+40 > 50)" test ! -e "$totaldir/eml001-big2.bin"
 
+# ── R1(3)/#52: Größen-Vorprüfung bei misdeklariertem/exotischem Transfer-Encoding ───────────
+# estimate_encoded_bytes() behandelt jedes NICHT-base64-CTE als "rohe Länge = sichere obere
+# Schranke" (kein Decode nötig, um zu schätzen). Kein Bug gefunden — dieser Test nagelt das
+# Verhalten fest: ein Anhang mit (falsch deklariertem) quoted-printable-CTE bleibt unter dem
+# Cap korrekt erfasst UND crasht beim echten Decode nicht, auch wenn der Inhalt kein gültiges
+# quoted-printable ist.
+eml_cte="$tmp/eml_cte"; mkdir -p "$eml_cte"
+cat > "$eml_cte/01-cte-edge.eml" <<'EOF'
+From: partner@example.com
+To: team@example.com
+Subject: [acme] CTE-Edge
+Message-ID: <cte1@example.com>
+Date: Fri, 05 Jul 2026 09:03:00 +0200
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="B"
+
+--B
+Content-Type: text/plain
+
+CTE-Edge-Test.
+--B
+Content-Type: application/octet-stream
+Content-Disposition: attachment; filename="mystery.bin"
+Content-Transfer-Encoding: quoted-printable
+
+payload=3D=0A=0Amehr=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D
+--B--
+EOF
+ctedir="$tmp/cte-cap"
+cteout="$(SCUT_MAIL_EML_DIR="$eml_cte" SCUT_MAIL_ATTACH_DIR="$ctedir" SCUT_MAIL_ATTACH_MAX=4 bash "$BIN")"; cterc=$?
+t "CTE-Edge + Cap: kein Crash (exit 0)" "0" "$cterc"
+t "CTE-Edge: Anhang wegen Cap übersprungen (Vorprüfung greift trotz CTE)" "1" \
+  "$(printf '%s\n' "$cteout" | grep -c 'übersprungen (>4B, im Postfach)')"
+ok "CTE-Edge: Anhang-Datei NICHT geschrieben" test ! -e "$ctedir/eml001-mystery.bin"
+ok "CTE-Edge: Volltext trotzdem da (Mail zugestellt)" test -s "$ctedir/eml001-body.txt"
+ctedir2="$tmp/cte-nocap"
+cteout2="$(SCUT_MAIL_EML_DIR="$eml_cte" SCUT_MAIL_ATTACH_DIR="$ctedir2" bash "$BIN")"; cterc2=$?
+t "CTE-Edge ohne Cap: kein Crash (exit 0)" "0" "$cterc2"
+ok "CTE-Edge ohne Cap: Anhang trotzdem decodiert+gespeichert" test -s "$ctedir2/eml001-mystery.bin"
+
 # Default (ohne ATTACH_DIR) bleibt v1: nur zählen — Regression siehe Checks oben (Zeile 4)
 
 # IMAP-Modus ohne Creds → exit 1 (klarer Fehler, kein Hänger)
