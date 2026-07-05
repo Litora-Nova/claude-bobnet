@@ -8,16 +8,25 @@
 # und wird NIEMALS ausgeführt.
 #
 # Sicherheits-Kontrakt (Serverwächter-Design 2026-07-04):
-#   - max 4 KB, GENAU eine Zeile, Control-Chars werden gestrippt (Tab → Space)
+#   - max 4 KB (Bytes, nicht Zeichen — multibyte-sicher, Codex-Review M4/#51), GENAU eine Zeile,
+#     Control-Chars werden gestrippt (Tab → Space)
 #   - Pflicht-Adressierung: führendes `[<uid>]` oder `[<uid>]@<Agent>`
 #     (Regex ^\[[a-z0-9_-]{1,32}\](@[A-Za-z0-9_-]{1,32})?$) — sonst REJECT
+#   - Peer-Argument selbst muss ^[A-Za-z0-9_-]{1,32}$ matchen; Display-Namen aus zweiter Hand
+#     (peers.json `lead`, TEAM_LEAD-Fallback aus dev-team.env) werden Steuerzeichen/Newline-
+#     gestrippt + auf 64 Zeichen gecappt — verhindert gefälschte Log-/Inbox-Zeilen (Codex-Review
+#     L7/#51)
 #   - Ziel-Inbox löst der EMPFÄNGER aus der Registry auf (Client kann keinen Pfad wählen);
 #     [uid] ohne Agent → TEAM_LEAD des Projekts (dev-team.env, Default Bob)
 #   - Kanon-Zeile wird SERVERSEITIG gestempelt: `<ts> | @<Agent> | BRIDGE (<peer>): <text>`
 #     (+ Signatur `— (<lead>@<peer>)`, wenn peers.json den Peer-Lead kennt); Append mit flock
 #   - Audit-PFLICHT: jede Annahme/Ablehnung → $BRIDGE_LOG (ts · accept/reject+Grund · peer ·
-#     target · bytes · Auszug)
-#   - Exit 0 = zugestellt · 2 = REJECT (Sender darf NICHT blind retryn)
+#     target · bytes · Auszug). ACCEPT ist fail-closed (Codex-Review M3/#51): schlägt der
+#     Audit-Write für eine Annahme fehl, wird NICHT zugestellt (siehe Exit 3). Ein REJECT wird
+#     dagegen IMMER abgelehnt, auch wenn dessen Audit-Write scheitert (best-effort dort).
+#   - Exit 0 = zugestellt · 2 = REJECT (Sender darf NICHT blind retryn) ·
+#     3 = Infra-Fehler: ACCEPT-Audit fehlgeschlagen, NICHT zugestellt (fail-closed, kein
+#     Zustellversuch ohne Audit-Trail)
 #
 # Env:
 #   DEV_TEAM_REGISTRY  zentrale projects.registry.json (Default wie scut-router.sh)
@@ -34,19 +43,31 @@ if [ -n "${BRIDGE_LOG:-}" ]; then LOG="$BRIDGE_LOG"
 elif [ -d "$HOME/standup" ]; then LOG="$HOME/standup/bridge.log"
 else LOG="$HOME/.claude/bobiverse-bridge.log"; fi
 
-audit() { # audit <ACCEPT|REJECT grund> <target> <bytes> <auszug>
+audit() { # audit <ACCEPT|REJECT grund> <target> <bytes> <auszug> — Exit-Status = Schreiberfolg
   mkdir -p "$(dirname "$LOG")" 2>/dev/null
   printf '%s | %s | peer=%s | target=%s | %sB | %s\n' \
-    "$(date '+%Y-%m-%d %H:%M:%S')" "$1" "${PEER:-?}" "${2:-—}" "${3:-0}" "${4:-}" >> "$LOG" 2>/dev/null || true
+    "$(date '+%Y-%m-%d %H:%M:%S')" "$1" "${PEER:-?}" "${2:-—}" "${3:-0}" "${4:-}" >> "$LOG" 2>/dev/null
 }
-reject() { audit "REJECT: $1" "${2:-—}" "${3:-0}" "${4:-}"; echo "bridge-receive: REJECT — $1" >&2; exit 2; }
+# REJECT bleibt REJECT, auch wenn dessen Audit-Write scheitert (best-effort) — nur der
+# ACCEPT-Pfad unten ist fail-closed (M3/#51).
+reject() { audit "REJECT: $1" "${2:-—}" "${3:-0}" "${4:-}" || true; echo "bridge-receive: REJECT — $1" >&2; exit 2; }
 
+# PEER: Steuerzeichen/Newline sofort weg (Log-Spoofing-Schutz, L7/#51), dann strikt validieren —
+# so tragen auch die REJECT-Audit-Zeilen unten nie einen rohen Newline im peer=-Feld.
+PEER="$(printf '%s' "$PEER" | tr -d '\000-\037\177')"
 [ -n "$PEER" ] || reject "kein Peer-Argument (authorized_keys-Zeile prüfen)"
+case "$PEER" in
+  *[!A-Za-z0-9_-]*) reject "ungültiger Peer-Name (erlaubt: A-Za-z0-9_-, max 32) — Log-Spoofing-Schutz (L7)";;
+esac
+[ "${#PEER}" -le 32 ] || reject "Peer-Name zu lang (>32) — Log-Spoofing-Schutz (L7)"
 
 # ── Input: SSH_ORIGINAL_COMMAND als Daten, Fallback stdin; max 4 KB ─────────────────────────
 raw="${SSH_ORIGINAL_COMMAND:-}"
 [ -z "$raw" ] && raw="$(head -c 5000 2>/dev/null || true)"
-bytes="${#raw}"
+# Bytes zählen, nicht Zeichen (M4/#51): ${#raw} zählt in Multibyte-Locales Codepoints, nicht
+# Bytes — eine UTF-8-lastige Nachricht könnte so den 4KB-Bytekontrakt sprengen (und den
+# Audit-Bytewert verfälschen), ohne von der Zeichen-basierten Prüfung erfasst zu werden.
+bytes="$(printf '%s' "$raw" | LC_ALL=C wc -c | tr -d ' ')"
 [ "$bytes" -gt 0 ] || reject "leere Nachricht" "—" 0
 [ "$bytes" -le 4096 ] || reject "über 4KB (${bytes}B)" "—" "$bytes"
 raw="${raw%$'\n'}"                                   # EIN trailing newline (stdin) ist ok
@@ -86,7 +107,14 @@ inbox="$standup/_inbox.md"
 if [ -z "$agent" ]; then
   proj="$(expand_tilde "$(reg_lookup "$uid" path)")"
   envf="$proj/_dev_team/dev-team.env"
-  [ -f "$envf" ] && agent="$(sed -n 's/^export TEAM_LEAD="\{0,1\}\([^"]*\)"\{0,1\}.*/\1/p' "$envf" | head -n1)"
+  if [ -f "$envf" ]; then
+    agent="$(sed -n 's/^export TEAM_LEAD="\{0,1\}\([^"]*\)"\{0,1\}.*/\1/p' "$envf" | head -n1)"
+    # Aus einer Konfig-Datei gelesen, nicht aus dem client-validierten [uid]@Agent-Regex —
+    # Steuerzeichen/Newline strippen + Länge cappen, damit dev-team.env keine gefälschten
+    # Log-/Inbox-Zeilen einschleusen kann (L7/#51).
+    agent="$(printf '%s' "$agent" | tr -d '\000-\037\177')"
+    agent="${agent:0:64}"
+  fi
   agent="${agent:-Bob}"
 fi
 
@@ -109,14 +137,26 @@ except Exception:
     pass
 PY
 )"
+# peers.json ist Config, kein client-validierter Wert — dieselbe Sanitize-Regel wie beim
+# TEAM_LEAD-Fallback oben (L7/#51): Steuerzeichen/Newline weg, Länge gecappt.
+lead="$(printf '%s' "$lead" | tr -d '\000-\037\177')"
+lead="${lead:0:64}"
 
 # ── Serverseitig stempeln + flock-Append ────────────────────────────────────────────────────
 line="$(date '+%Y-%m-%d %H:%M') | @$agent | BRIDGE ($PEER): $rest"
 [ -n "$lead" ] && line="$line — ($lead@$PEER)"
+
+# M3/#51: Audit-Pflicht ist fail-closed für ACCEPT — schlägt der Audit-Write fehl, wird
+# NICHT zugestellt (Exit 3, eigener Infra-Code), statt eine Nachricht ohne Audit-Trail
+# durchzulassen. Deshalb VOR dem Inbox-Append prüfen, nicht danach.
+if ! audit "ACCEPT" "$tgt" "$bytes" "${rest:0:60}"; then
+  echo "bridge-receive: ACCEPT-Audit fehlgeschlagen ($LOG) — NICHT zugestellt (fail-closed)" >&2
+  exit 3
+fi
+
 mkdir -p "$(dirname "$inbox")"
 { flock -x 9; printf '%s\n' "$line" >&9; } 9>>"$inbox" \
   || reject "Append fehlgeschlagen ($inbox)" "$tgt" "$bytes"
 
-audit "ACCEPT" "$tgt" "$bytes" "${rest:0:60}"
 echo "✓ bridge-receive: [$uid]@$agent ← $PEER (${bytes}B)"
 exit 0
