@@ -163,23 +163,45 @@ ok "Traversal: NICHTS außerhalb geschrieben" test ! -e "$tmp/evil.txt"
 ok "Traversal: auch nicht eine Ebene höher" test ! -e "$(dirname "$tmp")/evil.txt"
 
 # Fail-Degradation (Review-A2/Test-Gate-Fund): unbeschreibbarer ATTACH_DIR versenkt NICHT den Batch
-rodir="$tmp/ro"; mkdir -p "$rodir"; chmod 555 "$rodir"
+# L9/#51: ENOTDIR statt chmod 555 — ein Pfad UNTER einer regulären Datei kann NIE zum
+# Verzeichnis werden, schlägt also strukturell fehl, auch wenn die Suite als root läuft
+# (chmod 555 wäre das nicht — root ignoriert Dateimodus-Bits).
+roblock="$tmp/ro-blocker"; touch "$roblock"
+rodir="$roblock/sub"
 fout="$(SCUT_MAIL_EML_DIR="$eml" SCUT_MAIL_ATTACH_DIR="$rodir" bash "$BIN" 2>/dev/null)"; frc=$?
-chmod 755 "$rodir"
 t "Fail-loud: Batch überlebt (exit 0)" "0" "$frc"
 t "Fail-loud: alle Events trotzdem emittiert" "6" "$(printf '%s\n' "$fout" | wc -l | tr -d ' ')"
 t "Fail-loud: Vermerk in der Zeile" "1" "$(printf '%s\n' "$fout" | sed -n 4p | grep -c 'Persistenz fehlgeschlagen')"
+# N1/#51: bei 0 Anhängen (Zeile 2 = 02-ungerichtet.eml) darf der Vermerk nicht "0 Anhänge" sagen
+t "N1: 0-Anhang-Mail bekommt eigene Formulierung" "1" \
+  "$(printf '%s\n' "$fout" | sed -n 2p | grep -c 'Mailtext nicht abgelegt')"
+t "N1: 0-Anhang-Mail NICHT die Anhang-Zähl-Formulierung" "0" \
+  "$(printf '%s\n' "$fout" | sed -n 2p | grep -c '0 Anhang')"
 
 # H2/#50 STRICT-Modus: bei Persistenz-Fehler stoppt der Poll VOR dem Emit (Offset rückt nicht vor).
-# Default (oben, Zeile 170) emittiert alle 6 trotz Fehler; STRICT bricht bei der ersten Fehl-Mail ab.
-sout="$(chmod 555 "$rodir"; SCUT_MAIL_EML_DIR="$eml" SCUT_MAIL_ATTACH_DIR="$rodir" SCUT_MAIL_ATTACH_STRICT=1 bash "$BIN" 2>/dev/null; chmod 755 "$rodir")"
-serr="$(chmod 555 "$rodir"; SCUT_MAIL_EML_DIR="$eml" SCUT_MAIL_ATTACH_DIR="$rodir" SCUT_MAIL_ATTACH_STRICT=1 bash "$BIN" 2>&1 >/dev/null; chmod 755 "$rodir")"
+# Default (oben) emittiert alle 6 trotz Fehler; STRICT bricht bei der ersten Fehl-Mail ab.
+sout="$(SCUT_MAIL_EML_DIR="$eml" SCUT_MAIL_ATTACH_DIR="$rodir" SCUT_MAIL_ATTACH_STRICT=1 bash "$BIN" 2>/dev/null)"
+serr="$(SCUT_MAIL_EML_DIR="$eml" SCUT_MAIL_ATTACH_DIR="$rodir" SCUT_MAIL_ATTACH_STRICT=1 bash "$BIN" 2>&1 >/dev/null)"
 t "STRICT: Poll stoppt bei erster Fehl-Mail (0 emittiert)" "0" "$(printf '%s' "$sout" | grep -c .)"
-t "STRICT: exit 0 (kein Crash, laut in stderr)" "0" "$(chmod 555 "$rodir"; SCUT_MAIL_EML_DIR="$eml" SCUT_MAIL_ATTACH_DIR="$rodir" SCUT_MAIL_ATTACH_STRICT=1 bash "$BIN" >/dev/null 2>&1; echo $?; chmod 755 "$rodir")"
+t "STRICT: exit 0 (kein Crash, laut in stderr)" "0" "$(SCUT_MAIL_EML_DIR="$eml" SCUT_MAIL_ATTACH_DIR="$rodir" SCUT_MAIL_ATTACH_STRICT=1 bash "$BIN" >/dev/null 2>&1; echo $?)"
 t "STRICT: stderr nennt Offset-nicht-vorgerückt" "1" "$(printf '%s\n' "$serr" | grep -c 'STRICT.*Offset NICHT vorgerückt')"
 # STRICT ohne Fehler (beschreibbarer Dir) verhält sich wie Default: alle emittiert
 sokdir="$tmp/strictok"; sok="$(SCUT_MAIL_EML_DIR="$eml" SCUT_MAIL_ATTACH_DIR="$sokdir" SCUT_MAIL_ATTACH_STRICT=1 bash "$BIN" 2>/dev/null)"
 t "STRICT ohne Fehler: alle 6 emittiert" "6" "$(printf '%s\n' "$sok" | wc -l | tr -d ' ')"
+
+# ── L9/#51 Marvins Test-Seam: den IMAP-Offset selbst prüfen (nicht nur die stderr-Meldung) ──
+# SCUT_MAIL_EML_OFFSET_TEST=1 lässt den EML-Testmodus einen echten (synthetischen) Offset-
+# Token schreiben, damit sich "rückt vor" (Default) vs. "hält" (STRICT) am Offset-File selbst
+# beobachten lässt — sonst bleibt der EML-Testmodus offset-los wie bisher (kein Regressions-Risiko).
+offset_default="$tmp/offset-default"
+SCUT_MAIL_EML_DIR="$eml" SCUT_MAIL_EML_OFFSET_TEST=1 SCUT_MAIL_ATTACH_DIR="$rodir" \
+  SCUT_MAIL_OFFSET_FILE="$offset_default" bash "$BIN" >/dev/null 2>&1
+t "L9: Default (best-effort) rückt den Offset trotz Fehler vor" "1" "$([ -s "$offset_default" ] && echo 1 || echo 0)"
+ok "L9: Offset zeigt auf die letzte verarbeitete Mail" grep -qx 'emltest:006' "$offset_default"
+offset_strict="$tmp/offset-strict"
+SCUT_MAIL_EML_DIR="$eml" SCUT_MAIL_EML_OFFSET_TEST=1 SCUT_MAIL_ATTACH_DIR="$rodir" \
+  SCUT_MAIL_ATTACH_STRICT=1 SCUT_MAIL_OFFSET_FILE="$offset_strict" bash "$BIN" >/dev/null 2>&1
+t "L9: STRICT hält den Offset an (No-Loss, keine Datei geschrieben)" "0" "$([ -e "$offset_strict" ] && echo 1 || echo 0)"
 
 # Size-Cap: zu großer Anhang wird übersprungen + vermerkt, Datei NICHT geschrieben
 cdir="$tmp/capfiles"
@@ -187,6 +209,94 @@ cout="$(SCUT_MAIL_EML_DIR="$eml" SCUT_MAIL_ATTACH_DIR="$cdir" SCUT_MAIL_ATTACH_M
 t "Cap: Skip-Vermerk in der Zeile" "1" "$(printf '%s\n' "$cout" | sed -n 4p | grep -c 'übersprungen (>4B, im Postfach)')"
 ok "Cap: Anhang-Datei nicht geschrieben" test ! -e "$cdir/eml004-doc.pdf"
 ok "Cap: Volltext trotzdem da" test -s "$cdir/eml004-body.txt"
+
+# ── M6/#51: Caps gegen unbounded IO — Body-Cap · Anzahl-Cap · Aggregat-Byte-Cap ─────────────
+eml_m6_body="$tmp/eml_m6_body"; mkdir -p "$eml_m6_body"
+cat > "$eml_m6_body/01.eml" <<EOF
+From: partner@example.com
+To: team@example.com
+Subject: [acme] langer body
+Message-ID: <m6-body@example.com>
+Date: Fri, 04 Jul 2026 11:00:00 +0200
+
+$(python3 -c "print('ä'*60, end='')")
+EOF
+bodydir="$tmp/m6-body"
+bout="$(SCUT_MAIL_EML_DIR="$eml_m6_body" SCUT_MAIL_ATTACH_DIR="$bodydir" SCUT_MAIL_BODY_MAX=51 bash "$BIN")"
+t "M6 Body-Cap: Vermerk in der Zeile" "1" "$(printf '%s\n' "$bout" | grep -c 'gekürzt, > 51B')"
+ok "M6 Body-Cap: body.txt bleibt unter dem Cap (Header+51B)" test "$(wc -c < "$bodydir/eml001-body.txt")" -lt 250
+ok "M6 Body-Cap: body.txt ist gültiges UTF-8 (Schnitt an Zeichengrenze)" python3 -c "open('$bodydir/eml001-body.txt', encoding='utf-8').read()"
+ok "M6 Body-Cap: 25 'ä' erhalten (50 von 51 Bytes, Rest verworfen)" grep -q "$(python3 -c "print('ä'*25, end='')")" "$bodydir/eml001-body.txt"
+
+eml_m6_count="$tmp/eml_m6_count"; mkdir -p "$eml_m6_count"
+cat > "$eml_m6_count/01.eml" <<'EOF'
+From: partner@example.com
+To: team@example.com
+Subject: [acme] drei anhaenge count
+Message-ID: <m6-count@example.com>
+Date: Fri, 04 Jul 2026 11:01:00 +0200
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="B"
+
+--B
+Content-Type: text/plain
+
+Drei Anhaenge, Count-Cap testen.
+--B
+Content-Type: application/octet-stream
+Content-Disposition: attachment; filename="a.bin"
+
+AAA
+--B
+Content-Type: application/octet-stream
+Content-Disposition: attachment; filename="b.bin"
+
+BBB
+--B
+Content-Type: application/octet-stream
+Content-Disposition: attachment; filename="c.bin"
+
+CCC
+--B--
+EOF
+countdir="$tmp/m6-count"
+ccout="$(SCUT_MAIL_EML_DIR="$eml_m6_count" SCUT_MAIL_ATTACH_DIR="$countdir" SCUT_MAIL_ATTACH_MAX_COUNT=2 bash "$BIN")"
+t "M6 Count-Cap: nur 2 von 3 Anhängen gespeichert" "1" "$(printf '%s\n' "$ccout" | grep -c 'übersprungen (>2 Anhänge/Mail, im Postfach)')"
+ok "M6 Count-Cap: erster Anhang da" test -s "$countdir/eml001-a.bin"
+ok "M6 Count-Cap: zweiter Anhang da" test -s "$countdir/eml001-b.bin"
+ok "M6 Count-Cap: dritter NICHT gespeichert" test ! -e "$countdir/eml001-c.bin"
+
+eml_m6_total="$tmp/eml_m6_total"; mkdir -p "$eml_m6_total"
+cat > "$eml_m6_total/01.eml" <<EOF
+From: partner@example.com
+To: team@example.com
+Subject: [acme] zwei anhaenge total
+Message-ID: <m6-total@example.com>
+Date: Fri, 04 Jul 2026 11:02:00 +0200
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="B"
+
+--B
+Content-Type: text/plain
+
+Zwei Anhaenge, Total-Cap testen.
+--B
+Content-Type: application/octet-stream
+Content-Disposition: attachment; filename="big1.bin"
+
+$(python3 -c "print('A'*40, end='')")
+--B
+Content-Type: application/octet-stream
+Content-Disposition: attachment; filename="big2.bin"
+
+$(python3 -c "print('B'*40, end='')")
+--B--
+EOF
+totaldir="$tmp/m6-total"
+tcout="$(SCUT_MAIL_EML_DIR="$eml_m6_total" SCUT_MAIL_ATTACH_DIR="$totaldir" SCUT_MAIL_ATTACH_MAX_TOTAL=50 bash "$BIN")"
+t "M6 Total-Cap: zweiter Anhang übersprungen (Summe >50B)" "1" "$(printf '%s\n' "$tcout" | grep -c 'übersprungen (Summe >50B, im Postfach)')"
+ok "M6 Total-Cap: erster Anhang (40B) unter dem Cap gespeichert" test -s "$totaldir/eml001-big1.bin"
+ok "M6 Total-Cap: zweiter Anhang NICHT gespeichert (40+40 > 50)" test ! -e "$totaldir/eml001-big2.bin"
 
 # Default (ohne ATTACH_DIR) bleibt v1: nur zählen — Regression siehe Checks oben (Zeile 4)
 
