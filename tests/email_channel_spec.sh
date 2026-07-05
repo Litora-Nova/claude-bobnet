@@ -91,6 +91,46 @@ t "Plus-Adresse: target" "[acme]@Bill" "$(printf '%s\n' "$l3" | cut -f5)"
 t "Plus-Adresse uid-only: target" "[acme]" "$(printf '%s\n' "$l4" | cut -f5)"
 t "Anhang gezählt, nicht gespeichert" "1" "$(printf '%s\n' "$l4" | cut -f6 | grep -c '\[1 Anhang/Anhänge im Postfach\]')"
 
+# ── Attachment-Persistenz (#46, opt-in via SCUT_MAIL_ATTACH_DIR) ────────────────────────────
+cat > "$eml/05-umlaut-anhang.eml" <<'EOF'
+From: partner@example.com
+To: team@example.com
+Subject: [acme] Datei mit Umlaut-Namen
+Message-ID: <a5@example.com>
+Date: Fri, 04 Jul 2026 10:04:00 +0200
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="B"
+
+--B
+Content-Type: text/plain
+
+Anbei die Datei.
+--B
+Content-Type: image/png
+Content-Disposition: attachment; filename*=UTF-8''b%C3%B6se%20datei%3F.png
+
+FAKEPNG
+--B--
+EOF
+mdir="$tmp/mailfiles"
+aout="$(SCUT_MAIL_EML_DIR="$eml" SCUT_MAIL_ATTACH_DIR="$mdir" bash "$BIN")"
+ok "Duo: Volltext-File geschrieben" test -s "$mdir/eml004-body.txt"
+ok "Duo: Volltext enthält Header+Body" grep -q "Subject: Unterlagen" "$mdir/eml004-body.txt"
+ok "Anhang gespeichert (eml004-doc.pdf)" test -s "$mdir/eml004-doc.pdf"
+t "Zeile referenziert Volltext+Anhang" "1" \
+  "$(printf '%s\n' "$aout" | sed -n 4p | grep -c 'Volltext: eml004-body.txt · Anhänge: eml004-doc.pdf')"
+ok "Umlaut-Name ASCII-sanitiert" test -s "$mdir/eml005-bose_datei_.png"
+t "sanitierter Name in der Zeile" "1" "$(printf '%s\n' "$aout" | sed -n 5p | grep -c 'eml005-bose_datei_.png')"
+
+# Size-Cap: zu großer Anhang wird übersprungen + vermerkt, Datei NICHT geschrieben
+cdir="$tmp/capfiles"
+cout="$(SCUT_MAIL_EML_DIR="$eml" SCUT_MAIL_ATTACH_DIR="$cdir" SCUT_MAIL_ATTACH_MAX=4 bash "$BIN")"
+t "Cap: Skip-Vermerk in der Zeile" "1" "$(printf '%s\n' "$cout" | sed -n 4p | grep -c 'übersprungen (>4B, im Postfach)')"
+ok "Cap: Anhang-Datei nicht geschrieben" test ! -e "$cdir/eml004-doc.pdf"
+ok "Cap: Volltext trotzdem da" test -s "$cdir/eml004-body.txt"
+
+# Default (ohne ATTACH_DIR) bleibt v1: nur zählen — Regression siehe Checks oben (Zeile 4)
+
 # IMAP-Modus ohne Creds → exit 1 (klarer Fehler, kein Hänger)
 t "ohne Creds: exit 1" "1" \
   "$(SCUT_MAIL_EML_DIR= SCUT_MAIL_HOST= SCUT_MAIL_USER= SCUT_MAIL_PASS= SCUT_SECRETS_DIR="$tmp/leer" \
@@ -98,7 +138,7 @@ t "ohne Creds: exit 1" "1" \
 
 # Ende-zu-Ende-Smoke: Adapter → Router (Dry-Run) triagiert gerichtet + ungerichtet
 route="$(SCUT_MAIL_EML_DIR="$eml" bash "$BIN" | SCUT_ROUTER_DRYRUN=1 DEV_TEAM_REGISTRY="$tmp/keine.json" CONTEXT_UID=ctx bash "$ROUTER" 2>/dev/null)"
-t "Router-Smoke: gerichtet → inbox[acme]" "3" "$(printf '%s\n' "$route" | grep -c 'inbox\[acme\]')"
+t "Router-Smoke: gerichtet → inbox[acme]" "4" "$(printf '%s\n' "$route" | grep -c 'inbox\[acme\]')"
 t "Router-Smoke: ungerichtet → review-queue" "1" "$(printf '%s\n' "$route" | grep -c 'review-queue\[ctx\]')"
 
 echo "email_channel_spec: $pass passed, $fail failed"
