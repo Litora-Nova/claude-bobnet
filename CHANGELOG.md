@@ -4,6 +4,17 @@ All notable engine changes are documented here. Versioning follows SemVer (`VERS
 human-facing); machine compatibility is anchored separately by `SCHEMA_VERSION` (integer) —
 see `.claude/rules/contract.md`. `skills/update-bobs` points teams here after an update.
 
+## [0.10.0] — 2026-07-05
+
+### Fixed
+- **Bridge sender no longer puts the message in the SSH command position** (`bobnet-send.sh`,
+  #49, from a cross-model review): the payload now always goes over **stdin**, never as the
+  ssh remote command, so it can never be executed as shell input on a mis-/unwired receiver.
+  Peers must declare a safe receive mode in `peers.json` — `"forced": true` (forced-command
+  key that reads stdin) or `"recv": "<remote-cmd>"` (explicit trusted receive command);
+  neither → the sender refuses (fail hard). `tests/bridge_spec.sh` now at 45 checks (ssh
+  shim captures stdin separately from argv).
+
 ## [0.9.0] — 2026-07-05
 
 ### Added
