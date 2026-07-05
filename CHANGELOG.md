@@ -4,6 +4,46 @@ All notable engine changes are documented here. Versioning follows SemVer (`VERS
 human-facing); machine compatibility is anchored separately by `SCHEMA_VERSION` (integer) —
 see `.claude/rules/contract.md`. `skills/update-bobs` points teams here after an update.
 
+## [0.12.0] — 2026-07-05
+
+### Fixed
+- **BobNet-Bridge hardening, medium/low batch** (#51, from the cross-model review,
+  range a997383..fd1457a):
+  - `bridge-receive.sh`: the mandatory ACCEPT audit is now **fail-closed** — if the audit
+    write fails, the message is not delivered (new exit code 3, documented in the header)
+    instead of landing in the inbox without an audit trail. REJECT audit failures still
+    never block a rejection (best-effort there).
+  - `bridge-receive.sh`: the 4KB limit now counts **bytes**, not shell characters —
+    `${#raw}` undercounts in a multibyte locale, which could let an oversized message slip
+    past the check and skew the audit's byte count.
+  - `bridge-receive.sh`: the peer argument is now validated against a strict
+    `^[A-Za-z0-9_-]{1,32}$` pattern, and second-hand display names (`peers.json` `lead`,
+    the `TEAM_LEAD` fallback from `dev-team.env`) are control-character/newline-stripped
+    and length-capped (64) — closes a log-/inbox-line spoofing path.
+  - `bobnet-send.sh`: `BRIDGE_TRANSPORT_CMD` now only takes effect with the new
+    `BRIDGE_TEST_MODE=1` — without it, the override is ignored (warning, normal ssh/
+    forced/recv path runs instead), closing a shell-injection path through an untrusted
+    `peers.json`.
+  - `bobnet-send.sh`: adds a best-effort sender audit (`BOBNET_SEND_LOG`, append-only,
+    ts·peer·bytes·rc per send), symmetric to the receiver's `BRIDGE_LOG` — `team-rules/
+    comms.md` already called for bidirectional audit.
+  - `scripts/channels/email.sh`: the persisted attachment/body pipeline now bounds its I/O
+    instead of decoding unboundedly before checking size — new `SCUT_MAIL_BODY_MAX`
+    (default 256 KB, UTF-8-safe truncation of the persisted full text, which previously
+    had no cap at all), `SCUT_MAIL_ATTACH_MAX_COUNT` (default 10 per mail) and
+    `SCUT_MAIL_ATTACH_MAX_TOTAL` (default 50 MB aggregate per mail); oversized attachments
+    are now estimated from their encoded (base64) length and skipped **before** the full
+    decode. Same degrade-per-mail semantics as before (digest note, files stay in the
+    mailbox, `SCUT_MAIL_ATTACH_STRICT` still respected).
+  - `scripts/channels/email.sh`: the "persistence failed" note no longer misreports
+    "0 Anhänge" when only the body write failed (no attachments involved).
+  - `tests/email_channel_spec.sh`: the unwritable-attachment-dir fixture now uses an
+    ENOTDIR path instead of `chmod 555`, so it fails deterministically even when the
+    suite runs as root; adds a direct offset-file assertion (via the new, test-only
+    `SCUT_MAIL_EML_OFFSET_TEST`) for the STRICT-vs-default no-loss invariant from 0.11.0,
+    not just its stderr message. `tests/bridge_spec.sh` now at 67 checks,
+    `tests/email_channel_spec.sh` at 55.
+
 ## [0.11.0] — 2026-07-05
 
 ### Added
