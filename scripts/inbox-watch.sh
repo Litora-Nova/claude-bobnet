@@ -65,12 +65,15 @@ lead_state() {
   printf '%s:%s' "${st:-none}" "$age"
 }
 
-# watch_sig <standup> — Signatur "größe:anzahl" von _inbox.md + _inbox/.
+# watch_sig <standup> — Signatur "größe:anzahl:queue" von _inbox.md + _inbox/ + _review-queue.md
+# (die Review-Queue ist ein Eingang wie jeder andere — ungerichtete Router-Mails landen dort
+#  und dürfen nicht unbemerkt liegen; Fleet-Fund 2026-07-05: Kundenmail lag ~14h ungesehen).
 watch_sig() {
-  local sd="$1" size=0 cnt=0
+  local sd="$1" size=0 cnt=0 q=0
   [ -f "$sd/_inbox.md" ] && size="$(wc -c < "$sd/_inbox.md" | tr -d ' ')"
   [ -d "$sd/_inbox" ] && cnt="$(find "$sd/_inbox" -type f 2>/dev/null | wc -l | tr -d ' ')"
-  printf '%s:%s' "$size" "$cnt"
+  [ -f "$sd/_review-queue.md" ] && q="$(wc -c < "$sd/_review-queue.md" | tr -d ' ')"
+  printf '%s:%s:%s' "$size" "$cnt" "$q"
 }
 
 # Aktive Projekte als TSV "uid<TAB>path<TAB>standup" aus der Registry.
@@ -133,7 +136,7 @@ while IFS=$'\t' read -r uid path standup; do
   fi
 
   if mux_has "$session" 2>/dev/null; then
-    if mux_send "$session" "📬 [$uid] Neue Inbox-Einträge — bitte $standup/_inbox.md lesen." 2>/dev/null; then
+    if mux_send "$session" "📬 [$uid] Neue Eingänge — bitte $standup/_inbox.md (+ _review-queue.md) lesen." 2>/dev/null; then
       echo "[inbox-watch] $uid: NUDGE → $session (Lead $lead war $st)"
       printf '%s' "$sig" > "$statef"; n_nudge=$((n_nudge+1))
     else
