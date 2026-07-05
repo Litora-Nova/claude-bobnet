@@ -33,7 +33,19 @@
 # Env:
 #   BRIDGE_TRANSPORT_CMD  Transport-Override NUR für Tests (bekommt die Zeile auf stdin;
 #                         Platzhalter {host} {user} {key} werden ersetzt). Umgeht den
-#                         forced/recv-Guard bewusst — nicht mit untrusted peers.json nutzen.
+#                         forced/recv-Guard bewusst — deshalb wirkt er NUR, wenn zusätzlich
+#                         BRIDGE_TEST_MODE=1 gesetzt ist; sonst wird er ignoriert (Warnung,
+#                         normaler ssh/forced/recv-Pfad läuft) — eine untrusted peers.json
+#                         könnte sonst über diesen Override beliebige Shell-Kommandos
+#                         einschleusen (Codex-Review M5/#51).
+#   BRIDGE_TEST_MODE      1 = erlaubt BRIDGE_TRANSPORT_CMD (siehe oben). NUR in Tests setzen.
+#   BOBNET_SEND_LOG       Sender-Audit-Log, append-only, eine Zeile pro Send (ts · peer ·
+#                         bytes · rc). Best-effort — ein Schreibfehler blockiert das Senden
+#                         NICHT (anders als der Empfänger-Audit, der ACCEPTs fail-closed
+#                         behandelt). Default: $STANDUP_DIR/bridge-send.log falls STANDUP_DIR
+#                         gesetzt, sonst neben der aufgelösten peers.json — Symmetrie zu
+#                         bridge-receive.sh BRIDGE_LOG (Codex-Review L8/#51, comms.md §7
+#                         verlangt beidseitiges Audit).
 # Exit: 0 zugestellt · 1 Transportfehler · 2 Fehlbedienung / Peer unbekannt/unsicher / REJECT.
 set -uo pipefail
 
@@ -59,6 +71,15 @@ peers_file="${peers_file:-$HOME/.claude/bobiverse-peers.json}"
 case "$peers_file" in "~"/*) peers_file="$HOME/${peers_file#\~/}";; esac
 [ -f "$peers_file" ] || { echo "bobnet-send: keine peers.json ($peers_file) — Peer '$peer' nicht auflösbar" >&2; exit 2; }
 
+# Sender-Audit-Log auflösen (L8/#51) — symmetrisch zu bridge-receive.sh BRIDGE_LOG.
+if [ -n "${BOBNET_SEND_LOG:-}" ]; then SENDLOG="$BOBNET_SEND_LOG"
+elif [ -n "${STANDUP_DIR:-}" ]; then SENDLOG="$STANDUP_DIR/bridge-send.log"
+else SENDLOG="$(dirname "$peers_file")/bridge-send.log"; fi
+send_audit() { # send_audit <peer> <bytes> <rc> — append-only, best-effort (nicht senden-blockierend)
+  mkdir -p "$(dirname "$SENDLOG")" 2>/dev/null
+  printf '%s | peer=%s | %sB | rc=%s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$1" "$2" "$3" >> "$SENDLOG" 2>/dev/null || true
+}
+
 entry="$(PEERS_FILE="$peers_file" PEER="$peer" python3 - <<'PY'
 import json, os, sys
 try:
@@ -81,12 +102,27 @@ recv="$(printf '%s' "$entry" | cut -f5)"
 [ -n "$host" ] || { echo "bobnet-send: Peer '$peer' nicht in $peers_file" >&2; exit 2; }
 case "$key" in "~"/*) key="$HOME/${key#\~/}";; esac
 
+bytes="$(printf '%s' "$line" | LC_ALL=C wc -c | tr -d ' ')"
+
+use_override=0
 if [ -n "${BRIDGE_TRANSPORT_CMD:-}" ]; then
+  if [ "${BRIDGE_TEST_MODE:-0}" = 1 ]; then
+    use_override=1
+  else
+    # M5/#51: der Override wird bewusst NICHT honoriert ohne BRIDGE_TEST_MODE=1 — sonst
+    # könnte eine untrusted peers.json (oder eine falsch gesetzte Env) hier beliebige
+    # Shell-Kommandos einschleusen. Fällt durch in den normalen forced/recv-Pfad unten.
+    echo "bobnet-send: BRIDGE_TRANSPORT_CMD ignoriert (nur mit BRIDGE_TEST_MODE=1 aktiv — Shell-Injection-Schutz, siehe #51/M5)" >&2
+  fi
+fi
+
+if [ "$use_override" = 1 ]; then
   cmd="${BRIDGE_TRANSPORT_CMD//\{host\}/$host}"
   cmd="${cmd//\{user\}/$user_}"
   cmd="${cmd//\{key\}/$key}"
   printf '%s\n' "$line" | bash -c "$cmd"
   rc=$?
+  send_audit "$peer" "$bytes" "$rc"
 else
   # H1: Payload NIE als Kommando. Sicher nur, wenn die Gegenseite ihn als Daten empfängt:
   #   recv gesetzt → explizites Empfangskommando (trusted config); sonst forced-command-Key.
@@ -100,6 +136,7 @@ else
   printf '%s\n' "$line" | ssh "${keyopt[@]}" -o BatchMode=yes -o ConnectTimeout=6 \
     "${user_:+$user_@}$host" ${recv:+"$recv"} >/dev/null 2>&1
   rc=$?
+  send_audit "$peer" "$bytes" "$rc"
   [ "$rc" -eq 255 ] && { echo "bobnet-send: SSH-Transport zu $peer ($host) fehlgeschlagen" >&2; exit 1; }
 fi
 if [ "$rc" -ne 0 ]; then

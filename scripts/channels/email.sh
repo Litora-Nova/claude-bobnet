@@ -37,6 +37,21 @@
 #                       (Anhänge nur gezählt, bleiben im Postfach).
 #   SCUT_MAIL_ATTACH_MAX   max. Bytes pro Anhang (Default 10485760 = 10MB); größere werden
 #                       übersprungen und in der Zeile vermerkt (bleiben im Postfach).
+#                       Größen-Vorprüfung: die Bytes werden — wo möglich (Base64) — aus der
+#                       KODIERTEN Länge abgeschätzt (~Länge*3/4), BEVOR decodiert wird, damit
+#                       ein überdimensionierter Anhang nicht erst voll decodiert werden muss,
+#                       nur um verworfen zu werden (Codex-Review M6/#51, unbounded IO).
+#   SCUT_MAIL_ATTACH_MAX_COUNT   max. Anzahl persistierter Anhänge PRO MAIL (Default 10);
+#                       darüber hinausgehende werden übersprungen (bleiben im Postfach, Zeile
+#                       vermerkt "N übersprungen"; M6/#51).
+#   SCUT_MAIL_ATTACH_MAX_TOTAL   max. Bytes AGGREGIERT über alle Anhänge einer Mail (Default
+#                       52428800 = 50MB); ab hier werden weitere Anhänge übersprungen, auch
+#                       wenn sie einzeln unter SCUT_MAIL_ATTACH_MAX liegen (M6/#51).
+#   SCUT_MAIL_BODY_MAX   max. Bytes für den persistierten Volltext (<prefix>-body.txt);
+#                       Default 262144 (256 KB). Überschreitung wird an der UTF-8-Zeichengrenze
+#                       gekürzt + im Volltext und in der Event-Zeile vermerkt (kein Fehler,
+#                       der Digest in der Zeile bleibt wie bisher auf 400 Zeichen gecappt;
+#                       M6/#51 — bisher hatte der persistierte Volltext GAR keinen Cap).
 #   SCUT_MAIL_ATTACH_STRICT  Verhalten bei fehlgeschlagener Persistenz (Issue #50, Codex-H2):
 #                       DEFAULT (unset/0) = best-effort: Mail wird zugestellt, Offset rückt vor,
 #                       die Zeile trägt „Persistenz fehlgeschlagen"; RECOVERY = Anker manuell auf
@@ -47,6 +62,13 @@
 #                       head-of-line (laut in stderr/Journal, kein stiller Verlust).
 #   SCUT_MAIL_EML_DIR   TESTMODUS: statt IMAP alle *.eml in diesem Ordner parsen (sortiert,
 #                       kein Offset-Write) — macht Parsing/Triage ohne Server spec-bar.
+#   SCUT_MAIL_EML_OFFSET_TEST   TESTMODUS-Zusatz (nur mit SCUT_MAIL_EML_DIR): 1 = pro Datei
+#                       einen synthetischen Offset-Token ("emltest:NNN" statt "-") erzeugen,
+#                       damit Specs die STRICT/Default-Offset-Semantik (rückt vor / hält)
+#                       OHNE echten IMAP-Server prüfen können (Marvins Test-Seam, #51/L9).
+#                       Wird in diesem Modus weiterhin NIE zurückgelesen — keine produktive
+#                       Wirkung. Default(unset) bleibt exakt der bisherige EML-Testmodus
+#                       (kein Offset-Write).
 #
 # Host-Verdrahtung (Instanz-Seite, analog scut-poll): systemd-Template pro Projekt, Env aus
 # dev-team.env, CONTEXT_UID=<uid> für den Router. Secrets/Enable = human-only (T4).
@@ -135,14 +157,44 @@ emit_event() {
 #   "<uidvalidity>:<uid>\t<ext_id>\t<ts>\t<sender>\t<text>", emittiert Events, schreibt Offset.
 poll_once() {
   local parsed
-  parsed="$(SCUT_MAIL_EML_DIR="$EML_DIR" MAIL_HOST="$HOST" MAIL_USER="$USER_" MAIL_PASS="$PASS" \
+  parsed="$(SCUT_MAIL_EML_DIR="$EML_DIR" SCUT_MAIL_EML_OFFSET_TEST="${SCUT_MAIL_EML_OFFSET_TEST:-}" \
+            MAIL_HOST="$HOST" MAIL_USER="$USER_" MAIL_PASS="$PASS" \
             MAIL_PORT="$PORT" MAIL_MAILBOX="$MAILBOX" MAIL_OFFSET_FILE="$OFFSET_FILE" \
             MAIL_ATTACH_DIR="${SCUT_MAIL_ATTACH_DIR:-}" MAIL_ATTACH_MAX="${SCUT_MAIL_ATTACH_MAX:-10485760}" \
+            MAIL_BODY_MAX="${SCUT_MAIL_BODY_MAX:-262144}" \
+            MAIL_ATTACH_MAX_COUNT="${SCUT_MAIL_ATTACH_MAX_COUNT:-10}" \
+            MAIL_ATTACH_MAX_TOTAL="${SCUT_MAIL_ATTACH_MAX_TOTAL:-52428800}" \
             python3 - <<'PY'
 import email, email.header, email.utils, glob, imaplib, os, re, sys, time, unicodedata
 
 ATTACH_DIR = os.environ.get("MAIL_ATTACH_DIR", "")
 ATTACH_MAX = int(os.environ.get("MAIL_ATTACH_MAX") or 10485760)
+BODY_MAX = int(os.environ.get("MAIL_BODY_MAX") or 262144)
+ATTACH_MAX_COUNT = int(os.environ.get("MAIL_ATTACH_MAX_COUNT") or 10)
+ATTACH_MAX_TOTAL = int(os.environ.get("MAIL_ATTACH_MAX_TOTAL") or 52428800)
+
+def fmt_size(n):
+    return "%dMB" % (n // 1048576) if n >= 1048576 else "%dB" % n
+
+def truncate_utf8(s, max_bytes):
+    # An der Byte-Grenze schneiden, dann unvollständige Trailing-Bytes verwerfen (M6/#51:
+    # der persistierte Volltext hatte bisher GAR keinen Cap).
+    raw = s.encode("utf-8", "replace")
+    if len(raw) <= max_bytes:
+        return s, False
+    return raw[:max_bytes].decode("utf-8", "ignore"), True
+
+def estimate_encoded_bytes(part):
+    # Größen-Vorprüfung VOR dem vollen Decode (M6/#51, unbounded IO): für Base64 lässt sich
+    # die decodierte Größe aus der kodierten Länge abschätzen (~Länge*3/4), ohne zu decodieren.
+    # Andere Transfer-Encodings (7bit/8bit/quoted-printable) schrumpfen beim Decode nie
+    # wesentlich — die rohe Länge ist dort schon eine sichere Obergrenze.
+    raw = part.get_payload(decode=False)
+    if isinstance(raw, list):
+        return 0
+    raw_len = len(str(raw or "").encode("utf-8", "ignore"))
+    enc = (part.get("Content-Transfer-Encoding") or "").strip().lower()
+    return (raw_len * 3) // 4 if enc == "base64" else raw_len
 
 def norm(s):
     return " ".join(str(s or "").split())
@@ -185,14 +237,35 @@ def sanitize_name(name):
 def persist_mail(prefix, sender, date_hdr, subject, body, atts):
     # Digest+Volltext-Duo: Volltext + Anhänge als Dateien, Rückgabe = Zeilen-Suffix.
     os.makedirs(ATTACH_DIR, exist_ok=True)
+    body_out, body_truncated = truncate_utf8(body, BODY_MAX)
     with open(os.path.join(ATTACH_DIR, "%s-body.txt" % prefix), "w",
               encoding="utf-8", errors="replace") as fh:
-        fh.write("From: %s\nDate: %s\nSubject: %s\n\n%s" % (sender, date_hdr, subject, body))
-    saved, skipped, seen = [], 0, set()
+        fh.write("From: %s\nDate: %s\nSubject: %s\n\n%s" % (sender, date_hdr, subject, body_out))
+        if body_truncated:
+            fh.write("\n\n[... gekürzt, Volltext > %s ...]" % fmt_size(BODY_MAX))
+    saved, seen = [], set()
+    skipped_size = skipped_count = skipped_total = 0
+    total_bytes = 0
     for part in atts:
+        if len(saved) >= ATTACH_MAX_COUNT:
+            skipped_count += 1
+            continue
+        # Vorprüfung aus der kodierten Länge, BEVOR decodiert wird (M6/#51) — ein
+        # überdimensionierter Anhang muss so nie voll ins RAM decodiert werden, nur um
+        # verworfen zu werden.
+        est = estimate_encoded_bytes(part)
+        if est > ATTACH_MAX:
+            skipped_size += 1
+            continue
+        if total_bytes + est > ATTACH_MAX_TOTAL:
+            skipped_total += 1
+            continue
         data = part.get_payload(decode=True) or b""
         if len(data) > ATTACH_MAX:
-            skipped += 1
+            skipped_size += 1
+            continue
+        if total_bytes + len(data) > ATTACH_MAX_TOTAL:
+            skipped_total += 1
             continue
         # Kollisions-Dedup NUR innerhalb der Mail (Review-A1); bewusst nicht gegen die
         # Disk, damit ein Batch-Retry idempotent überschreibt statt -2-Duplikate zu stapeln.
@@ -206,13 +279,22 @@ def persist_mail(prefix, sender, date_hdr, subject, body, atts):
         with open(os.path.join(ATTACH_DIR, "%s-%s" % (prefix, fname)), "wb") as fh:
             fh.write(data)
         saved.append("%s-%s" % (prefix, fname))
+        total_bytes += len(data)
     note = " [Volltext: %s-body.txt" % prefix
+    if body_truncated:
+        note += " (gekürzt, > %s)" % fmt_size(BODY_MAX)
     if saved:
         note += " · Anhänge: " + (", ".join(saved) if len(saved) <= 3
                                   else "%d Dateien (%s-*)" % (len(saved), prefix))
-    if skipped:
-        cap = "%dMB" % (ATTACH_MAX // 1048576) if ATTACH_MAX >= 1048576 else "%dB" % ATTACH_MAX
-        note += " · %d übersprungen (>%s, im Postfach)" % (skipped, cap)
+    skip_notes = []
+    if skipped_size:
+        skip_notes.append("%d übersprungen (>%s, im Postfach)" % (skipped_size, fmt_size(ATTACH_MAX)))
+    if skipped_count:
+        skip_notes.append("%d übersprungen (>%d Anhänge/Mail, im Postfach)" % (skipped_count, ATTACH_MAX_COUNT))
+    if skipped_total:
+        skip_notes.append("%d übersprungen (Summe >%s, im Postfach)" % (skipped_total, fmt_size(ATTACH_MAX_TOTAL)))
+    if skip_notes:
+        note += " · " + " · ".join(skip_notes)
     return note + "]"
 
 PLUS_RE = re.compile(r"[A-Za-z0-9._%-]+\+([A-Za-z0-9_-]+)@")
@@ -252,7 +334,12 @@ def line_for(key, msg, prefix):
         except Exception as e:
             print("email-channel: Persistenz fehlgeschlagen (%s) — Dateien bleiben im Postfach" % e,
                   file=sys.stderr)
-            text += " [Persistenz fehlgeschlagen — %d Anhang/Anhänge im Postfach]" % len(atts)
+            # N1/#51: bei 0 Anhängen scheiterte nur der body.txt-Write — "0 Anhänge im
+            # Postfach" wäre dann eine irreführende Formulierung (es gibt ja keine).
+            if atts:
+                text += " [Persistenz fehlgeschlagen — %d Anhang/Anhänge im Postfach]" % len(atts)
+            else:
+                text += " [Persistenz fehlgeschlagen — Mailtext nicht abgelegt]"
             pfail = "1"
     elif atts:
         text += " [%d Anhang/Anhänge im Postfach]" % len(atts)
@@ -265,9 +352,15 @@ def line_for(key, msg, prefix):
 
 eml_dir = os.environ.get("SCUT_MAIL_EML_DIR", "")
 if eml_dir:
+    # L9/#51 Test-Seam: mit SCUT_MAIL_EML_OFFSET_TEST=1 einen synthetischen Offset-Token
+    # statt "-" liefern, damit Specs die STRICT/Default-Offset-Semantik (Bash-Seite unten)
+    # auch ohne echten IMAP-Server prüfen können. Wird hier nie zurückgelesen — der normale
+    # EML-Testmodus (Default) bleibt exakt wie bisher offset-los.
+    offset_seam = os.environ.get("SCUT_MAIL_EML_OFFSET_TEST", "") == "1"
     for i, path in enumerate(sorted(glob.glob(os.path.join(eml_dir, "*.eml"))), 1):
         with open(path, "rb") as fh:
-            line_for("-", email.message_from_bytes(fh.read()), "eml%03d" % i)
+            key = "emltest:%03d" % i if offset_seam else "-"
+            line_for(key, email.message_from_bytes(fh.read()), "eml%03d" % i)
     sys.exit(0)
 
 off_file = os.environ["MAIL_OFFSET_FILE"]
