@@ -25,7 +25,9 @@ cat > "$tmp/registry.json" <<JSON
 JSON
 printf 'export TEAM_LEAD="Zed"\n' > "$tmp/alpha/_dev_team/dev-team.env"
 cat > "$tmp/peers.json" <<JSON
-{ "codex-2": { "host": "203.0.113.7", "user": "acme", "key": "$tmp/fakekey", "lead": "Rob" },
+{ "codex-2":   { "host": "203.0.113.7", "user": "acme", "key": "$tmp/fakekey", "lead": "Rob", "forced": true },
+  "recvpeer":  { "host": "203.0.113.9", "user": "acme", "key": "$tmp/fakekey", "recv": "~/bobnet/recv.sh" },
+  "unsafepeer":{ "host": "203.0.113.8" },
   "plainpeer": { "host": "203.0.113.8" } }
 JSON
 INBOX="$tmp/alpha/_dev_team/standup/_inbox.md"
@@ -92,19 +94,38 @@ t "send: Override bekommt geplättete Zeile" "[alpha]@Bill: zeile1 zeile2" "$(tr
 t "send: Remote-REJECT (rc 2) propagiert als 2" "2" \
   "$(BOBNET_PEERS="$tmp/peers.json" BRIDGE_TRANSPORT_CMD="exit 2" bash "$SEND" codex-2 "[alpha] hi" >/dev/null 2>&1; echo $?)"
 
-# ── ssh-Shim (PATH-Fake): exakte argv + Fehlerzweige des ECHTEN ssh-Pfads ───────────────────
+# ── ssh-Shim (PATH-Fake): exakte argv + STDIN + Fehlerzweige des ECHTEN ssh-Pfads ───────────
 mkdir -p "$tmp/bin"
 cat > "$tmp/bin/ssh" <<SH
 #!/usr/bin/env bash
 printf '%s\n' "\$@" > "$tmp/ssh-argv.txt"
+cat > "$tmp/ssh-stdin.txt"
 exit "\${FAKE_SSH_RC:-0}"
 SH
 chmod +x "$tmp/bin/ssh"
+
+# H1 (#49): forced-Peer → Payload auf STDIN, KEIN Kommando in argv
 PATH="$tmp/bin:$PATH" BOBNET_PEERS="$tmp/peers.json" bash "$SEND" codex-2 "[alpha]@Bill: echt per ssh" >/dev/null
 ok "ssh-argv: -i <key>" grep -qx -- "$tmp/fakekey" "$tmp/ssh-argv.txt"
 ok "ssh-argv: BatchMode=yes" grep -qx -- "BatchMode=yes" "$tmp/ssh-argv.txt"
 ok "ssh-argv: user@host" grep -qx -- "acme@203.0.113.7" "$tmp/ssh-argv.txt"
-t "ssh-argv: Nachricht als Kommando-String (letztes Arg)" "[alpha]@Bill: echt per ssh" "$(tail -1 "$tmp/ssh-argv.txt")"
+t "H1: forced → letztes argv ist user@host, NICHT die Nachricht" "acme@203.0.113.7" "$(tail -1 "$tmp/ssh-argv.txt")"
+t "H1: Nachricht steht NICHT in argv" "0" "$(grep -c 'echt per ssh' "$tmp/ssh-argv.txt")"
+t "H1: Nachricht kommt über STDIN an" "[alpha]@Bill: echt per ssh" "$(tr -d '\n' < "$tmp/ssh-stdin.txt")"
+
+# H1: recv-Peer → recv-Kommando (unsere Config) IN argv, Payload weiter auf stdin
+PATH="$tmp/bin:$PATH" BOBNET_PEERS="$tmp/peers.json" bash "$SEND" recvpeer "[alpha]@Bill: via recv" >/dev/null
+t "H1: recv-Kommando in argv (letztes Arg)" "~/bobnet/recv.sh" "$(tail -1 "$tmp/ssh-argv.txt")"
+t "H1: Payload NICHT in recv-argv" "0" "$(grep -c 'via recv' "$tmp/ssh-argv.txt")"
+t "H1: recv-Payload über stdin" "[alpha]@Bill: via recv" "$(tr -d '\n' < "$tmp/ssh-stdin.txt")"
+
+# H1 Fail-Hard: Peer ohne forced UND ohne recv → verweigern (kein Senden an eine Login-Shell)
+t "H1 Fail-Hard: weder forced noch recv → exit 2" "2" \
+  "$(PATH="$tmp/bin:$PATH" BOBNET_PEERS="$tmp/peers.json" bash "$SEND" unsafepeer "[alpha] hi" >/dev/null 2>&1; echo $?)"
+rm -f "$tmp/ssh-argv.txt"
+PATH="$tmp/bin:$PATH" BOBNET_PEERS="$tmp/peers.json" bash "$SEND" unsafepeer "[alpha] hi" >/dev/null 2>&1
+ok "H1 Fail-Hard: ssh gar nicht aufgerufen (keine argv-Datei)" test ! -e "$tmp/ssh-argv.txt"
+
 t "ssh rc=255 → Transportfehler exit 1" "1" \
   "$(PATH="$tmp/bin:$PATH" FAKE_SSH_RC=255 BOBNET_PEERS="$tmp/peers.json" bash "$SEND" codex-2 "[alpha] hi" >/dev/null 2>&1; echo $?)"
 t "ssh rc=2 (Remote-REJECT) → exit 2" "2" \

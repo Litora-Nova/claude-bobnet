@@ -49,6 +49,9 @@ Die **Cross-Installation-Bridge** (Issue #45) läuft bewusst NICHT über den Rou
 `../bridge-receive.sh` (forced-command-Ziel, Pflicht-Adressierung `[uid]`, stempelt
 serverseitig, flock-Append + Audit) + `../bobnet-send.sh` (peers.json). Eigener
 Trust-Pfad — Schlüssel/`authorized_keys` = Instanz + `{HUMAN}` (T4).
+Der Sender schickt die Nachricht **immer auf stdin, nie als SSH-Kommando** (#49); der Peer
+muss in `peers.json` als `"forced": true` (forced-command-Empfänger liest stdin) oder mit
+`"recv": "<remote-cmd>"` deklariert sein, sonst verweigert der Sender (fail hard).
 
 ## Verifikation
 
