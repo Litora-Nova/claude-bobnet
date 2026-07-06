@@ -60,6 +60,20 @@
 #                       Poll gestoppt — die UID kommt automatisch beim nächsten Poll erneut (kein
 #                       Anhang-Verlust). Preis: DAUER-Fehler (Disk voll) stallt den Kanal
 #                       head-of-line (laut in stderr/Journal, kein stiller Verlust).
+#   SCUT_MAIL_SENDERS_FILE   known-sender mapping (Issue #53): eine bekannte Absender-Adresse
+#                       pro Zeile ("<adresse>" oder "<adresse> @Agent"), `#`-Kommentare/Leerzeilen
+#                       ignoriert, Adress-Match case-insensitive. Match UND die Mail hat noch
+#                       keinen Subject-Tag/Plus-Adress-Treffer → wird als "@<Agent>" (Default
+#                       TEAM_LEAD, sonst der gemappte Agent) VOR den Text gestellt, landet also
+#                       gerichtet in der Projekt-Inbox statt ungerichtet in der Review-Queue —
+#                       die Haupt-Kundenmail kommt i. d. R. OHNE [uid]@Agent-Adressierung.
+#                       Default (unset): $PROJECT_ROOT/_dev_team/team-rules/scut-mail.senders,
+#                       falls PROJECT_ROOT gesetzt ist (Instanz-Daten, NIE ins Engine-Repo
+#                       committen); fehlt die Datei oder ist sie leer → Verhalten unverändert
+#                       (ungerichtet → Review-Queue, wie bisher). Niedrigste Priorität: greift
+#                       NUR, wenn Subject-Tag UND Plus-Adresse nicht gezogen haben.
+#   SCUT_MAIL_SENDERS_DEFAULT_AGENT   Agent für einen Treffer ohne explizites "@Agent" in der
+#                       Mapping-Zeile. Default: $TEAM_LEAD (aus dev-team.env), sonst "Bob".
 #   SCUT_MAIL_EML_DIR   TESTMODUS: statt IMAP alle *.eml in diesem Ordner parsen (sortiert,
 #                       kein Offset-Write) — macht Parsing/Triage ohne Server spec-bar.
 #   SCUT_MAIL_EML_OFFSET_TEST   TESTMODUS-Zusatz (nur mit SCUT_MAIL_EML_DIR): 1 = pro Datei
@@ -101,6 +115,14 @@ MAILBOX="$(cred SCUT_MAIL_MAILBOX email_mailbox INBOX)"
 OFFSET_FILE="${SCUT_MAIL_OFFSET_FILE:-$SECRETS/email_offset}"
 ONESHOT="${SCUT_MAIL_ONESHOT:-0}"
 INTERVAL="${SCUT_MAIL_POLL_INTERVAL:-120}"
+
+# #53: known-sender mapping — Instanz-Daten (nie im Engine-Repo), Default abgeleitet vom
+# PROJECT_ROOT der (gesourcten) dev-team.env; Pfad + Default-Agent bleiben env-übersteuerbar
+# (Specs setzen SCUT_MAIL_SENDERS_FILE direkt, ohne PROJECT_ROOT zu brauchen).
+SENDERS_FILE="${SCUT_MAIL_SENDERS_FILE:-}"
+[ -z "$SENDERS_FILE" ] && [ -n "${PROJECT_ROOT:-}" ] \
+  && SENDERS_FILE="$PROJECT_ROOT/_dev_team/team-rules/scut-mail.senders"
+SENDERS_DEFAULT_AGENT="${SCUT_MAIL_SENDERS_DEFAULT_AGENT:-${TEAM_LEAD:-Bob}}"
 
 if [ -z "$EML_DIR" ] && { [ -z "$HOST" ] || [ -z "$USER_" ] || [ -z "$PASS" ]; }; then
   echo "email-channel: SCUT_MAIL_HOST/USER/PASS fehlen (Env oder $SECRETS/email_*)" >&2
@@ -164,6 +186,7 @@ poll_once() {
             MAIL_BODY_MAX="${SCUT_MAIL_BODY_MAX:-262144}" \
             MAIL_ATTACH_MAX_COUNT="${SCUT_MAIL_ATTACH_MAX_COUNT:-10}" \
             MAIL_ATTACH_MAX_TOTAL="${SCUT_MAIL_ATTACH_MAX_TOTAL:-52428800}" \
+            MAIL_SENDERS_FILE="$SENDERS_FILE" MAIL_SENDERS_DEFAULT_AGENT="$SENDERS_DEFAULT_AGENT" \
             python3 - <<'PY'
 import email, email.header, email.utils, glob, imaplib, os, re, sys, time, unicodedata
 
@@ -311,6 +334,34 @@ def plus_tag(msg):
             return t
     return ""
 
+SENDERS_FILE = os.environ.get("MAIL_SENDERS_FILE", "")
+SENDERS_DEFAULT_AGENT = os.environ.get("MAIL_SENDERS_DEFAULT_AGENT") or "Bob"
+
+def known_sender_tag(addr):
+    # #53: bekannte Absender-Adresse (Feld-Hauptfall: Kundenmail ohne [uid]@Agent-Tag) →
+    # gerichtetes "@<Agent>" statt ungerichtet in die Review-Queue. NUR Fallback — line_for()
+    # ruft das erst, wenn Subject-Tag UND Plus-Adresse leer geblieben sind. Kein uid im Tag
+    # nötig: der Poller läuft pro Projekt (CONTEXT_UID), der Router adressiert "@Agent" ohne
+    # [uid] an genau dieses Kontext-Bobiverse.
+    if not SENDERS_FILE or not addr:
+        return ""
+    addr_l = addr.strip().lower()
+    try:
+        with open(SENDERS_FILE, encoding="utf-8") as fh:
+            for raw in fh:
+                s = raw.strip()
+                if not s or s.startswith("#"):
+                    continue
+                parts = s.split(None, 1)
+                if parts[0].strip().lower() != addr_l:
+                    continue
+                if len(parts) > 1 and parts[1].strip().startswith("@"):
+                    return parts[1].split()[0]
+                return "@" + SENDERS_DEFAULT_AGENT
+    except OSError:
+        return ""
+    return ""
+
 def line_for(key, msg, prefix):
     subject = dec_header(msg.get("Subject", "")) or "(kein Betreff)"
     body, atts = body_and_attachments(msg)
@@ -344,7 +395,7 @@ def line_for(key, msg, prefix):
     elif atts:
         text += " [%d Anhang/Anhänge im Postfach]" % len(atts)
     if not subject.startswith(("[", "@")):
-        tag = plus_tag(msg)
+        tag = plus_tag(msg) or known_sender_tag(addr)
         if tag:
             text = tag + " " + text
     row = [key, ext, str(ts), sender, pfail, text]

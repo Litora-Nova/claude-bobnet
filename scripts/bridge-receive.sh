@@ -21,12 +21,15 @@
 #   - Kanon-Zeile wird SERVERSEITIG gestempelt: `<ts> | @<Agent> | BRIDGE (<peer>): <text>`
 #     (+ Signatur `— (<lead>@<peer>)`, wenn peers.json den Peer-Lead kennt); Append mit flock
 #   - Audit-PFLICHT: jede Annahme/Ablehnung → $BRIDGE_LOG (ts · accept/reject+Grund · peer ·
-#     target · bytes · Auszug). ACCEPT ist fail-closed (Codex-Review M3/#51): schlägt der
-#     Audit-Write für eine Annahme fehl, wird NICHT zugestellt (siehe Exit 3). Ein REJECT wird
-#     dagegen IMMER abgelehnt, auch wenn dessen Audit-Write scheitert (best-effort dort).
+#     target · bytes · Auszug). Fail-closed VOR der Zustellung (Codex-Review M3/#51): ist der
+#     Log-Pfad nicht schreibbar (Preflight), wird NICHT zugestellt (siehe Exit 3). Der
+#     ACCEPT-Eintrag selbst wird erst NACH erfolgreichem Inbox-Append geschrieben (R1/#52) —
+#     sonst stünde bei einem Append-Fehlschlag ein ACCEPT gefolgt von "REJECT: Append
+#     fehlgeschlagen" für dieselbe Nachricht im Log (widersprüchlich). Ein REJECT wird dagegen
+#     IMMER abgelehnt, auch wenn dessen Audit-Write scheitert (best-effort dort).
 #   - Exit 0 = zugestellt · 2 = REJECT (Sender darf NICHT blind retryn) ·
-#     3 = Infra-Fehler: ACCEPT-Audit fehlgeschlagen, NICHT zugestellt (fail-closed, kein
-#     Zustellversuch ohne Audit-Trail)
+#     3 = Infra-Fehler: Audit-Log-Preflight fehlgeschlagen, NICHT zugestellt (fail-closed, kein
+#     Zustellversuch ohne funktionierenden Audit-Kanal)
 #
 # Env:
 #   DEV_TEAM_REGISTRY  zentrale projects.registry.json (Default wie scut-router.sh)
@@ -146,17 +149,27 @@ lead="${lead:0:64}"
 line="$(date '+%Y-%m-%d %H:%M') | @$agent | BRIDGE ($PEER): $rest"
 [ -n "$lead" ] && line="$line — ($lead@$PEER)"
 
-# M3/#51: Audit-Pflicht ist fail-closed für ACCEPT — schlägt der Audit-Write fehl, wird
-# NICHT zugestellt (Exit 3, eigener Infra-Code), statt eine Nachricht ohne Audit-Trail
-# durchzulassen. Deshalb VOR dem Inbox-Append prüfen, nicht danach.
-if ! audit "ACCEPT" "$tgt" "$bytes" "${rest:0:60}"; then
-  echo "bridge-receive: ACCEPT-Audit fehlgeschlagen ($LOG) — NICHT zugestellt (fail-closed)" >&2
+# M3/#51: Audit-Pflicht ist fail-closed für ACCEPT — ist der Audit-Kanal kaputt, wird NICHT
+# zugestellt (Exit 3), statt eine Nachricht ohne Audit-Trail durchzulassen. R1/#52: dieser
+# Preflight prüft NUR die Schreibbarkeit (schreibt noch KEIN "ACCEPT") — der finale
+# ACCEPT-Eintrag kommt erst NACH dem erfolgreichen Inbox-Append weiter unten. Stünde ACCEPT
+# schon hier und der Append scheitert danach, hinterließe das ein widersprüchliches ACCEPT
+# gefolgt von "REJECT: Append fehlgeschlagen" für dieselbe Nachricht im Log.
+audit_writable() { mkdir -p "$(dirname "$LOG")" 2>/dev/null; : >> "$LOG" 2>/dev/null; }
+if ! audit_writable; then
+  echo "bridge-receive: Audit-Log nicht schreibbar ($LOG) — NICHT zugestellt (fail-closed)" >&2
   exit 3
 fi
 
 mkdir -p "$(dirname "$inbox")"
 { flock -x 9; printf '%s\n' "$line" >&9; } 9>>"$inbox" \
   || reject "Append fehlgeschlagen ($inbox)" "$tgt" "$bytes"
+
+# Zustellung ist bereits erfolgt — der ACCEPT-Eintrag ist jetzt reine Buchführung (best-effort
+# wie bei REJECT; ein Schreibfehler hier kann die bereits erfolgte Zustellung nicht mehr
+# zurückrollen, der Preflight oben hat den häufigen Fall — kaputter Log-Pfad — schon gefangen).
+audit "ACCEPT" "$tgt" "$bytes" "${rest:0:60}" \
+  || echo "bridge-receive: ACCEPT-Audit-Write fehlgeschlagen ($LOG) — Nachricht wurde trotzdem zugestellt" >&2
 
 echo "✓ bridge-receive: [$uid]@$agent ← $PEER (${bytes}B)"
 exit 0

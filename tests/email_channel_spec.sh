@@ -298,6 +298,119 @@ t "M6 Total-Cap: zweiter Anhang übersprungen (Summe >50B)" "1" "$(printf '%s\n'
 ok "M6 Total-Cap: erster Anhang (40B) unter dem Cap gespeichert" test -s "$totaldir/eml001-big1.bin"
 ok "M6 Total-Cap: zweiter Anhang NICHT gespeichert (40+40 > 50)" test ! -e "$totaldir/eml001-big2.bin"
 
+# ── R1(3)/#52: Größen-Vorprüfung bei misdeklariertem/exotischem Transfer-Encoding ───────────
+# estimate_encoded_bytes() behandelt jedes NICHT-base64-CTE als "rohe Länge = sichere obere
+# Schranke" (kein Decode nötig, um zu schätzen). Kein Bug gefunden — dieser Test nagelt das
+# Verhalten fest: ein Anhang mit (falsch deklariertem) quoted-printable-CTE bleibt unter dem
+# Cap korrekt erfasst UND crasht beim echten Decode nicht, auch wenn der Inhalt kein gültiges
+# quoted-printable ist.
+eml_cte="$tmp/eml_cte"; mkdir -p "$eml_cte"
+cat > "$eml_cte/01-cte-edge.eml" <<'EOF'
+From: partner@example.com
+To: team@example.com
+Subject: [acme] CTE-Edge
+Message-ID: <cte1@example.com>
+Date: Fri, 05 Jul 2026 09:03:00 +0200
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="B"
+
+--B
+Content-Type: text/plain
+
+CTE-Edge-Test.
+--B
+Content-Type: application/octet-stream
+Content-Disposition: attachment; filename="mystery.bin"
+Content-Transfer-Encoding: quoted-printable
+
+payload=3D=0A=0Amehr=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D
+--B--
+EOF
+ctedir="$tmp/cte-cap"
+cteout="$(SCUT_MAIL_EML_DIR="$eml_cte" SCUT_MAIL_ATTACH_DIR="$ctedir" SCUT_MAIL_ATTACH_MAX=4 bash "$BIN")"; cterc=$?
+t "CTE-Edge + Cap: kein Crash (exit 0)" "0" "$cterc"
+t "CTE-Edge: Anhang wegen Cap übersprungen (Vorprüfung greift trotz CTE)" "1" \
+  "$(printf '%s\n' "$cteout" | grep -c 'übersprungen (>4B, im Postfach)')"
+ok "CTE-Edge: Anhang-Datei NICHT geschrieben" test ! -e "$ctedir/eml001-mystery.bin"
+ok "CTE-Edge: Volltext trotzdem da (Mail zugestellt)" test -s "$ctedir/eml001-body.txt"
+ctedir2="$tmp/cte-nocap"
+cteout2="$(SCUT_MAIL_EML_DIR="$eml_cte" SCUT_MAIL_ATTACH_DIR="$ctedir2" bash "$BIN")"; cterc2=$?
+t "CTE-Edge ohne Cap: kein Crash (exit 0)" "0" "$cterc2"
+ok "CTE-Edge ohne Cap: Anhang trotzdem decodiert+gespeichert" test -s "$ctedir2/eml001-mystery.bin"
+
+# ── #53: Known-Sender-Mapping — Haupt-Kundenmail ohne Tag/Plus-Adresse → gerichtet ──────────
+eml_ks="$tmp/eml_ks"; mkdir -p "$eml_ks"
+cat > "$eml_ks/01-known.eml" <<'EOF'
+From: Kunde Y <kunde-y@example.com>
+To: team@example.com
+Subject: Frage zum Vertrag
+Message-ID: <ks1@example.com>
+Date: Fri, 05 Jul 2026 09:00:00 +0200
+
+Bitte um Rueckruf.
+EOF
+cat > "$eml_ks/02-unknown.eml" <<'EOF'
+From: Unbekannt <unbekannt@example.com>
+To: team@example.com
+Subject: Andere Frage
+Message-ID: <ks2@example.com>
+Date: Fri, 05 Jul 2026 09:01:00 +0200
+
+Wer ist zustaendig?
+EOF
+cat > "$eml_ks/03-tagged.eml" <<'EOF'
+From: Kunde Y <kunde-y@example.com>
+To: team@example.com
+Subject: [acme]@Zed: schon adressiert
+Message-ID: <ks3@example.com>
+Date: Fri, 05 Jul 2026 09:02:00 +0200
+
+Schon getaggt, Mapping darf nicht ueberschreiben.
+EOF
+senders="$tmp/scut-mail.senders"
+cat > "$senders" <<'SENDERS'
+# Kommentar-Zeile, wird ignoriert
+
+kunde-y@example.com @Support
+SENDERS
+ksout="$(SCUT_MAIL_EML_DIR="$eml_ks" SCUT_MAIL_SENDERS_FILE="$senders" bash "$BIN")"
+t "Known-Sender: bekannte Adresse (case-insensitive) → target @<gemappter Agent>" "@Support" \
+  "$(printf '%s\n' "$ksout" | sed -n 1p | cut -f5)"
+t "Known-Sender: unbekannte Adresse → target bleibt leer (Review-Queue-Pfad)" "" \
+  "$(printf '%s\n' "$ksout" | sed -n 2p | cut -f5)"
+t "Known-Sender: bestehender Subject-Tag hat Vorrang (nicht überschrieben)" "[acme]@Zed" \
+  "$(printf '%s\n' "$ksout" | sed -n 3p | cut -f5)"
+
+# Kein "@Name" in der Mapping-Zeile → Default-Agent (SCUT_MAIL_SENDERS_DEFAULT_AGENT, sonst TEAM_LEAD)
+senders_default="$tmp/scut-mail.senders-default"
+printf 'KUNDE-Y@EXAMPLE.COM\n' > "$senders_default"
+dout="$(SCUT_MAIL_EML_DIR="$eml_ks" SCUT_MAIL_SENDERS_FILE="$senders_default" SCUT_MAIL_SENDERS_DEFAULT_AGENT="Riker" bash "$BIN")"
+t "Known-Sender: kein @Name in der Zeile → Default-Agent, Adress-Case egal" "@Riker" \
+  "$(printf '%s\n' "$dout" | sed -n 1p | cut -f5)"
+
+# Map-Datei fehlt/leer ⇒ Verhalten wie vor #53 (target bleibt leer)
+t "Known-Sender: fehlende Mapping-Datei → target bleibt leer (unverändert)" "" \
+  "$(SCUT_MAIL_EML_DIR="$eml_ks" SCUT_MAIL_SENDERS_FILE="$tmp/nix.senders" bash "$BIN" | sed -n 1p | cut -f5)"
+printf '# nur Kommentare\n\n' > "$tmp/leer.senders"
+t "Known-Sender: leere Mapping-Datei → target bleibt leer (unverändert)" "" \
+  "$(SCUT_MAIL_EML_DIR="$eml_ks" SCUT_MAIL_SENDERS_FILE="$tmp/leer.senders" bash "$BIN" | sed -n 1p | cut -f5)"
+
+# Ende-zu-Ende über den Router: gerichtet → Projekt-Inbox (Kanon-Zeile erhalten), unbekannt →
+# unverändert die Review-Queue des Kontext-Bobiverse.
+ksreg="$tmp/ks-reg"; mkdir -p "$ksreg/acme/_dev_team/standup"
+cat > "$ksreg/registry.json" <<JSON
+{ "version":1, "projects":[
+  {"uid":"acme","name":"acme","path":"$ksreg/acme","standup":"$ksreg/acme/_dev_team/standup","status":"active"}
+]}
+JSON
+SCUT_MAIL_EML_DIR="$eml_ks" SCUT_MAIL_SENDERS_FILE="$senders" bash "$BIN" \
+  | DEV_TEAM_REGISTRY="$ksreg/registry.json" CONTEXT_UID="acme" bash "$ROUTER" >/dev/null 2>&1
+t "Known-Sender Ende-zu-Ende: gerichtete Inbox-Zeile @Support, Kanon 'via email, von' erhalten" "1" \
+  "$(grep -c '@Support | SCUT (via email, von Kunde Y): Frage zum Vertrag' "$ksreg/acme/_dev_team/standup/_inbox.md")"
+t "Known-Sender Ende-zu-Ende: unbekannter Absender → Review-Queue (unverändert)" "1" \
+  "$(grep -c 'UNGERICHTET (via email, von Unbekannt) | Andere Frage' "$ksreg/acme/_dev_team/standup/_review-queue.md")"
+
+
 # Default (ohne ATTACH_DIR) bleibt v1: nur zählen — Regression siehe Checks oben (Zeile 4)
 
 # IMAP-Modus ohne Creds → exit 1 (klarer Fehler, kein Hänger)

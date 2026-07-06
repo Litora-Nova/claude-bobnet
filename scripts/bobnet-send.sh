@@ -25,9 +25,9 @@
 # "recv" nutzen (immun gegen forced-Fehldeklaration, weil das Kommando explizit gesetzt ist).
 #
 # peers.json (Map; Daten vor Code, Auflösung wie news.sh):
-#   { "codex-2": { "host": "<tailscale-ip-oder-name>", "user": "<ssh-user>",
-#                  "key": "~/.ssh/bridge/bridge_<peer>", "lead": "<peer-lead>",
-#                  "forced": true } }   // ODER "recv": "<remote-empfangskommando>"
+#   { "peerB": { "host": "<tailscale-ip-oder-name>", "user": "<ssh-user>",
+#                "key": "~/.ssh/bridge/bridge_<peer>", "lead": "<peer-lead>",
+#                "forced": true } }   // ODER "recv": "<remote-empfangskommando>"
 #   1. $BOBNET_PEERS  2. Key "peers" in ~/.claude/bobiverse.json  3. ~/.claude/bobiverse-peers.json
 #
 # Env:
@@ -46,7 +46,9 @@
 #                         gesetzt, sonst neben der aufgelösten peers.json — Symmetrie zu
 #                         bridge-receive.sh BRIDGE_LOG (Codex-Review L8/#51, comms.md §7
 #                         verlangt beidseitiges Audit).
-# Exit: 0 zugestellt · 1 Transportfehler · 2 Fehlbedienung / Peer unbekannt/unsicher / REJECT.
+# Exit: 0 zugestellt · 1 Transportfehler · 2 Fehlbedienung / Peer unbekannt/unsicher / Empfänger
+#       REJECT · 3 Empfänger-Infra-Fehler durchgereicht (rc 3 = ACCEPT-Audit dort fehlgeschlagen,
+#       NICHT zugestellt — siehe bridge-receive.sh; anders als 2 lohnt sich ein späterer Retry).
 set -uo pipefail
 
 peer="${1:-}"; shift || true
@@ -138,6 +140,14 @@ else
   rc=$?
   send_audit "$peer" "$bytes" "$rc"
   [ "$rc" -eq 255 ] && { echo "bobnet-send: SSH-Transport zu $peer ($host) fehlgeschlagen" >&2; exit 1; }
+fi
+# Empfänger-Exit-Codes durchreichen statt zusammenzufalten (#52): rc 3 (seit M3/#51) ist ein
+# Infra-/Audit-Fehler AUF DER GEGENSEITE (ACCEPT-Audit dort fehlgeschlagen, NICHT zugestellt) —
+# ein späterer Retry kann sich lohnen. rc 2 ist ein bewusstes REJECT (Kontrakt verletzt,
+# blinder Retry hilft nicht). Beide bleiben unterschiedlich, statt beide als 2 zu melden.
+if [ "$rc" -eq 3 ]; then
+  echo "bobnet-send: Gegenseite meldet Infra-Fehler (rc=3, Audit fehlgeschlagen, NICHT zugestellt) — anders als REJECT ggf. später erneut versuchen" >&2
+  exit 3
 fi
 if [ "$rc" -ne 0 ]; then
   echo "bobnet-send: Gegenseite hat abgelehnt/Fehler (rc=$rc) — nicht blind retryn" >&2

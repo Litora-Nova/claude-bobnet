@@ -4,6 +4,41 @@ All notable engine changes are documented here. Versioning follows SemVer (`VERS
 human-facing); machine compatibility is anchored separately by `SCHEMA_VERSION` (integer) —
 see `.claude/rules/contract.md`. `skills/update-bobs` points teams here after an update.
 
+## [0.13.0] — 2026-07-05
+
+### Added
+- **Known-sender mapping for the email channel** (#53): customer mail is the *main* case for
+  a project mailbox, but without `[uid]@Agent` addressing it used to land undirected in the
+  review queue. `scripts/channels/email.sh` now matches the `From:` address (case-insensitive)
+  against a per-project map file as a third, lowest-priority fallback (subject tag > plus
+  address > known sender): `SCUT_MAIL_SENDERS_FILE`, default
+  `$PROJECT_ROOT/_dev_team/team-rules/scut-mail.senders` — one address per line, optional
+  explicit `@Agent` target (default `TEAM_LEAD`, overridable via
+  `SCUT_MAIL_SENDERS_DEFAULT_AGENT`), `#` comments and blank lines ignored. A match delivers
+  the message **directed** into the project inbox (canon line unchanged, `via Mail von …`
+  preserved); unknown senders keep the review-queue behavior byte-for-byte. The map file is
+  **instance data** — never committed to this engine repo. Docs: `team-rules/comms.md` §7,
+  `scripts/channels/README.md`.
+
+### Fixed
+- **Follow-up batch from the 0.12.0 gate notes** (#52):
+  - `bridge-receive.sh`: the ACCEPT audit line is now written **after** the successful inbox
+    append; the fail-closed guard before delivery is a pure writability preflight (no entry).
+    Previously an append failure left a contradictory `ACCEPT` followed by
+    `REJECT: append failed` for the same message in the log. A post-append audit-write
+    failure warns on stderr but no longer misreports (the delivery already happened);
+    covered by a negative spec assertion.
+  - `bobnet-send.sh`: the receiver's exit 3 (infra/audit failure, fail-closed since 0.12.0)
+    is now passed through as the sender's own exit 3 instead of being folded into exit 2
+    (REJECT) — the two classes have different retry semantics (infra: retry later may help;
+    reject: do not retry blindly). Distinct messages on stderr, raw rc still in
+    `BOBNET_SEND_LOG`.
+  - `email.sh`: the size-estimate behavior for exotic/misdeclared `Content-Transfer-Encoding`
+    (raw length treated as the upper bound for everything non-base64) is now pinned by spec —
+    no code change needed, no expansion bug found.
+  - `tests/bridge_spec.sh`: fixture peer renamed to the generic `peerB` (white-label hygiene;
+    same rename applied to the `peers.json` example in the `bobnet-send.sh` header).
+
 ## [0.12.0] — 2026-07-05
 
 ### Fixed

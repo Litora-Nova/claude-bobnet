@@ -129,6 +129,13 @@ normalisiert zu Events, `scripts/scut-router.sh` triagiert datengetrieben (Regis
    (Dedupe via UID-Offset). Adressierung per Subject-Tag `[<uid>]@<Agent>` oder Plus-Adresse
    (`team+<uid>[-<agent>]@…`); ohne Ziel → Review-Queue. Outbound-Mail folgt später als
    eigenes `scut-mail.sh` (Symmetrie zu `scut.sh`/Telegram).
+   **Known-Sender-Mapping (#53):** die Haupt-Kundenmail kommt in der Praxis OHNE Tag/Plus-
+   Adresse — als dritter, niedrigster Fallback matcht der Adapter die `From:`-Adresse
+   case-insensitive gegen `<projekt>/_dev_team/team-rules/scut-mail.senders` (eine Adresse
+   pro Zeile, optional `@Agent`, `#`-Kommentare/Leerzeilen ignoriert — **Instanz-Daten, NIE
+   ins Engine-Repo committen**) und adressiert bei Treffer gerichtet an `@<Agent>` (Default
+   `TEAM_LEAD`) statt ungerichtet in die Review-Queue. Fehlt die Datei/kein Treffer →
+   Verhalten wie bisher. Details/Env: Kopf von `scripts/channels/email.sh`.
 2. **Schichtung:** Engine liefert Adapter + Router + Spec; die Host-Verdrahtung (systemd-
    Template pro Projekt, Env aus `dev-team.env`) ist Instanz-Sache; **Secrets + Scharfschalten
    = `{HUMAN}`-only (T4)**.
@@ -137,8 +144,11 @@ normalisiert zu Events, `scripts/scut-router.sh` triagiert datengetrieben (Regis
 4. **Cross-Installation (BobNet-Bridge, #45):** `bobnet-send.sh <peer> "[uid][@Agent]: …"` →
    drüben forced-command `bridge-receive.sh <peer>` (Pflicht-Adressierung, Empfänger stempelt
    ts/Identität selbst, flock-Append, Audit-Log beidseitig). Die beiden Seiten wiegen dabei
-   unterschiedlich schwer (#51): der **Empfänger-Audit ist fail-closed** — schlägt der Write
-   für eine Annahme fehl, wird NICHT zugestellt (kein Audit-Trail, keine Zustellung) — der
+   unterschiedlich schwer (#51/#52): der **Empfänger-Audit ist fail-closed vor der
+   Zustellung** — ist der Audit-Log-Pfad nicht schreibbar (Preflight), wird NICHT zugestellt
+   (Exit 3); der ACCEPT-Eintrag selbst wird erst NACH dem erfolgreichen Inbox-Append
+   geschrieben (scheitert erst dieser Write, ist die Nachricht bereits zugestellt — Warnung
+   auf stderr, Details im Kopf von `bridge-receive.sh`) — der
    **Sender-Audit ist best-effort** (`BOBNET_SEND_LOG`, append-only ts·peer·bytes·rc) und
    blockiert das Senden nie. Läuft bewusst NICHT über den Router; Schlüssel/`authorized_keys`/
    Rollout = Instanz + `{HUMAN}` (T4).
