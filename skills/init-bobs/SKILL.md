@@ -1,6 +1,6 @@
 ---
-name: init-bobs
-description: Stand up (or join) a project's Bobiverse — a Team-Lead-orchestrated team of background agents wired into the shared engine (Circle-of-Trust, heartbeat, registry, SCUT comms). Detects or installs the Bobiverse, onboards the project bidirectionally, interviews the user, and on approval spawns Bob#1 + SCUT + GUPPI + the team mapped to the repo's real seams. Use when the user asks to "init bobs", "set up a team", "init dev team", delegate areas to multiple agents, or orchestrate parallel agents per project.
+name: "init-bobs"
+description: "Stand up a project's Bobiverse: prepare the folder, map the repo's real seams, write TEAM.md, and only after explicit user approval spawn Codex subagents as Team-Bobs. Use when the user asks /init-bobs, init bobs, set up a team, init dev team, delegate areas to multiple agents, or orchestrate parallel agents per project."
 ---
 
 # init-bobs
@@ -12,6 +12,28 @@ background agents, so the main window stays responsive instead of being blocked.
 The functionality lives in the **engine** (this repo); the project only *references* it
 (symlinks + a small instance config). An engine update reaches every project (pull it in later with the `update-bobs` skill); the gates
 (Circle-of-Trust, deploy-guard) are baked into the engine and pulled fresh at init.
+
+## Codex surface mapping
+
+Codex does not currently define arbitrary project slash commands in the same way Claude Code does.
+For this engine, treat a user request for `/init-bobs` as an explicit invocation of this
+`init-bobs` skill. In Codex UI/CLI, the user may also invoke it through `/skills` or `$init-bobs`.
+
+Translate the Claude structure into Codex surfaces like this:
+
+| BobNet concept | Claude-style surface | Codex surface |
+|---|---|---|
+| Global skill install | `~/.claude/skills/init-bobs` | `~/.agents/skills/init-bobs` |
+| Project skill reference | `<project>/.claude/skills` | `<project>/.agents/skills` |
+| Persistent repo guidance | `CLAUDE.md` | `AGENTS.md` |
+| Background/team agents | Agent tool | Codex subagents (`worker`, `explorer`, custom `.codex/agents/*.toml`) |
+| Hooks | `.claude/hooks` wrappers | `.codex/hooks.json` + `.codex/hooks/*` wrappers |
+| Project instance state | `_dev_team/` | `_dev_team/` unchanged |
+| Dashboard/registry | `projects.registry.json` | unchanged, add `"surface": "codex"` where useful |
+
+Do **not** create Team-Bobs during install. Install only makes the structure visible to Codex.
+Team-Bobs are spawned only after this skill has mapped the repo, written `TEAM.md`, and the user
+explicitly says `go`.
 
 > Renames + supersedes the legacy `init-dev-team` skill. The old `join-dev-team` skill is
 > **retired** — joining another team is not a skill, it is inter-Bobiverse comms over SCUT
@@ -69,10 +91,12 @@ Bobiverse        the whole installation (root variable, stored in ~/.claude/bobi
 ## Procedure
 
 ### 0. Bobiverse check & install
-- Read `~/.claude/bobiverse.json`. **Exists** (points at an engine) → continue. **Missing** →
-  bootstrap: run the engine's `bin/install` (machine-global, idempotent — symlinks skills into
-  `~/.claude/skills`, writes `bobiverse.json`). First contact on a bare machine is
-  `git clone <engine> && <engine>/bin/install`.
+- On Claude Code, read `~/.claude/bobiverse.json`. **Exists** (points at an engine) → continue.
+  **Missing** → bootstrap with `bin/install`.
+- On Codex, read `~/.codex/bobiverse.json`. **Exists** (points at an engine) → continue.
+  **Missing** → bootstrap with `bin/install-codex` (machine-global, idempotent — symlinks skills
+  into `~/.agents/skills`, writes `~/.codex/bobiverse.json`). First contact on a bare Codex
+  machine is `git clone <engine> && <engine>/bin/install-codex`.
 - **BobNet is optional** (strongly recommended). If the user wants the dashboard, set
   `bobnet` in `bobiverse.json` and start it (`bin/start <uid>`); otherwise the Projekt-Bobiverse
   runs on SCUT + GUPPI alone, and GUPPI periodically checks whether a BobNet has appeared.
@@ -85,7 +109,8 @@ Bobiverse        the whole installation (root variable, stored in ~/.claude/bobi
 - Identify the real boundaries: backend(s), frontend(s), infra, marketing, shared layer/reference apps.
 
 ### 2. Onboard the project (bidirectional registration)
-- Run `bin/onboard <project-root>`. It is idempotent + non-destructive and does, in one pass:
+- On Claude Code, run `bin/onboard <project-root>`. On Codex, run
+  `bin/onboard-codex <project-root>`. It is idempotent + non-destructive and does, in one pass:
   memory-symlink · skills-symlink (→ engine) · agents from `archetypes/` (only if absent) ·
   hook wrappers (deploy-guard etc. + a **git-identity export wrapper**:
   `.claude/hooks/git-identity.sh` → `scripts/git-identity.sh export`; **no `settings.json`
@@ -150,9 +175,11 @@ Circle-of-Trust pointer (`team-rules/circle-of-trust.md` + `bin/tier`), and any 
 This is the durable contract every agent reads. **Stop here until the user says go.**
 
 ### 7. On "go": stand up the Projekt-Bobiverse
-- Spawn **Bob#1** (the main window already is it) and the team agents from their archetypes with
-  the **Agent tool**, `run_in_background: true`. Code-writers/reviewers = full-tool agents;
-  read-only `Explore`/Sonde only for pure research.
+- Spawn **Bob#1** (the main window already is it) and the team agents from their archetypes.
+  On Claude Code this uses the Agent tool. On Codex this uses explicit subagents:
+  `worker` for bounded implementation Bobs, `explorer` for Sonde/read-only analysis, and
+  project custom agents from `.codex/agents/*.toml` when present. Code-writers/reviewers =
+  full-tool worker agents; read-only Sonde/explorer only for pure research.
 - Onboard each in its prompt: identity (persona from theme), **revier (exact paths)**, `gateTier`,
   guardrails, references, the **heartbeat protocol** (one `standup/log.sh <Name> <state> "<what>"`
   line before each step), the **inbox** (`read standup/_inbox.md at every heartbeat`), and:

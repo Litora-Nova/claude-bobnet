@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+# bin/install-codex — Codex bootstrap for the Bobiverse engine.
+#
+# Installs the engine as a Codex user skill source and writes a Codex-side
+# Bobiverse config. It intentionally does not touch ~/.claude.
+set -euo pipefail
+
+ENGINE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
+AGENTS_HOME="${AGENTS_HOME:-$HOME/.agents}"
+
+echo "=== bobnet codex install (engine: $ENGINE_ROOT) ==="
+
+echo "[Preflight]"
+for tool in git python3 node npm; do
+  if command -v "$tool" >/dev/null 2>&1; then echo "  ✓ $tool"
+  else echo "  ⚠ $tool missing"; fi
+done
+
+echo "[Skills → ~/.agents/skills]"
+mkdir -p "$AGENTS_HOME/skills"
+linked=0
+if [ -d "$ENGINE_ROOT/skills" ]; then
+  for skill in "$ENGINE_ROOT"/skills/*/; do
+    [ -d "$skill" ] || continue
+    name="$(basename "$skill")"
+    link="$AGENTS_HOME/skills/$name"
+    target="${skill%/}"
+    if [ -L "$link" ] && [ "$(readlink "$link")" = "$target" ]; then
+      echo "  ✓ $name"
+      linked=$((linked+1))
+      continue
+    fi
+    if [ -e "$link" ]; then
+      mv "$link" "$link.bak.$(date +%s 2>/dev/null || echo old)"
+    fi
+    ln -s "$target" "$link"
+    echo "  ↻ linked: $name"
+    linked=$((linked+1))
+  done
+fi
+[ "$linked" -eq 0 ] && echo "  ⊘ no engine skills found"
+
+echo "[Codex Bobiverse config]"
+mkdir -p "$CODEX_HOME"
+ver="$(cat "$ENGINE_ROOT/VERSION" 2>/dev/null || echo 0.0.0)"
+ENGINE_ROOT="$ENGINE_ROOT" CFG="$CODEX_HOME/bobiverse.json" VER="$ver" python3 - <<'PY'
+import json, os
+
+cfg = os.environ["CFG"]
+data = {}
+if os.path.exists(cfg):
+    try:
+        data = json.load(open(cfg))
+    except Exception:
+        data = {}
+
+data["engine"] = os.environ["ENGINE_ROOT"]
+data["engineVersion"] = os.environ["VER"]
+data.setdefault("bobnet", os.path.join(os.environ["ENGINE_ROOT"], "dashboard"))
+data.setdefault("version", 1)
+data.setdefault("surface", "codex")
+
+with open(cfg, "w") as fh:
+    json.dump(data, fh, indent=2)
+    fh.write("\n")
+
+print("  ✓ %s (engine=%s, v%s)" % (cfg, data["engine"], data["engineVersion"]))
+PY
+
+echo ""
+echo "✓ codex install done."
+echo "  Restart Codex if the init-bobs skill is not visible yet."
+echo "  Per project: PROJECT_UID=<uid> $ENGINE_ROOT/bin/onboard-codex <project-root>"

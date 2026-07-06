@@ -17,12 +17,54 @@ ENGINE_ROOT="$(cd "$BIN_DIR/.." && pwd)"
 TOOLHUB="$(cd "$ENGINE_ROOT/.." && pwd)"
 
 LAUNCHER="${BOBNET_LAUNCHER:-$TOOLHUB/claude-team-dashboard/start}"
+DASHBOARD="$ENGINE_ROOT/dashboard"
+REGISTRY="${NUXT_REGISTRY:-$TOOLHUB/projects.registry.json}"
 
 if [ ! -f "$LAUNCHER" ]; then
-  echo "bin/start: BobNet-Launcher nicht gefunden: $LAUNCHER" >&2
-  echo "  erwartet im tool-hub neben der Engine (claude-team-dashboard/start)." >&2
-  echo "  Override: BOBNET_LAUNCHER=/abs/pfad/zum/start bin/start <PROJECT_UID>" >&2
-  exit 1
+  if [ ! -f "$DASHBOARD/package.json" ]; then
+    echo "bin/start: BobNet-Launcher nicht gefunden: $LAUNCHER" >&2
+    echo "  erwartet im tool-hub neben der Engine (claude-team-dashboard/start)." >&2
+    echo "  Fallback-Dashboard fehlt ebenfalls: $DASHBOARD" >&2
+    echo "  Override: BOBNET_LAUNCHER=/abs/pfad/zum/start bin/start <PROJECT_UID>" >&2
+    exit 1
+  fi
+
+  uid="${1:-}"
+  if [ -n "$uid" ] && [ "${uid#-}" = "$uid" ] && [ -f "$REGISTRY" ]; then
+    eval "$(
+      REGISTRY="$REGISTRY" REG_UID="$uid" python3 - <<'PY'
+import json, os, shlex
+
+uid = os.environ["REG_UID"]
+try:
+    data = json.load(open(os.environ["REGISTRY"]))
+except Exception:
+    data = {}
+
+for project in data.get("projects", []):
+    if project.get("uid") == uid or (not project.get("uid") and project.get("name") == uid):
+        standup = project.get("standup") or os.path.join(project.get("path", ""), "_dev_team", "standup")
+        if standup:
+            print("export NUXT_STANDUP_DIR=%s" % shlex.quote(standup))
+            print("export NUXT_TEAM_CONFIG=%s" % shlex.quote(os.path.join(standup, "team.config.json")))
+        if project.get("theme"):
+            print("export NUXT_THEME=%s" % shlex.quote(project["theme"]))
+        break
+PY
+    )"
+  fi
+
+  export NUXT_REGISTRY="$REGISTRY"
+  export NUXT_THEMES_DIR="${NUXT_THEMES_DIR:-$ENGINE_ROOT/themes}"
+  export NUXT_ARCHETYPES_DIR="${NUXT_ARCHETYPES_DIR:-$ENGINE_ROOT/archetypes}"
+
+  cd "$DASHBOARD" || exit 1
+  if [ ! -d node_modules ]; then
+    echo "bin/start: Dashboard dependencies fehlen. Einmal ausführen:" >&2
+    echo "  cd $DASHBOARD && npm install" >&2
+    exit 1
+  fi
+  exec npx nuxt dev --host "${BOBNET_HOST:-0.0.0.0}" --port "${BOBNET_PORT:-${PORT:-3030}}"
 fi
 
 # Falls als reine Datei (nicht +x) vorliegend: via bash starten statt zu scheitern.

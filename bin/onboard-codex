@@ -1,0 +1,223 @@
+#!/usr/bin/env bash
+# bin/onboard-codex — project bootstrap for BobNet on Codex.
+#
+# Creates Codex-native project files:
+#   .agents/skills/init-bobs  -> engine skill
+#   .codex/agents/*.toml      custom subagent roles
+#   .codex/hooks.json         Codex lifecycle hooks
+#   AGENTS.md                 durable Team-Lead instructions
+#   _dev_team/*               BobNet instance state
+set -euo pipefail
+
+BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENGINE_ROOT="$(cd "$BIN_DIR/.." && pwd)"
+PROJECT_ROOT="${1:-${PROJECT_ROOT:-$PWD}}"
+PROJECT_ROOT="$(cd "$PROJECT_ROOT" && pwd)"
+
+CHANGES=0
+ok() { printf '  ✓ %s\n' "$*"; }
+changed() { CHANGES=$((CHANGES+1)); printf '  ↻ %s\n' "$*"; }
+note() { printf '  %s\n' "$*"; }
+
+echo "=== onboard-codex: $PROJECT_ROOT (engine: $ENGINE_ROOT) ==="
+
+PROJECT_UID_RESOLVED=""
+ENV_TARGET="$PROJECT_ROOT/_dev_team/dev-team.env"
+if [ -f "$ENV_TARGET" ]; then
+  existing_uid="$(sed -n 's/^export PROJECT_UID="\{0,1\}\([^"]*\)"\{0,1\}.*/\1/p' "$ENV_TARGET" | head -n1)"
+  [ -n "$existing_uid" ] && PROJECT_UID_RESOLVED="$existing_uid"
+fi
+if [ -z "$PROJECT_UID_RESOLVED" ] && [ -n "${PROJECT_UID:-}" ]; then
+  PROJECT_UID_RESOLVED="$PROJECT_UID"
+fi
+if [ -z "$PROJECT_UID_RESOLVED" ] && [ -t 0 ]; then
+  printf '  short immutable PROJECT_UID: ' >&2
+  read -r PROJECT_UID_RESOLVED || PROJECT_UID_RESOLVED=""
+fi
+if [ -z "$PROJECT_UID_RESOLVED" ]; then
+  echo "  ✗ PROJECT_UID required (env, existing dev-team.env, or TTY prompt)." >&2
+  exit 3
+fi
+
+PROJECT_NAME="${PROJECT_NAME:-$(basename "$PROJECT_ROOT")}"
+THEME="${THEME:-bobiverse}"
+STANDUP_DIR="$PROJECT_ROOT/_dev_team/standup"
+
+echo "[1/7] instance dirs"
+mkdir -p "$PROJECT_ROOT/_dev_team/memories" "$STANDUP_DIR/qa" "$PROJECT_ROOT/_inbox"
+changed "ensured _dev_team/memories, standup/qa, _inbox"
+
+echo "[2/7] dev-team.env"
+if [ -f "$ENV_TARGET" ]; then
+  ok "dev-team.env exists"
+else
+  mkdir -p "$(dirname "$ENV_TARGET")"
+  schema="$(tr -dc '0-9' < "$ENGINE_ROOT/SCHEMA_VERSION" 2>/dev/null)"
+  [ -n "$schema" ] || schema="1"
+  cat > "$ENV_TARGET" <<EOF
+export PROJECT_NAME="$PROJECT_NAME"
+export PROJECT_UID="$PROJECT_UID_RESOLVED"
+export PROJECT_ROOT="$PROJECT_ROOT"
+export DEV_TEAM_EMAIL="${DEV_TEAM_EMAIL:-team@example.com}"
+export THEME="$THEME"
+export STANDUP_DIR="$STANDUP_DIR"
+export SCUT_SECRETS_DIR="$PROJECT_ROOT/.secrets"
+export BOBNET_MUX="${BOBNET_MUX:-auto}"
+export SCUT_MUX_TARGET="$PROJECT_UID_RESOLVED"
+export SCUT_PREFIX="[SCUT/Owner]"
+export TEAM_LEAD="Bob"
+export QA_ASKED_BY="Owner"
+export QA_ANSWERED_BY="Bob"
+export SCUT_INBOX="$PROJECT_ROOT/_inbox"
+export HEALTH_HOST=""
+export BOBNET_URL="http://localhost:3030"
+export DEV_TEAM_REPOS="."
+export CANONICAL_BRANCH="main"
+export LEAD_PERSONA="Team-Lead"
+export LEAD_SIGNOFF="Done."
+export DEV_TEAM_TZ="${DEV_TEAM_TZ:-Europe/Berlin}"
+export ENGINE_SCHEMA="$schema"
+EOF
+  changed "wrote dev-team.env (PROJECT_UID=$PROJECT_UID_RESOLVED)"
+fi
+
+echo "[3/7] Codex skill link"
+mkdir -p "$PROJECT_ROOT/.agents/skills"
+skill_link="$PROJECT_ROOT/.agents/skills/init-bobs"
+skill_target="$ENGINE_ROOT/skills/init-bobs"
+if [ -L "$skill_link" ] && [ "$(readlink "$skill_link")" = "$skill_target" ]; then
+  ok "init-bobs skill link current"
+else
+  [ -e "$skill_link" ] && mv "$skill_link" "$skill_link.bak.$(date +%s 2>/dev/null || echo old)"
+  ln -s "$skill_target" "$skill_link"
+  changed "linked .agents/skills/init-bobs"
+fi
+
+echo "[4/7] Codex custom agents"
+mkdir -p "$PROJECT_ROOT/.codex/agents"
+write_agent() {
+  local file="$1" name="$2" desc="$3" body="$4" sandbox="${5:-workspace-write}"
+  local path="$PROJECT_ROOT/.codex/agents/$file.toml"
+  cat > "$path.tmp" <<EOF
+name = "$name"
+description = "$desc"
+sandbox_mode = "$sandbox"
+developer_instructions = """
+$body
+"""
+EOF
+  if [ -f "$path" ] && cmp -s "$path.tmp" "$path"; then
+    rm -f "$path.tmp"
+    ok "agent current: $file"
+  else
+    mv "$path.tmp" "$path"
+    changed "agent written: $file"
+  fi
+}
+
+write_agent "bobnet-worker" "bobnet-worker" "BobNet worker for bounded implementation work in an assigned revier." "You are a BobNet team member running under Codex. Work only in the assigned revier. Do not revert other agents' changes. Before editing, read TEAM.md and _dev_team/dev-team.env if present. Report changed paths and verification commands. Never touch secrets, production credentials, or deploy-only paths without explicit human approval."
+write_agent "bobnet-explorer" "bobnet-explorer" "Read-only BobNet explorer for codebase reconnaissance." "You are a BobNet Sonde/explorer. Answer the assigned question from the codebase. Prefer precise file references. Do not edit files." "read-only"
+write_agent "bobnet-reviewer" "bobnet-reviewer" "BobNet reviewer focused on correctness, risk, and missing tests." "Review like Riker. Prioritize correctness bugs, security/privacy risk, regressions, missing tests, and unclear ownership. Return findings first with file references. Do not edit files unless explicitly assigned a fix." "read-only"
+
+echo "[5/7] Codex hooks"
+mkdir -p "$PROJECT_ROOT/.codex/hooks"
+cat > "$PROJECT_ROOT/.codex/hooks/deploy-guard.sh" <<EOF
+#!/usr/bin/env bash
+export DEV_TEAM_ENV="$ENV_TARGET"
+exec "$ENGINE_ROOT/hooks/deploy-guard.sh" "\$@"
+EOF
+chmod +x "$PROJECT_ROOT/.codex/hooks/deploy-guard.sh"
+cat > "$PROJECT_ROOT/.codex/hooks/session-heartbeat.sh" <<EOF
+#!/usr/bin/env bash
+export DEV_TEAM_ENV="$ENV_TARGET"
+exec "$ENGINE_ROOT/hooks/session-heartbeat.sh" "\$@"
+EOF
+chmod +x "$PROJECT_ROOT/.codex/hooks/session-heartbeat.sh"
+cat > "$PROJECT_ROOT/.codex/hooks.json" <<EOF
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Edit|Write|apply_patch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$PROJECT_ROOT/.codex/hooks/deploy-guard.sh",
+            "statusMessage": "BobNet deploy guard"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$PROJECT_ROOT/.codex/hooks/session-heartbeat.sh",
+            "statusMessage": "BobNet heartbeat"
+          }
+        ]
+      }
+    ]
+  }
+}
+EOF
+changed "wrote Codex hooks"
+
+echo "[6/7] AGENTS.md"
+if [ ! -f "$PROJECT_ROOT/AGENTS.md" ]; then
+  cat > "$PROJECT_ROOT/AGENTS.md" <<EOF
+# BobNet Project Instructions
+
+This folder is a BobNet Project-Bobiverse for Codex.
+
+- The main Codex thread is Bob#1, the Team-Lead.
+- Spawn subagents only when the user explicitly asks for delegation or parallel team work.
+- Each spawned team Bob must have a clear revier: exact files, directories, or read-only question.
+- Do not let two agents edit the same path concurrently.
+- Read \`TEAM.md\` when present and keep it as the durable team contract.
+- Heartbeats live in \`_dev_team/standup/\`; inbox is \`_dev_team/standup/_inbox.md\`.
+- Secrets and production credentials are Tier-4 human-only.
+EOF
+  changed "wrote AGENTS.md"
+else
+  note "AGENTS.md exists — left untouched"
+fi
+
+echo "[7/7] registry"
+TOOLHUB="$(cd "$ENGINE_ROOT/.." && pwd)"
+REGISTRY="${DEV_TEAM_REGISTRY:-$TOOLHUB/projects.registry.json}"
+mkdir -p "$(dirname "$REGISTRY")"
+[ -f "$REGISTRY" ] || printf '%s\n' '{"version":1,"projects":[]}' > "$REGISTRY"
+REGISTRY="$REGISTRY" REG_UID="$PROJECT_UID_RESOLVED" NAME="$(basename "$PROJECT_ROOT")" LABEL="$PROJECT_NAME" ROOT="$PROJECT_ROOT" STANDUP="$STANDUP_DIR" THEME="$THEME" python3 - <<'PY'
+import json, os
+
+path = os.environ["REGISTRY"]
+entry = {
+    "uid": os.environ["REG_UID"],
+    "name": os.environ["NAME"],
+    "label": os.environ["LABEL"],
+    "path": os.environ["ROOT"],
+    "standup": os.environ["STANDUP"],
+    "theme": os.environ["THEME"],
+    "status": "active",
+    "surface": "codex",
+}
+try:
+    data = json.load(open(path))
+except Exception:
+    data = {"version": 1, "projects": []}
+projects = data.setdefault("projects", [])
+found = next((p for p in projects if isinstance(p, dict) and p.get("uid") == entry["uid"]), None)
+if found:
+    found.update(entry)
+else:
+    projects.append(entry)
+with open(path, "w") as fh:
+    json.dump(data, fh, indent=2)
+    fh.write("\n")
+PY
+changed "registry upsert: $PROJECT_UID_RESOLVED"
+
+echo "=== onboard-codex done: $CHANGES change(s) ==="

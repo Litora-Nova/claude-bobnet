@@ -1,0 +1,29 @@
+{
+  "name": "bobnet",
+  "version": "0.13.0",
+  "description": "BobNet/Bobiverse proof-of-concept for Codex: init-bobs skill, project onboarding helpers, and team-agent conventions.",
+  "author": {
+    "name": "Litora Nova",
+    "email": "team@example.com",
+    "url": "https://github.com/Litora-Nova/claude-bobnet"
+  },
+  "homepage": "https://github.com/Litora-Nova/claude-bobnet",
+  "repository": "https://github.com/Litora-Nova/claude-bobnet",
+  "license": "MIT",
+  "keywords": ["codex", "agents", "bobnet", "bobiverse"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "BobNet",
+    "shortDescription": "Bobiverse team-agent workflow for Codex.",
+    "longDescription": "A proof-of-concept Codex port of BobNet: init-bobs skill, project structure onboarding, Team-Lead conventions, and BobNet dashboard compatibility.",
+    "developerName": "Litora Nova",
+    "category": "Productivity",
+    "capabilities": ["Interactive", "Write"],
+    "defaultPrompt": [
+      "Run init-bobs for this repo.",
+      "Prepare a BobNet team plan.",
+      "Map this repo into Team-Bob reviers."
+    ],
+    "brandColor": "#3B82F6"
+  }
+}
