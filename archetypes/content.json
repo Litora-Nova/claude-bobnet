@@ -9,6 +9,12 @@
   "modelTier": "Cruiser",
   "model": "sonnet",
   "effort": "medium",
+  "providers": {
+    "claude": { "model": "sonnet", "effort": "medium" },
+    "devin": { "model": "swe-1-6-fast", "effort": "medium" },
+    "codex": { "model": "gpt-4.1-mini", "effort": "medium" },
+    "cursor": { "model": "cursor-agent", "effort": "medium" }
+  },
   "tags": ["content", "i18n", "dev"],
   "defaultTools": "all",
   "canSpawn": ["sonde"],

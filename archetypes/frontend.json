@@ -9,6 +9,12 @@
   "modelTier": "HEAVEN",
   "model": "sonnet",
   "effort": "xhigh",
+  "providers": {
+    "claude": { "model": "sonnet", "effort": "xhigh" },
+    "devin": { "model": "swe-1-6", "effort": "xhigh" },
+    "codex": { "model": "gpt-4.1", "effort": "xhigh" },
+    "cursor": { "model": "cursor-agent", "effort": "xhigh" }
+  },
   "tags": ["frontend", "js", "dev", "i18n"],
   "defaultTools": "all",
   "canSpawn": ["roamer", "sonde"],

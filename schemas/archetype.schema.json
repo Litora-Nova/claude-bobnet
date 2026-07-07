@@ -6,6 +6,23 @@
   "type": "object",
   "required": ["archetype", "category", "ring", "positionShort"],
   "additionalProperties": false,
+  "definitions": {
+    "providerConfig": {
+      "type": "object",
+      "required": ["model"],
+      "additionalProperties": false,
+      "properties": {
+        "model": {
+          "type": "string",
+          "description": "Provider-spezifische Modell-ID (z. B. 'opus', 'swe-1-6', 'gpt-4.1', 'cursor-agent')."
+        },
+        "effort": {
+          "enum": ["low", "medium", "high", "xhigh", "max"],
+          "description": "Provider-spezifisches Denk-Budget."
+        }
+      }
+    }
+  },
   "properties": {
     "archetype": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$", "description": "Archetyp-Slug = Dateiname (techlead, backend, review, process-auditor …)." },
     "category": {
@@ -25,11 +42,22 @@
     },
     "model": {
       "enum": ["fable", "opus", "sonnet", "haiku"],
-      "description": "Konkretes Default-Provider-Model (maschinen-lesbare Aufloesung von modelTier): HEAVEN->opus, Cruiser->sonnet, Probe->haiku; fable = Mythos-Class ueber Opus (advisor / bewusster Override, kein Tier-Fallback). Vom Spawn/init-bobs gelesen. Instanz/Theme darf ueberschreiben; Kosten/Qualitaet-Tuning ist PO-Call."
+      "description": "Legacy-Default-Modell (Claude-Code-Familie). Dient als Fallback fuer alle Provider, solange providers.<provider> nicht gesetzt ist. Neuere Konfiguration sollte providers verwenden."
     },
     "effort": {
       "enum": ["low", "medium", "high", "xhigh", "max"],
       "description": "Default reasoning-effort (Denk-Budget) der Rolle, orthogonal zum model. Generativ/Architekt = xhigh/high, Verifikation = high, Support/Recherche = medium/low. Vom Spawn gelesen; team.config/Instanz darf ueberschreiben (Kosten/Qualitaet = PO-Call)."
+    },
+    "providers": {
+      "type": "object",
+      "description": "Per-Provider Model+Effort-Konfiguration. Wenn ein Provider hier fehlt, greift der Fallback top-level model/effort -> modelTier. Erlaubt ai-bobnet, pro AI-Tool (Claude, Devin, Codex, Cursor) unterschiedliche Modelle zu waehlen.",
+      "additionalProperties": false,
+      "properties": {
+        "claude": { "$ref": "#/definitions/providerConfig" },
+        "devin": { "$ref": "#/definitions/providerConfig" },
+        "codex": { "$ref": "#/definitions/providerConfig" },
+        "cursor": { "$ref": "#/definitions/providerConfig" }
+      }
     },
     "tags": {
       "type": "array",

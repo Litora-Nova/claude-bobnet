@@ -12,6 +12,7 @@ printf '{"id":"gen","modelTier":"HEAVEN","model":"opus","effort":"xhigh"}' > "$t
 printf '{"id":"probe","modelTier":"Probe","model":"haiku"}'               > "$tmp/probe.json"  # effort -> Fallback low
 printf '{"id":"bare","modelTier":"Cruiser"}'                              > "$tmp/bare.json"   # model+effort -> Fallback sonnet/medium
 printf '{"id":"adv","modelTier":"HEAVEN","model":"fable","effort":"xhigh"}' > "$tmp/adv.json"   # fable = Mythos-Class (advisor)
+printf '{"id":"multi","modelTier":"HEAVEN","model":"opus","effort":"xhigh","providers":{"claude":{"model":"sonnet","effort":"high"},"devin":{"model":"swe-1-6","effort":"xhigh"}}}' > "$tmp/multi.json"
 
 t "explizit"        "opus xhigh"     "$(BOBNET_ARCHETYPES=$tmp bash "$LIB" gen)"
 t "effort-fallback" "haiku low"      "$(BOBNET_ARCHETYPES=$tmp bash "$LIB" probe)"
@@ -19,6 +20,12 @@ t "tier-fallback"   "sonnet medium"  "$(BOBNET_ARCHETYPES=$tmp bash "$LIB" bare)
 t "fable-explizit"  "fable xhigh"    "$(BOBNET_ARCHETYPES=$tmp bash "$LIB" adv)"
 t "--model-flag"    "--model opus"   "$(BOBNET_ARCHETYPES=$tmp bash "$LIB" --model gen)"
 t "env-override"    "sonnet high"    "$(BOBNET_ARCHETYPES=$tmp BOBNET_MODEL_OVERRIDE=sonnet BOBNET_EFFORT_OVERRIDE=high bash "$LIB" gen)"
+t "provider-claude" "sonnet high"    "$(BOBNET_ARCHETYPES=$tmp bash "$LIB" --provider claude multi)"
+t "provider-devin"  "swe-1-6 xhigh"  "$(BOBNET_ARCHETYPES=$tmp bash "$LIB" --provider devin multi)"
+t "provider-env"    "swe-1-6 xhigh"  "$(BOBNET_ARCHETYPES=$tmp BOBNET_PROVIDER=devin bash "$LIB" multi)"
+t "provider-full"   "devin swe-1-6 xhigh" "$(BOBNET_ARCHETYPES=$tmp bash "$LIB" --provider devin --full multi)"
+t "provider-flags"  "--model swe-1-6" "$(BOBNET_ARCHETYPES=$tmp bash "$LIB" --provider devin --model multi)"
+t "provider-fallback" "opus xhigh"   "$(BOBNET_ARCHETYPES=$tmp bash "$LIB" --provider codex multi)"
 BOBNET_ARCHETYPES=$tmp bash "$LIB" nope >/dev/null 2>&1; t "missing-rc3" "3" "$?"
 
 echo "model_spec: $pass passed, $fail failed"

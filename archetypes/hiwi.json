@@ -9,6 +9,12 @@
   "modelTier": "Probe",
   "model": "haiku",
   "effort": "low",
+  "providers": {
+    "claude": { "model": "haiku", "effort": "low" },
+    "devin": { "model": "swe-1-6-fast", "effort": "low" },
+    "codex": { "model": "gpt-4.1-mini", "effort": "low" },
+    "cursor": { "model": "cursor-agent", "effort": "low" }
+  },
   "tags": ["dev"],
   "defaultTools": "all",
   "canSpawn": [],
