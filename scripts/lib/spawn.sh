@@ -11,7 +11,17 @@
 #   # -> claude --model sonnet -- bash scripts/start-backend.sh
 #
 #   BOBNET_PROVIDER=devin spawn_cmd "" backend "bash scripts/start-backend.sh"
-#   # -> devin --model swe-1-6 -- bash scripts/start-backend.sh
+#   # -> devin --model swe-1-6 -- bash scripts/start-backend.sh   (interaktiv)
+#   # -> devin --model swe-1-6 -p "..."                         (non-interaktiv)
+#
+# Devin-Spezialfall:
+#   Der Devin CLI kennt keinen Headless-Tool-Modus. --permission-mode bypass
+#   scheitert ohne TTY/Scrollback ("Scrollback error: io error") und haengt
+#   bei komplexen Aufgaben. Daher:
+#   - Interaktiv: `devin --model <model> -- <start_cmd>`
+#   - Non-Interactive: `devin --model <model> -p "<prompt>"` (nur Text, keine Tools)
+#   - Fuer Non-Interactive Tool-Ausfuehrung: `devin-subagent` verwenden
+#     (wrapped via Devin-Subagent-Tool / run_subagent).
 
 _SPAWN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$_SPAWN_DIR/model.sh"
@@ -30,8 +40,11 @@ spawn_binary() {
 }
 
 # spawn_cmd [provider] <archetype_id> <start_cmd>
-#   -> "<binary> <model-flag> -- <start_cmd>"
+#   -> "<binary> <model-flag> -- <start_cmd>" (claude/codex/cursor)
+#   -> "<binary> <model-flag> -- <start_cmd>" (devin interaktiv)
+#   -> "<binary> <model-flag> -p <prompt>"     (devin non-interaktiv)
 #   provider optional; default = BOBNET_PROVIDER oder claude
+#   Env: BOBNET_PROVIDER, BOBNET_NON_INTERACTIVE=(true|false)
 spawn_cmd() {
   local provider archetype start_cmd
   if [ $# -eq 3 ]; then
@@ -46,15 +59,50 @@ spawn_cmd() {
   binary="$(spawn_binary "$provider")" || return $?
   flags="$(model_flags --provider "$provider" "$archetype")" || return $?
 
+  local non_interactive="${BOBNET_NON_INTERACTIVE:-}"
+  # Nur auto-detect wenn die Env nicht explizit gesetzt wurde.
+  if [ -z "$non_interactive" ]; then
+    [ -t 0 ] || non_interactive="true"
+  fi
+
   case "$provider" in
-    claude|devin|codex)
+    claude|codex)
       printf '%s %s -- %s\n' "$binary" "$flags" "$start_cmd"
+      ;;
+    devin)
+      if [ "$non_interactive" = "true" ]; then
+        # Non-Interactive: Devin CLI kann hier keine Tools ausfuehren.
+        # Wir nutzen -p fuer eine einzelne Antwort. Fuer Tool-Ausfuehrung
+        # siehe Provider `devin-subagent`.
+        printf '%s %s -p "You are %s. Task: %s. Reply with a short confirmation."\n' \
+          "$binary" "$flags" "$archetype" "$start_cmd"
+      else
+        printf '%s %s -- %s\n' "$binary" "$flags" "$start_cmd"
+      fi
       ;;
     cursor)
       # Cursor-CLI-Syntax ist noch nicht final; Stub mit Agent-Flag.
       printf '%s agent %s -- %s\n' "$binary" "$flags" "$start_cmd"
       ;;
   esac
+}
+
+# spawn_subagent_task [provider] <archetype_id> <start_cmd>
+#   Liefert eine Task-Beschreibung, die an das Devin run_subagent-Tool uebergeben
+#   werden kann. Nur fuer Provider `devin-subagent` sinnvoll.
+spawn_subagent_task() {
+  local provider archetype start_cmd
+  if [ $# -eq 3 ]; then
+    provider="$1"; archetype="$2"; start_cmd="$3"
+  else
+    provider="${BOBNET_PROVIDER:-claude}"; archetype="$1"; start_cmd="$2"
+  fi
+  [ -n "$archetype" ] || { echo "spawn_subagent_task: archetype_id fehlt" >&2; return 2; }
+  [ -n "$start_cmd" ] || { echo "spawn_subagent_task: start_cmd fehlt" >&2; return 2; }
+
+  local full
+  full="$(model_resolve --provider devin --full "$archetype")" || return $?
+  printf 'You are the %s (model: %s). Your task: %s\n' "$archetype" "$full" "$start_cmd"
 }
 
 # spawn_models <provider> — debug: alle Archetypen mit Modell auflisten
@@ -72,7 +120,8 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
   case "${1:-}" in
     --binary) shift; spawn_binary "$@" ;;
     --models) shift; spawn_models "$@" ;;
-    "") echo "usage: spawn.sh [--binary <provider>] [--models <provider>] <provider> <archetype> <start_cmd>" >&2; exit 2 ;;
+    --subagent-task) shift; spawn_subagent_task "$@" ;;
+    "") echo "usage: spawn.sh [--binary <provider>] [--models <provider>] [--subagent-task <provider> <archetype> <start_cmd>] <provider> <archetype> <start_cmd>" >&2; exit 2 ;;
     *) spawn_cmd "$@" ;;
   esac
 fi
