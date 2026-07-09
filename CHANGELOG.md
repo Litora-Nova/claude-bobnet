@@ -29,6 +29,13 @@ see `.claude/rules/contract.md`. `skills/update-bobs` points teams here after an
   arrive with no wake path at all (report-only). Wire it to the instance's messenger
   script to page a human. Without an alert command the watcher still finalizes (no
   endless loop) but logs the case loudly as swallowed and counts it in the summary line.
+- **Gate-note hardening batch** (from this release's full gate): the watcher now serializes
+  itself via `flock` (state-dir lock; overlapping timer/cron runs can no longer double-fire
+  the once-per-event escalation), a failing alert command is counted separately in the
+  summary (no longer masked as escalated), a corrupt `PENDING` state line (empty signature,
+  non-numeric fields) conservatively starts a fresh cycle instead of permissively verifying,
+  and the heartbeat-verification heuristic's known limit (a lead heartbeating for unrelated
+  work counts as woken) is documented in the header and `team-rules/comms.md`.
 
 ### Added
 - **Known-sender mapping for the email channel** (#53): customer mail is the *main* case for
