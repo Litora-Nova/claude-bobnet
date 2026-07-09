@@ -41,7 +41,11 @@ bash ~/Sites/<project>/standup/cron/cron-health.sh   # manueller Test (jeder Job
 ## inbox-watch (Issue #44)
 
 `scripts/inbox-watch.sh` = EIN Durchlauf pro Aufruf; Kadenz macht der Host-Timer (Empfehlung
-2–5 min, analog health). Beispiel systemd-Timer (Instanz-Seite; Enable = `{HUMAN}`, T4):
+2–5 min, analog health). Das Script serialisiert sich seit #48/0.14.0 selbst per `flock`
+(`<STATE_DIR>/.lock`) — ein überlappender Zweitlauf (z. B. wenn ein Durchlauf mal länger
+braucht als das Timer-Intervall) wird sauber übersprungen statt parallel zu laufen; kein
+externes `flock`-Wrapping im Timer/Cron nötig. Beispiel systemd-Timer (Instanz-Seite; Enable =
+`{HUMAN}`, T4):
 
 ```ini
 # ~/.config/systemd/user/inbox-watch.service

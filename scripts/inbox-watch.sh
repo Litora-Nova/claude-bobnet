@@ -44,8 +44,25 @@
 #      Re-Nudge-Versuche erschöpft sind, ohne verifiziert worden zu sein, oder (b) gar kein
 #      Weckweg existiert (report-only, kein MUX_SESSION). Ohne Alert-Cmd wird trotzdem finalisiert
 #      (kein Endlos-Loop) — aber laut als „VERSCHLUCKT" geloggt + in der Summary-Zeile gezählt.
+#      Schlägt der Alert-Cmd selbst fehl (rc≠0), zählt das NICHT als „eskaliert" mit — eigener
+#      Zähler „Alert-Fehlschlag(e)" in der Summary-Zeile (0.14.0-Gate, Riker-Fund).
 #   6. State fortschreiben NUR bei Nudge (→ pending) oder Verifikation/Eskalation/report-only
-#      (→ final) — busy/blocked-Skips + fehlgeschlagene Sends bleiben „offen".
+#      (→ final) — busy/blocked-Skips + fehlgeschlagene Sends bleiben „offen". Eine korrupte
+#      PENDING-Zeile (Pflichtfeld sig/lines/attempts fehlt oder ist nicht numerisch) wird
+#      KONSERVATIV wie „kein State" behandelt — frischer Zyklus statt eines permissiven
+#      Default (0.14.0-Gate, Marvin-Fund: ein defaultendes `lines=0` hätte fast jeden Heartbeat
+#      sofort als Zustellnachweis durchgehen lassen).
+#
+#   Bekannte Grenze (Riker-Review 0.14.0): die Heartbeat-Verifikation ist eine Heuristik, kein
+#   Beweis, dass die Inbox gelesen wurde — heartbeatet der Lead nach dem Nudge wegen ANDERER
+#   Arbeit (z. B. ein Alt-Task), OHNE die Inbox zu öffnen, gilt der Nudge trotzdem als
+#   zugestellt. Bewusst in Kauf genommen: verlässlicher als der mux_send-rc (der über eine
+#   echte Reaktion gar nichts aussagt), aber eben auch keine Garantie.
+#
+#   Single-Instance-Guard: ein `flock` auf `<STATE_DIR>/.lock` serialisiert Timer-/Cron-Läufe
+#   (Pattern aus `bridge-receive.sh`) — ein überlappender Zweitlauf wird sauber übersprungen
+#   (exit 0, kein State-Touch), damit die „genau-einmal"-Eskalation nicht durch einen parallelen
+#   Durchlauf verletzt werden kann.
 #
 # Instanz-Kontrakt (`<projekt>/_dev_team/dev-team.env`, alles optional):
 #   TEAM_LEAD              Name, unter dem der Lead heartbeatet (Log-Dateiname). Default: Bob.
@@ -81,6 +98,12 @@ DRYRUN="${INBOX_WATCH_DRYRUN:-0}"
 . "$DIR/lib/boot.sh"   # liefert mux_boot + (via mux.sh) mux_has/mux_send/mux_flush_draft
 
 mkdir -p "$STATE_DIR"
+
+# Single-Instance-Guard (0.14.0-Gate, Riker-Fund): Timer-/Cron-Overlap darf die
+# "genau-einmal"-Eskalation nicht verletzen können (Pattern aus bridge-receive.sh). Läuft
+# bereits eine Instanz, wird dieser Durchlauf sauber übersprungen — exit 0, kein State-Touch.
+exec 9>"$STATE_DIR/.lock"
+flock -n 9 || { echo "[inbox-watch] Lauf übersprungen (eine andere Instanz läuft bereits)"; exit 0; }
 
 # env_of <envfile> <key> — export KEY="wert" / export KEY=wert lesen (leer wenn fehlt).
 env_of() { [ -f "$1" ] && sed -n "s/^export $2=\"\{0,1\}\([^\"]*\)\"\{0,1\}.*/\1/p" "$1" | head -n1; }
@@ -136,6 +159,9 @@ state_kind() {
 # state_field <statef> <key> -> Wert aus einer "PENDING sig=... lines=... attempts=..."-Zeile.
 state_field() { sed -n "s/.* $2=\([^ ]*\).*/\1/p" "$1" 2>/dev/null | head -n1; }
 
+# is_uint <wert> -> true bei einer nichtleeren Ziffernfolge.
+is_uint() { case "$1" in ''|*[!0-9]*) return 1 ;; *) return 0 ;; esac; }
+
 # state_write_final <statef> <sig> -> Alt-Format: nackte Signatur, keine Newline.
 state_write_final() { printf '%s' "$2" > "$1"; }
 
@@ -150,16 +176,19 @@ run_alert() {
 
 # escalate_or_swallow <statef> <sig> <uid> <lead> <standup> <alert_cmd> <reason>
 # Eskaliert GENAU EINMAL (falls alert_cmd gesetzt) oder verschluckt laut; finalisiert IMMER auf
-# <sig>. Setzt _ESC_RESULT=escalated|swallowed für den Aufrufer (Summary-Zähler).
+# <sig>. Setzt _ESC_RESULT=escalated|alert_failed|swallowed für den Aufrufer (Summary-Zähler) —
+# ein FEHLGESCHLAGENER Alert-Cmd zählt bewusst NICHT als "eskaliert" mit (0.14.0-Gate,
+# Riker-Fund: sonst würde ein kaputter Alert-Cmd sich als Erfolg tarnen).
 escalate_or_swallow() {
   local statef="$1" sig="$2" uid="$3" lead="$4" standup="$5" alert_cmd="$6" reason="$7"
   if [ -n "$alert_cmd" ]; then
     if run_alert "$alert_cmd" "$uid" "$lead" "$standup"; then
       echo "[inbox-watch] $uid: $reason — ESKALIERT → $alert_cmd"
+      _ESC_RESULT=escalated
     else
       echo "[inbox-watch] $uid: $reason — Eskalation an $alert_cmd FEHLGESCHLAGEN"
+      _ESC_RESULT=alert_failed
     fi
-    _ESC_RESULT=escalated
   else
     echo "[inbox-watch] $uid: $reason — VERSCHLUCKT (kein INBOX_WATCH_ALERT_CMD konfiguriert)"
     _ESC_RESULT=swallowed
@@ -182,7 +211,16 @@ for p in data.get("projects", []):
 PY
 }
 
-n_new=0; n_nudge=0; n_escalated=0; n_swallowed=0
+n_new=0; n_nudge=0; n_escalated=0; n_alert_failed=0; n_swallowed=0
+
+# esc_count <_ESC_RESULT> -> passenden Summary-Zähler hochzählen (escalated|alert_failed|swallowed).
+esc_count() {
+  case "$1" in
+    escalated)    n_escalated=$((n_escalated+1)) ;;
+    alert_failed) n_alert_failed=$((n_alert_failed+1)) ;;
+    *)            n_swallowed=$((n_swallowed+1)) ;;
+  esac
+}
 while IFS=$'\t' read -r uid path standup; do
   [ -z "$uid" ] && continue
   standup="$(expand_tilde "$standup")"; path="$(expand_tilde "$path")"
@@ -201,20 +239,28 @@ while IFS=$'\t' read -r uid path standup; do
 
   if [ "$kind" = pending ]; then
     psig="$(state_field "$statef" sig)"
-    plines="$(state_field "$statef" lines)"; plines="${plines:-0}"
-    patt="$(state_field "$statef" attempts)"; patt="${patt:-1}"
+    plines_raw="$(state_field "$statef" lines)"
+    patt_raw="$(state_field "$statef" attempts)"
 
-    if heartbeat_since "$leadlog" "$plines"; then
-      echo "[inbox-watch] $uid: Nudge verifiziert — Lead $lead heartbeatete seither ($patt Versuch(e))"
-      state_write_final "$statef" "$psig"
-      if [ "$sig" = "$psig" ]; then
-        continue
-      fi
-      # Signatur ist seit dem Nudge weitergewandert -> unten als frischer Zyklus behandelt.
-    elif [ "$sig" = "$psig" ]; then
-      attempts="$patt"
+    if [ -z "$psig" ] || ! is_uint "$plines_raw" || ! is_uint "$patt_raw"; then
+      # 0.14.0-Gate, Marvin-Fund: ein fehlendes Pflichtfeld NICHT permissiv defaulten (ein
+      # defaultes lines=0 hätte fast jeden Heartbeat sofort als Zustellnachweis durchgehen
+      # lassen) — konservativ wie "kein State" behandeln, frischer Zyklus.
+      echo "[inbox-watch] $uid: PENDING-State korrupt (Pflichtfeld fehlt/ungültig) — als frischer Zyklus behandelt"
     else
-      echo "[inbox-watch] $uid: weitere Eingänge, alter Nudge an $lead noch unverifiziert — neuer Zyklus"
+      plines="$plines_raw"; patt="$patt_raw"
+      if heartbeat_since "$leadlog" "$plines"; then
+        echo "[inbox-watch] $uid: Nudge verifiziert — Lead $lead heartbeatete seither ($patt Versuch(e))"
+        state_write_final "$statef" "$psig"
+        if [ "$sig" = "$psig" ]; then
+          continue
+        fi
+        # Signatur ist seit dem Nudge weitergewandert -> unten als frischer Zyklus behandelt.
+      elif [ "$sig" = "$psig" ]; then
+        attempts="$patt"
+      else
+        echo "[inbox-watch] $uid: weitere Eingänge, alter Nudge an $lead noch unverifiziert — neuer Zyklus"
+      fi
     fi
   elif [ "$kind" = final ]; then
     old="$(cat "$statef" 2>/dev/null || echo "")"
@@ -243,14 +289,14 @@ while IFS=$'\t' read -r uid path standup; do
   if [ -z "$session" ]; then
     escalate_or_swallow "$statef" "$sig" "$uid" "$lead" "$standup" "$alert_cmd" \
       "NEU, Lead $lead=$st, kein Weckweg (kein MUX_SESSION konfiguriert)"
-    [ "$_ESC_RESULT" = escalated ] && n_escalated=$((n_escalated+1)) || n_swallowed=$((n_swallowed+1))
+    esc_count "$_ESC_RESULT"
     continue
   fi
 
   if [ "$attempts" -ge "$MAX_NUDGE" ]; then
     escalate_or_swallow "$statef" "$sig" "$uid" "$lead" "$standup" "$alert_cmd" \
       "$attempts Nudge-Versuch(e) erschöpft (Limit $MAX_NUDGE), Lead $lead nicht verifiziert"
-    [ "$_ESC_RESULT" = escalated ] && n_escalated=$((n_escalated+1)) || n_swallowed=$((n_swallowed+1))
+    esc_count "$_ESC_RESULT"
     continue
   fi
 
@@ -293,5 +339,5 @@ while IFS=$'\t' read -r uid path standup; do
   fi
 done <<< "$(projects)"
 
-echo "── inbox-watch: $n_new Projekt(e) mit Neuem, $n_nudge genudged/gebootet, $n_escalated eskaliert, $n_swallowed ungeweckt-verschluckt (registry=$REGISTRY)"
+echo "── inbox-watch: $n_new Projekt(e) mit Neuem, $n_nudge genudged/gebootet, $n_escalated eskaliert, $n_alert_failed Alert-Fehlschlag(e), $n_swallowed ungeweckt-verschluckt (registry=$REGISTRY)"
 exit 0

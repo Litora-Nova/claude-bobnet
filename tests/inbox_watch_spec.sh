@@ -59,6 +59,20 @@ t "(b) keine weitere NUDGE-Zeile im selben Tick" "0" "$(printf '%s\n' "$out" | g
 out="$(run)"
 t "(b) danach: ok (unverändert)" "1" "$(printf '%s\n' "$out" | grep -c 'alpha: ok')"
 
+# flock-Single-Instance-Guard (0.14.0-Gate, Riker-Fund): ein überlappender Zweitlauf wird
+# sauber übersprungen (exit 0, kein State-Touch), damit ein Timer-/Cron-Overlap die
+# "genau-einmal"-Eskalation nicht verletzen kann. Lock im Testprozess selbst halten (fd 8) —
+# der Watcher öffnet dieselbe Lock-Datei in einem eigenen Prozess (fd 9) und muss non-blocking
+# scheitern. Platziert an einem Punkt, an dem alpha/beta ruhig sind (beide "ok"), damit der
+# zusätzliche Lauf nach der Freigabe keine späteren Zyklen verfälscht.
+exec 8>"$tmp/state/.lock"
+flock -n 8
+out="$(run)"
+t "flock-Guard: Zweitlauf wird übersprungen" "1" "$(printf '%s\n' "$out" | grep -c 'Lauf übersprungen')"
+exec 8>&-
+out="$(run)"
+t "flock-Guard: nach Freigabe wieder normaler Lauf (alpha weiter ok)" "1" "$(printf '%s\n' "$out" | grep -c 'alpha: ok')"
+
 # busy (frisch) → skip-busy, State bleibt offen → Wiederholungslauf meldet weiter NEU
 echo "neuer eintrag" >> "$A/_inbox.md"
 echo "$(now) | busy | arbeite" > "$A/Zed.log"
@@ -164,6 +178,33 @@ echo "delta zwei" >> "$D/_inbox.md"
 echo "$(now) | idle | warte" > "$D/Deb.log"
 out="$(run)"
 t "(f) Alt-Format-State, geänderte Signatur → normal als NEU erkannt" "1" "$(printf '%s\n' "$out" | grep -c 'delta: NEU')"
+
+# (g) Alert-Fehlschlag getrennt zählen (0.14.0-Gate, Riker-Fund): ein ALERT_CMD, der selbst
+# fehlschlägt (rc≠0), darf NICHT als "eskaliert" durchgehen — eigener Zähler + eigene
+# Pro-Event-Zeile ("FEHLGESCHLAGEN", nicht "ESKALIERT").
+cat > "$tmp/alert_fail.sh" <<'SH'
+#!/usr/bin/env bash
+exit 1
+SH
+chmod +x "$tmp/alert_fail.sh"
+printf 'export TEAM_LEAD="Yui"\nexport INBOX_WATCH_ALERT_CMD="%s"\n' "$tmp/alert_fail.sh" > "$tmp/beta/_dev_team/dev-team.env"
+echo "beta content mit fehlschlagendem alert-cmd" >> "$B/_inbox.md"
+out="$(run)"
+t "(g) Alert-Fehlschlag NICHT als ESKALIERT gezählt (Pro-Event-Zeile)" "0" "$(printf '%s\n' "$out" | grep -c 'beta:.*ESKALIERT')"
+t "(g) Alert-Fehlschlag pro-Event-Zeile FEHLGESCHLAGEN" "1" "$(printf '%s\n' "$out" | grep -c 'beta:.*FEHLGESCHLAGEN')"
+t "(g) Summary zählt Alert-Fehlschlag separat (nicht als eskaliert)" "1" "$(printf '%s\n' "$out" | grep -cE '── inbox-watch:.*0 eskaliert, 1 Alert-Fehlschlag')"
+
+# (h) korrupte PENDING-Zeile konservativ (0.14.0-Gate, Marvin-Fund): fehlt ein Pflichtfeld
+# (hier: sig), NICHT permissiv mit lines=0 "verifizieren" (das lässt fast jeden Heartbeat sofort
+# als Zustellnachweis durchgehen) — stattdessen wie "kein State" behandeln, frischer Zyklus.
+echo "$(now) | idle | schon einige zeilen im log" > "$A/Zed.log"
+echo "$(now) | idle | noch mehr" >> "$A/Zed.log"
+printf 'PENDING lines=0 attempts=1' > "$tmp/state/alpha.state"   # sig fehlt -> korrupt
+echo "content für korrupten-pending-test" >> "$A/_inbox.md"
+out="$(run)"
+t "(h) korrupte PENDING-Zeile NICHT permissiv verifiziert" "0" "$(printf '%s\n' "$out" | grep -c 'alpha: Nudge verifiziert')"
+t "(h) korrupte PENDING-Zeile als frischer Zyklus behandelt" "1" "$(printf '%s\n' "$out" | grep -c 'alpha: PENDING-State korrupt')"
+t "(h) frischer Zyklus nudgt normal (#1)" "1" "$(printf '%s\n' "$out" | grep -c 'alpha: NUDGE #1')"
 
 echo "inbox_watch_spec: $pass passed, $fail failed"
 [ "$fail" = 0 ]
