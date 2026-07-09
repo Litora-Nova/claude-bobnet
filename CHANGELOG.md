@@ -4,7 +4,31 @@ All notable engine changes are documented here. Versioning follows SemVer (`VERS
 human-facing); machine compatibility is anchored separately by `SCHEMA_VERSION` (integer) —
 see `.claude/rules/contract.md`. `skills/update-bobs` points teams here after an update.
 
-## [0.13.0] — 2026-07-05
+## [0.14.0] — 2026-07-09
+
+### Fixed
+- **inbox-watch: delivery is now verified via the lead's heartbeat, not the mux return
+  code** (#48; field incident: customer mail sat unseen for a day). Previously a nudge —
+  or even a report-only pass with no wake path at all — finalized the watch state
+  immediately, silently swallowing the entry. Two real-world failure modes drove this:
+  report-only projects (no `MUX_SESSION`) were marked handled although nobody was woken,
+  and zellij delivers `write-chars` to sessions without an attached client as an
+  **unsubmitted draft** while the send returns success. The watcher now keeps a
+  `PENDING` state per event (signature + lead-log line-count snapshot + attempt counter):
+  delivered means the lead's heartbeat log grew since the nudge (line count, not
+  timestamps — the log has minute resolution); unverified events are re-nudged up to
+  `INBOX_WATCH_MAX_NUDGE` times (default 3). On re-nudge attempts a bare Enter is sent
+  first (new `mux_flush_draft` in `lib/mux.sh`, zellij only — submits a possibly stuck
+  draft once a client attaches; tmux path unchanged). Old plain-signature state files
+  are still read (treated as final).
+
+### Added
+- **Escalation hook `INBOX_WATCH_ALERT_CMD`** (opt-in, per-project `dev-team.env` or
+  unit env as fleet fallback): runs exactly once per event — `$ALERT_CMD <uid> <lead>
+  <standup-path>` — when re-nudge attempts are exhausted unverified, or when new entries
+  arrive with no wake path at all (report-only). Wire it to the instance's messenger
+  script to page a human. Without an alert command the watcher still finalizes (no
+  endless loop) but logs the case loudly as swallowed and counts it in the summary line.
 
 ### Added
 - **Known-sender mapping for the email channel** (#53): customer mail is the *main* case for
