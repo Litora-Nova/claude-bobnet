@@ -12,6 +12,7 @@
 #   mux_has  scut && echo "läuft"
 #   mux_list                       # Session-Namen, einer pro Zeile
 #   mux_send bob "[SCUT] hallo"    # Text + Enter (Notfall-Injection)
+#   mux_flush_draft bob            # nur zellij: hängenden Draft submitten (No-Op bei tmux)
 #   mux_capture bob                # sichtbarer Pane-Inhalt -> STDOUT
 #   mux_kill scut
 #
@@ -141,6 +142,18 @@ mux_capture() {
   else
     "$_MUX_BIN" --session "$name" action dump-screen 2>/dev/null
   fi
+}
+
+# mux_flush_draft NAME -> zellij: sendet ein "nacktes" Enter, um einen hängen gebliebenen
+#   Draft zu submitten (write-chars ohne write 13 bei fehlendem attached Client, s. o. — der
+#   Draft steht dann im Eingabefeld, bis irgendwann ein Client attached UND Enter kommt).
+#   Harmlos, wenn kein Draft aussteht (leere Zeile). tmux: No-Op — tmux liefert bereits
+#   zuverlässig zu, dieser Pfad bleibt unverändert (Issue #48).
+mux_flush_draft() {
+  _mux_resolve || return 1
+  local name="$1"
+  [ "$_MUX_BACKEND" = zellij ] || return 0
+  "$_MUX_BIN" --session "$name" action write 13 2>/dev/null
 }
 
 # mux_kill NAME -> Session beenden

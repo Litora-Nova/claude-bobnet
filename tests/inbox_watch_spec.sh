@@ -15,31 +15,63 @@ cat > "$tmp/registry.json" <<JSON
 { "version":1, "projects":[
   {"uid":"alpha","name":"alpha","path":"$tmp/alpha","standup":"$tmp/alpha/_dev_team/standup","status":"active"},
   {"uid":"beta","name":"beta","path":"$tmp/beta","standup":"$tmp/beta/_dev_team/standup","status":"active"},
-  {"uid":"leer","name":"leer","path":"$tmp/leer","standup":"$tmp/leer","status":"active"}
+  {"uid":"leer","name":"leer","path":"$tmp/leer","standup":"$tmp/leer","status":"active"},
+  {"uid":"delta","name":"delta","path":"$tmp/delta","standup":"$tmp/delta/_dev_team/standup","status":"active"}
 ]}
 JSON
 printf 'export TEAM_LEAD="Zed"\nexport MUX_SESSION="alpha_sess"\n' > "$tmp/alpha/_dev_team/dev-team.env"
 printf 'export TEAM_LEAD="Yui"\n' > "$tmp/beta/_dev_team/dev-team.env"
+# "delta" bleibt bis zum Alt-Format-Test (f) unmaterialisiert (keine _inbox.md -> harmlos "skip").
 
 A="$tmp/alpha/_dev_team/standup"; B="$tmp/beta/_dev_team/standup"
 echo "x | @Zed | hallo" > "$A/_inbox.md"
 echo "y | @Yui | hallo" > "$B/_inbox.md"
 now(){ date '+%Y-%m-%d %H:%M'; }
-run(){ DEV_TEAM_REGISTRY="$tmp/registry.json" INBOX_WATCH_STATE="$tmp/state" INBOX_WATCH_DRYRUN=1 bash "$BIN" 2>/dev/null; }
+MAXN=3
+run(){ DEV_TEAM_REGISTRY="$tmp/registry.json" INBOX_WATCH_STATE="$tmp/state" INBOX_WATCH_DRYRUN=1 INBOX_WATCH_MAX_NUDGE="$MAXN" bash "$BIN" 2>/dev/null; }
 
-# Lauf 1: alpha-Lead idle → NUDGE · beta ohne MUX_SESSION → report-only · leer ohne Inbox → skip
+# Lauf 1: alpha-Lead idle → NUDGE #1 (State bleibt PENDING, NICHT sofort finalisiert — Kern von
+# #48: der mux_send-rc ist nicht vertrauenswürdig, s. Kopf von inbox-watch.sh) · beta ohne
+# MUX_SESSION → kein Weckweg, kein Alert-Cmd konfiguriert → VERSCHLUCKT (laut geloggt, nicht
+# still wie vor #48) · leer ohne Inbox → skip
 echo "$(now) | idle | warte" > "$A/Zed.log"
 echo "$(now) | idle | warte" > "$B/Yui.log"
-out="$(run)"
-t "neu + idle → NUDGE" "1" "$(printf '%s\n' "$out" | grep -c 'alpha: NUDGE → alpha_sess')"
-t "ohne MUX_SESSION → report-only" "1" "$(printf '%s\n' "$out" | grep -c 'beta: NEU.*report-only')"
+out="$(run)"; rc=$?
+t "exit 0" "0" "$rc"
+t "neu + idle → NUDGE #1" "1" "$(printf '%s\n' "$out" | grep -c 'alpha: NUDGE #1 → alpha_sess')"
+t "ohne MUX_SESSION, kein Alert-Cmd → VERSCHLUCKT" "1" "$(printf '%s\n' "$out" | grep -c 'beta: NEU.*kein Weckweg.*VERSCHLUCKT')"
 t "ohne _inbox.md → skip" "1" "$(printf '%s\n' "$out" | grep -c 'leer: keine _inbox.md')"
-t "exit 0" "0" "$(run >/dev/null; echo $?)"
+t "State nach Nudge = PENDING, nicht final" "PENDING" "$(cut -d' ' -f1 "$tmp/state/alpha.state")"
 
-# Lauf 2: nichts Neues → beide ok (State wurde bei Nudge + report-only fortgeschrieben)
+# (a) Nudge finalisiert NICHT: ohne neuen Heartbeat bleibt die Signatur offen → Re-Nudge #2,
+# nicht "ok (unverändert)".
 out="$(run)"
-t "unverändert → ok (alpha)" "1" "$(printf '%s\n' "$out" | grep -c 'alpha: ok')"
-t "unverändert → ok (beta)" "1" "$(printf '%s\n' "$out" | grep -c 'beta: ok')"
+t "(a) Nudge finalisiert nicht → Re-Nudge #2 statt ok" "1" "$(printf '%s\n' "$out" | grep -c 'alpha: NUDGE #2 → alpha_sess')"
+t "(a) beta unverändert seit VERSCHLUCKT-Finalize → ok" "1" "$(printf '%s\n' "$out" | grep -c 'beta: ok')"
+
+# (b) Heartbeat NACH dem Nudge finalisiert: neue Log-Zeile (kanonisch: Stand-up beginnt mit
+# Heartbeat + Inbox lesen) verifiziert den ausstehenden Nudge, ohne dass sich die Inbox geändert
+# hat → State wird auf die genudgte Signatur finalisiert, kein weiterer Nudge nötig.
+echo "$(now) | idle | zurück" >> "$A/Zed.log"
+out="$(run)"
+t "(b) Heartbeat verifiziert den Nudge" "1" "$(printf '%s\n' "$out" | grep -c 'alpha: Nudge verifiziert')"
+t "(b) keine weitere NUDGE-Zeile im selben Tick" "0" "$(printf '%s\n' "$out" | grep -c 'alpha: NUDGE')"
+out="$(run)"
+t "(b) danach: ok (unverändert)" "1" "$(printf '%s\n' "$out" | grep -c 'alpha: ok')"
+
+# flock-Single-Instance-Guard (0.14.0-Gate, Riker-Fund): ein überlappender Zweitlauf wird
+# sauber übersprungen (exit 0, kein State-Touch), damit ein Timer-/Cron-Overlap die
+# "genau-einmal"-Eskalation nicht verletzen kann. Lock im Testprozess selbst halten (fd 8) —
+# der Watcher öffnet dieselbe Lock-Datei in einem eigenen Prozess (fd 9) und muss non-blocking
+# scheitern. Platziert an einem Punkt, an dem alpha/beta ruhig sind (beide "ok"), damit der
+# zusätzliche Lauf nach der Freigabe keine späteren Zyklen verfälscht.
+exec 8>"$tmp/state/.lock"
+flock -n 8
+out="$(run)"
+t "flock-Guard: Zweitlauf wird übersprungen" "1" "$(printf '%s\n' "$out" | grep -c 'Lauf übersprungen')"
+exec 8>&-
+out="$(run)"
+t "flock-Guard: nach Freigabe wieder normaler Lauf (alpha weiter ok)" "1" "$(printf '%s\n' "$out" | grep -c 'alpha: ok')"
 
 # busy (frisch) → skip-busy, State bleibt offen → Wiederholungslauf meldet weiter NEU
 echo "neuer eintrag" >> "$A/_inbox.md"
@@ -49,12 +81,13 @@ t "neu + busy → skip-busy" "1" "$(printf '%s\n' "$out" | grep -c 'alpha: NEU.*
 out="$(run)"
 t "busy-Skip hält State offen (re-check)" "1" "$(printf '%s\n' "$out" | grep -c 'alpha: NEU.*skip-busy')"
 
-# Lead wird done → jetzt NUDGE
+# Lead wird done → jetzt NUDGE (neuer Zyklus, Versuchszähler bei 1)
 echo "$(now) | done | fertig" > "$A/Zed.log"
 out="$(run)"
-t "done → NUDGE" "1" "$(printf '%s\n' "$out" | grep -c 'alpha: NUDGE')"
+t "done → NUDGE" "1" "$(printf '%s\n' "$out" | grep -c 'alpha: NUDGE #1')"
 
-# stale-busy: alter busy-Heartbeat zählt als idle
+# stale-busy: alter busy-Heartbeat zählt als idle (Signatur wandert weiter → neuer Zyklus, der
+# vorige unverifizierte Nudge bleibt bewusst hinter sich — s. Kopf-Doku Punkt 3)
 echo "weiterer eintrag" >> "$A/_inbox.md"
 echo "2020-01-01 00:00 | busy | uralt" > "$A/Zed.log"
 out="$(run)"
@@ -77,16 +110,101 @@ echo "GARBAGE-TS | busy | haengt" > "$A/Zed.log"
 out="$(run)"
 t "Müll-Timestamp + busy → NUDGE (stale)" "1" "$(printf '%s\n' "$out" | grep -c 'alpha: NUDGE')"
 
-# _inbox/-Dateidrop zählt als Neues
+# _inbox/-Dateidrop zählt als Neues (beta weiterhin ohne Alert-Cmd → VERSCHLUCKT)
 mkdir -p "$B/_inbox"; echo bild > "$B/_inbox/foto.txt"
 echo "$(now) | idle | warte" > "$B/Yui.log"
 out="$(run)"
-t "_inbox/-Drop → NEU (beta report-only)" "1" "$(printf '%s\n' "$out" | grep -c 'beta: NEU.*report-only')"
+t "_inbox/-Drop → NEU (beta VERSCHLUCKT)" "1" "$(printf '%s\n' "$out" | grep -c 'beta: NEU.*VERSCHLUCKT')"
 
 # Review-Queue-Eintrag zählt als Neues (ungerichtete Router-Mails dürfen nicht liegenbleiben)
 echo "x | UNGERICHTET (via email, von kunde) | anfrage" >> "$B/_review-queue.md"
 out="$(run)"
-t "_review-queue.md → NEU (beta report-only)" "1" "$(printf '%s\n' "$out" | grep -c 'beta: NEU.*report-only')"
+t "_review-queue.md → NEU (beta VERSCHLUCKT)" "1" "$(printf '%s\n' "$out" | grep -c 'beta: NEU.*VERSCHLUCKT')"
+
+# (c) Re-Nudge zählt hoch + respektiert INBOX_WATCH_MAX_NUDGE: frischer Zyklus mit Limit 2 —
+# #1, #2, dann erschöpft (KEIN #3), ohne Alert-Cmd laut VERSCHLUCKT.
+MAXN=2
+echo "frischer zyklus für re-nudge-test" >> "$A/_inbox.md"
+echo "$(now) | idle | warte" > "$A/Zed.log"
+out="$(run)"
+t "(c) Re-Nudge #1" "1" "$(printf '%s\n' "$out" | grep -c 'alpha: NUDGE #1')"
+out="$(run)"
+t "(c) Re-Nudge #2 (Versuchszähler hoch)" "1" "$(printf '%s\n' "$out" | grep -c 'alpha: NUDGE #2')"
+out="$(run)"
+t "(c) Limit respektiert: kein #3" "0" "$(printf '%s\n' "$out" | grep -c 'alpha: NUDGE #3')"
+t "(c) erschöpft ohne Alert-Cmd → VERSCHLUCKT" "1" "$(printf '%s\n' "$out" | grep -c 'alpha:.*erschöpft.*VERSCHLUCKT')"
+
+# (d) Alert-Cmd feuert GENAU EINMAL bei Erschöpfung.
+alerts="$tmp/alerts.log"
+cat > "$tmp/alert.sh" <<SH
+#!/usr/bin/env bash
+echo "ALERT uid=\$1 lead=\$2 standup=\$3" >> "$alerts"
+SH
+chmod +x "$tmp/alert.sh"
+printf 'export INBOX_WATCH_ALERT_CMD="%s"\n' "$tmp/alert.sh" >> "$tmp/alpha/_dev_team/dev-team.env"
+echo "neuer zyklus mit alert-cmd" >> "$A/_inbox.md"
+echo "$(now) | idle | warte" > "$A/Zed.log"
+run >/dev/null   # #1
+run >/dev/null   # #2 (MAXN=2)
+out="$(run)"     # erschöpft → eskalieren
+t "(d) erschöpft MIT Alert-Cmd → ESKALIERT" "1" "$(printf '%s\n' "$out" | grep -c 'alpha:.*erschöpft.*ESKALIERT')"
+t "(d) Alert-Cmd genau einmal ausgeführt" "1" "$(wc -l < "$alerts" | tr -d ' ')"
+out="$(run)"
+t "(d) danach finalisiert → ok, kein zweiter Alert" "1" "$(printf '%s\n' "$out" | grep -c 'alpha: ok')"
+t "(d) alerts.log wächst nicht weiter" "1" "$(wc -l < "$alerts" | tr -d ' ')"
+
+# (e) report-only + Alert-Cmd feuert (kein MUX_SESSION → kein Re-Nudge-Zyklus, direkt eskaliert).
+printf 'export INBOX_WATCH_ALERT_CMD="%s"\n' "$tmp/alert.sh" >> "$tmp/beta/_dev_team/dev-team.env"
+echo "beta ohne weckweg, mit alert" >> "$B/_inbox.md"
+out="$(run)"
+t "(e) report-only MIT Alert-Cmd → ESKALIERT" "1" "$(printf '%s\n' "$out" | grep -c 'beta:.*kein Weckweg.*ESKALIERT')"
+t "(e) Alert-Cmd feuert (zweiter Eintrag, uid=beta)" "1" "$(tail -n1 "$alerts" | grep -c 'uid=beta')"
+t "(e) alerts.log jetzt 2 Zeilen (alpha + beta)" "2" "$(wc -l < "$alerts" | tr -d ' ')"
+out="$(run)"
+t "(e) danach finalisiert → ok, kein erneuter Alert" "1" "$(printf '%s\n' "$out" | grep -c 'beta: ok')"
+t "(e) alerts.log wächst nicht weiter" "2" "$(wc -l < "$alerts" | tr -d ' ')"
+
+# (f) Alt-Format-State kompatibel: eine vorbestehende nackte Signatur (Format vor #48) wird als
+# "final" gelesen — kein Crash, keine Fehlinterpretation als PENDING; danach normale NEU-Erkennung.
+mkdir -p "$tmp/delta/_dev_team/standup"
+D="$tmp/delta/_dev_team/standup"
+printf 'export TEAM_LEAD="Deb"\n' > "$tmp/delta/_dev_team/dev-team.env"
+echo "delta eins" > "$D/_inbox.md"
+dsig="$(wc -c < "$D/_inbox.md" | tr -d ' '):0:0"
+printf '%s' "$dsig" > "$tmp/state/delta.state"
+out="$(run)"
+t "(f) Alt-Format-State unverändert → ok (kein Crash)" "1" "$(printf '%s\n' "$out" | grep -c 'delta: ok')"
+echo "delta zwei" >> "$D/_inbox.md"
+echo "$(now) | idle | warte" > "$D/Deb.log"
+out="$(run)"
+t "(f) Alt-Format-State, geänderte Signatur → normal als NEU erkannt" "1" "$(printf '%s\n' "$out" | grep -c 'delta: NEU')"
+
+# (g) Alert-Fehlschlag getrennt zählen (0.14.0-Gate, Riker-Fund): ein ALERT_CMD, der selbst
+# fehlschlägt (rc≠0), darf NICHT als "eskaliert" durchgehen — eigener Zähler + eigene
+# Pro-Event-Zeile ("FEHLGESCHLAGEN", nicht "ESKALIERT").
+cat > "$tmp/alert_fail.sh" <<'SH'
+#!/usr/bin/env bash
+exit 1
+SH
+chmod +x "$tmp/alert_fail.sh"
+printf 'export TEAM_LEAD="Yui"\nexport INBOX_WATCH_ALERT_CMD="%s"\n' "$tmp/alert_fail.sh" > "$tmp/beta/_dev_team/dev-team.env"
+echo "beta content mit fehlschlagendem alert-cmd" >> "$B/_inbox.md"
+out="$(run)"
+t "(g) Alert-Fehlschlag NICHT als ESKALIERT gezählt (Pro-Event-Zeile)" "0" "$(printf '%s\n' "$out" | grep -c 'beta:.*ESKALIERT')"
+t "(g) Alert-Fehlschlag pro-Event-Zeile FEHLGESCHLAGEN" "1" "$(printf '%s\n' "$out" | grep -c 'beta:.*FEHLGESCHLAGEN')"
+t "(g) Summary zählt Alert-Fehlschlag separat (nicht als eskaliert)" "1" "$(printf '%s\n' "$out" | grep -cE '── inbox-watch:.*0 eskaliert, 1 Alert-Fehlschlag')"
+
+# (h) korrupte PENDING-Zeile konservativ (0.14.0-Gate, Marvin-Fund): fehlt ein Pflichtfeld
+# (hier: sig), NICHT permissiv mit lines=0 "verifizieren" (das lässt fast jeden Heartbeat sofort
+# als Zustellnachweis durchgehen) — stattdessen wie "kein State" behandeln, frischer Zyklus.
+echo "$(now) | idle | schon einige zeilen im log" > "$A/Zed.log"
+echo "$(now) | idle | noch mehr" >> "$A/Zed.log"
+printf 'PENDING lines=0 attempts=1' > "$tmp/state/alpha.state"   # sig fehlt -> korrupt
+echo "content für korrupten-pending-test" >> "$A/_inbox.md"
+out="$(run)"
+t "(h) korrupte PENDING-Zeile NICHT permissiv verifiziert" "0" "$(printf '%s\n' "$out" | grep -c 'alpha: Nudge verifiziert')"
+t "(h) korrupte PENDING-Zeile als frischer Zyklus behandelt" "1" "$(printf '%s\n' "$out" | grep -c 'alpha: PENDING-State korrupt')"
+t "(h) frischer Zyklus nudgt normal (#1)" "1" "$(printf '%s\n' "$out" | grep -c 'alpha: NUDGE #1')"
 
 echo "inbox_watch_spec: $pass passed, $fail failed"
 [ "$fail" = 0 ]

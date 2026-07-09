@@ -140,7 +140,24 @@ normalisiert zu Events, `scripts/scut-router.sh` triagiert datengetrieben (Regis
    Template pro Projekt, Env aus `dev-team.env`) ist Instanz-Sache; **Secrets + Scharfschalten
    = `{HUMAN}`-only (T4)**.
 3. **Letzte Meile:** Neue Inbox-Einträge weckt der Inbox-Watcher (Issue #44) — Leads werden
-   bei idle genudged statt Prompts zu kapern (konsistent mit §Kanon Inbox-first).
+   bei idle genudged statt Prompts zu kapern (konsistent mit §Kanon Inbox-first). **Zustellung
+   ist seit #48 heartbeat-verifiziert, nicht mehr am mux_send-Returncode abgelesen** (Feld-Fund
+   2026-07-05: zellij `write-chars`/`write 13` an eine Session ohne attached Client landet als
+   unabgeschickter Draft, der rc sieht trotzdem „ok" aus). Ein Nudge finalisiert den Watch-State
+   deshalb nicht mehr sofort, sondern erst wenn der Lead seither selbst geheartbeatet hat
+   (Stand-up beginnt kanonisch mit Heartbeat + Inbox lesen — das gilt als Zustellnachweis).
+   Bleibt die Verifikation aus, nudgt der Watcher erneut (`INBOX_WATCH_MAX_NUDGE`, Default 3).
+   Sind die Versuche erschöpft, oder existiert gar kein Weckweg (report-only ohne
+   `MUX_SESSION`), ist das **best-effort**: ohne `INBOX_WATCH_ALERT_CMD` (opt-in) wird der State
+   trotzdem finalisiert (kein Endlos-Loop), aber laut als „verschluckt" geloggt — mit
+   Alert-Cmd läuft der Eskalations-Hook stattdessen genau einmal (schlägt der Alert-Cmd selbst
+   fehl, zählt das separat, nicht als „eskaliert"). Ein überlappender Timer-/Cron-Lauf wird über
+   ein `flock` sauber übersprungen, damit das „genau einmal" auch bei Overlap hält. **Bekannte
+   Grenze:** die Heartbeat-Verifikation ist eine Heuristik, kein Beweis, dass die Inbox
+   tatsächlich gelesen wurde — heartbeatet der Lead nach dem Nudge wegen anderer Arbeit, gilt der
+   Nudge trotzdem als zugestellt; bewusst in Kauf genommen, weil verlässlicher als der
+   mux_send-rc. Details/Env: Kopf von
+   `scripts/inbox-watch.sh`.
 4. **Cross-Installation (BobNet-Bridge, #45):** `bobnet-send.sh <peer> "[uid][@Agent]: …"` →
    drüben forced-command `bridge-receive.sh <peer>` (Pflicht-Adressierung, Empfänger stempelt
    ts/Identität selbst, flock-Append, Audit-Log beidseitig). Die beiden Seiten wiegen dabei
