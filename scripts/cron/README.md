@@ -56,4 +56,6 @@ Persistent=true
 ```
 
 Cron-Äquivalent: `*/3 * * * * <engine>/scripts/inbox-watch.sh >> <standup>/inbox-watch.log 2>&1`.
-Instanz-Kontrakt (`dev-team.env`: `TEAM_LEAD`/`MUX_SESSION`/`BOOT_CMD`) im Script-Header.
+Instanz-Kontrakt (`dev-team.env`: `TEAM_LEAD`/`MUX_SESSION`/`BOOT_CMD`/`INBOX_WATCH_ALERT_CMD`)
+im Script-Header. Seit #48 ist Zustellung heartbeat-verifiziert (Re-Nudge + optionaler
+Eskalations-Hook statt sofortigem Finalisieren) — Details ebenfalls im Script-Header.
