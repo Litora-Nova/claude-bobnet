@@ -206,5 +206,57 @@ t "(h) korrupte PENDING-Zeile NICHT permissiv verifiziert" "0" "$(printf '%s\n' 
 t "(h) korrupte PENDING-Zeile als frischer Zyklus behandelt" "1" "$(printf '%s\n' "$out" | grep -c 'alpha: PENDING-State korrupt')"
 t "(h) frischer Zyklus nudgt normal (#1)" "1" "$(printf '%s\n' "$out" | grep -c 'alpha: NUDGE #1')"
 
+# (i)/(j) Boot-Pfad (INBOX_WATCH_BOOT=1): dev-team.env wird vor BOOT_CMD gesourct, weil
+# BOOT_CMD in einer FRISCHEN Shell läuft (mux_spawn) — sonst wären $PROJECT_ROOT & Co. dort leer
+# (gleicher Fußgänger + gleiche Kur wie bin/recycle f083dd3). Braucht einen echten Multiplexer
+# (DRYRUN endet vor dem Boot-Zweig) — Backend fest auf tmux, das liefert auch headless
+# zuverlässig zu (zellij ohne attached Client laut mux.sh-Doku nicht).
+if command -v tmux >/dev/null 2>&1; then
+  boot_marker="$tmp/boot_marker.txt"
+  boot_sess="inbox_watch_spec_boot_$$"
+  tmux kill-session -t "$boot_sess" >/dev/null 2>&1 || true
+  mkdir -p "$tmp/epsilon/_dev_team/standup"
+  EP="$tmp/epsilon/_dev_team/standup"
+  echo "e | @Deb | hallo" > "$EP/_inbox.md"
+  cat > "$tmp/epsilon/_dev_team/dev-team.env" <<ENVEOF
+export TEAM_LEAD="Deb"
+export MUX_SESSION="$boot_sess"
+export PROJECT_ROOT="$tmp/epsilon"
+export BOOT_CMD="echo PROJECT_ROOT=\$PROJECT_ROOT >> $boot_marker; sleep 30"
+ENVEOF
+  python3 - "$tmp/registry.json" "$tmp/epsilon" "$EP" <<'PY'
+import json, sys
+p, path, standup = sys.argv[1], sys.argv[2], sys.argv[3]
+d = json.load(open(p))
+d["projects"].append({"uid": "epsilon", "name": "epsilon", "path": path, "standup": standup, "status": "active"})
+json.dump(d, open(p, "w"))
+PY
+  BOBNET_MUX=tmux DEV_TEAM_REGISTRY="$tmp/registry.json" INBOX_WATCH_STATE="$tmp/state" INBOX_WATCH_BOOT=1 bash "$BIN" >/dev/null 2>&1
+  sleep 1
+  t "(i) BOOT_CMD sieht Env-Werte aus dev-team.env (PROJECT_ROOT nicht leer)" "1" "$(grep -Fc "PROJECT_ROOT=$tmp/epsilon" "$boot_marker" 2>/dev/null || echo 0)"
+  tmux kill-session -t "$boot_sess" >/dev/null 2>&1 || true
+
+  # (j) dev-team.env vorhanden (MUX_SESSION bekannt), aber ohne BOOT_CMD -> weiterhin "Boot
+  # nicht möglich", kein Crash. Die neue start_cmd-Konstruktion (liest+quoted envf VOR der
+  # boot_cmd-Prüfung) darf diesen bestehenden Fall nicht verändern/brechen.
+  mkdir -p "$tmp/zeta/_dev_team/standup"
+  ZE="$tmp/zeta/_dev_team/standup"
+  echo "z | @Deb | hallo" > "$ZE/_inbox.md"
+  zeta_sess="inbox_watch_spec_zeta_$$"
+  printf 'export TEAM_LEAD="Deb"\nexport MUX_SESSION="%s"\n' "$zeta_sess" > "$tmp/zeta/_dev_team/dev-team.env"
+  python3 - "$tmp/registry.json" "$tmp/zeta" "$ZE" <<'PY'
+import json, sys
+p, path, standup = sys.argv[1], sys.argv[2], sys.argv[3]
+d = json.load(open(p))
+d["projects"].append({"uid": "zeta", "name": "zeta", "path": path, "standup": standup, "status": "active"})
+json.dump(d, open(p, "w"))
+PY
+  out="$(BOBNET_MUX=tmux DEV_TEAM_REGISTRY="$tmp/registry.json" INBOX_WATCH_STATE="$tmp/state" INBOX_WATCH_BOOT=1 bash "$BIN" 2>/dev/null)"; rc=$?
+  t "(j) fehlendes BOOT_CMD -> exit weiterhin 0" "0" "$rc"
+  t "(j) ... unveränderte Meldung, kein Crash" "1" "$(printf '%s\n' "$out" | grep -c 'zeta:.*Boot nicht möglich')"
+else
+  echo "HINWEIS: tmux nicht verfügbar — Boot-Pfad-Tests (i)/(j) übersprungen"
+fi
+
 echo "inbox_watch_spec: $pass passed, $fail failed"
 [ "$fail" = 0 ]
