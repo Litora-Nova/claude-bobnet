@@ -1,0 +1,319 @@
+#!/usr/bin/env bash
+# bin/recycle <PROJECT_UID> — geordneter Lead-Session-Tausch bei vollem Kontext („Recycle").
+#
+# PO-Auftrag 2026-07-15: Lange Lead-Sessions werden zäh (Kontext voll) und reagieren irgendwann
+# nicht mehr. Statt Hand-Chirurgie (Übergabe diktieren, /clear tippen, neu briefen): EIN Kommando,
+# das den Lead GEORDNET durchtauscht — Continuity sichern, Session frisch booten, Stand-up läuft
+# automatisch an. Von Hand nutzbar und Colonel-/cron-triggerbar (--yes).
+#
+# Ablauf (Phasen):
+#   [1/4] ÜBERGABE  Lead per mux_send bitten, Continuity zu sichern (NEXT_SESSION + standup
+#                   committen/pushen) und das per Heartbeat-Marker „recycle-ready" zu quittieren.
+#                   Verifikation über NEUE Heartbeat-Zeilen (Zeilenzahl-Snapshot — Muster aus
+#                   inbox-watch.sh/#48), NICHT über den mux_send-Returncode. Zur Halbzeit einmal
+#                   mux_flush_draft + Re-Ping (zellij-Draft-Grenze, s. u.).
+#   [2/4] KILL      Session beenden (mux_kill — misst am Resultat, nicht am rc; 1 Retry).
+#   [3/4] BOOT      Frisch starten via mux_boot (lib/boot.sh): Boot-Briefing landet VOR dem Spawn
+#                   in der Ziel-Inbox, der SessionStart-Hook liest sie beim Boot. Funktioniert
+#                   HEADLESS (zellij #35: spawn geht ohne attached Client, write-chars nicht).
+#   [4/4] VERIFY    Warten, bis der frische Lead heartbeatet (neue Log-Zeile) — sonst ⚠ (rc 6).
+#
+# Sicherheits-Gates (VOR jedem Eingriff):
+#   - BOOT_CMD fehlt                 → ABBRUCH (65). NIE killen ohne Boot-Pfad.
+#   - Lead busy (frisch) / blocked   → ABBRUCH (3); --force übersteuert bewusst.
+#   - Übergabe-Timeout               → ABBRUCH (4) mit Lagebild. KEIN Auto-Fallback auf --hard:
+#                                      ungesicherter Kontext geht beim Kill verloren — diese
+#                                      Entscheidung trifft der Aufrufer explizit (--hard).
+#   - Session existiert nicht        → Übergabe/Kill entfallen, direkt BOOT (recycle == boot).
+#
+# Bekannte Grenze (zellij headless, #35/#48): mux_send an eine Session OHNE attached Client landet
+# als unabgeschickter Draft — die Übergabe-Bitte kommt dann ggf. nie an und die Phase läuft in den
+# Timeout. Dann ist --hard der ehrliche Weg (mit Lagebild zur letzten Lead-Aktivität). tmux ist
+# davon nicht betroffen (adressiert detached Panes server-seitig).
+#
+# Instanz-Kontrakt (<projekt>/_dev_team/dev-team.env — wird in einer Subshell gesourcet):
+#   TEAM_LEAD    Heartbeat-/Logname des Leads (Default: Bob)
+#   MUX_SESSION  Multiplexer-Session des Leads (PFLICHT — ohne sie ist nichts zu recyclen)
+#   BOOT_CMD     self-contained Start-Kommando des Leads, headless-tauglich (PFLICHT), z. B.
+#                  export BOOT_CMD='cd "$PROJECT_ROOT" && claude "Moin, Stand-up bitte."'
+#                Permission-Modus ist bewusst NICHT Teil des Boots (Mensch-Call, lessons.md).
+#
+# Env:
+#   DEV_TEAM_REGISTRY           zentrale projects.registry.json (Default: <tool-hub>/projects.registry.json)
+#   RECYCLE_HANDOVER_TIMEOUT_S  Übergabe-Timeout (Default 600)
+#   RECYCLE_BOOT_TIMEOUT_S      Verify-Timeout nach Boot (Default 600)
+#   RECYCLE_POLL_S              Poll-Intervall (Default 15)
+#   RECYCLE_STALE_MIN           busy gilt nach N Minuten als stale → recycelbar (Default 90,
+#                               analog INBOX_WATCH_STALE_MIN)
+#
+# Exit: 0 ok · 2 usage/Abbruch · 3 Gate (busy/blocked) · 4 Übergabe-Timeout · 5 Kill-/Boot-Fehler ·
+#       6 Boot ohne Heartbeat-Verify · 64 UID unbekannt · 65 Instanz-Konfig unvollständig
+set -uo pipefail
+
+BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENGINE_ROOT="$(cd "$BIN_DIR/.." && pwd)"
+TOOLHUB="$(cd "$ENGINE_ROOT/.." && pwd)"
+. "$ENGINE_ROOT/scripts/lib/boot.sh"   # liefert mux_boot + (via mux.sh) mux_has/send/kill/flush
+
+REGISTRY="${DEV_TEAM_REGISTRY:-$TOOLHUB/projects.registry.json}"
+HANDOVER_TIMEOUT_S="${RECYCLE_HANDOVER_TIMEOUT_S:-600}"
+BOOT_TIMEOUT_S="${RECYCLE_BOOT_TIMEOUT_S:-600}"
+POLL_S="${RECYCLE_POLL_S:-15}"
+STALE_MIN="${RECYCLE_STALE_MIN:-90}"
+
+usage() {
+  cat <<'USAGE'
+Usage: bin/recycle <PROJECT_UID> [Optionen]
+
+Geordneter Lead-Session-Tausch bei vollem Kontext: Übergabe → Kill → frischer Boot → Verify.
+
+Optionen:
+  --hard      Übergabe-Phase überspringen (Lead nicht erreichbar / headless-Grenze).
+              ACHTUNG: ungesicherter Kontext geht verloren — Lagebild wird angezeigt.
+  --force     busy/blocked-Gate übersteuern (Kill in laufende Arbeit — nur wenn du sicher bist).
+  --yes       keine Rückfrage (Automation/Colonel/cron).
+  --dry-run   nur zeigen, was passieren würde (keine Eingriffe, kein Warten).
+  -h|--help   diese Hilfe.
+
+Beispiele:
+  bin/recycle acme                 # interaktiv, graceful
+  bin/recycle acme --hard --yes    # nicht erreichbarer Lead, automatisiert
+
+Env: RECYCLE_HANDOVER_TIMEOUT_S (600) · RECYCLE_BOOT_TIMEOUT_S (600) · RECYCLE_POLL_S (15) ·
+     RECYCLE_STALE_MIN (90) · DEV_TEAM_REGISTRY (<tool-hub>/projects.registry.json)
+Exit: 0 ok · 2 usage/Abbruch · 3 Gate · 4 Übergabe-Timeout · 5 Kill-/Boot-Fehler ·
+      6 kein Heartbeat-Verify · 64 UID unbekannt · 65 Konfig unvollständig
+USAGE
+}
+
+pass() { printf '  ✓ %s\n' "$*"; }
+warn() { printf '  ⚠ %s\n' "$*"; }
+fail() { printf '  ✗ %s\n' "$*"; }
+note() { printf '    %s\n' "$*"; }
+
+# ── Argumente ─────────────────────────────────────────────────────────────────────────────────────
+UID_ARG=""; HARD=0; FORCE=0; YES=0; DRYRUN=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --hard)    HARD=1 ;;
+    --force)   FORCE=1 ;;
+    --yes)     YES=1 ;;
+    --dry-run) DRYRUN=1 ;;
+    -h|--help) usage; exit 0 ;;
+    -*)        echo "recycle: unbekannte Option '$1'" >&2; usage >&2; exit 2 ;;
+    *)         [ -n "$UID_ARG" ] && { echo "recycle: genau EINE UID erwartet" >&2; exit 2; }
+               UID_ARG="$1" ;;
+  esac
+  shift
+done
+[ -n "$UID_ARG" ] || { usage >&2; exit 2; }
+
+# env_get <envfile> <key> — dev-team.env ist per Kontrakt sourcebar; Subshell-Source statt
+# sed-Parsing, damit Quoting + $VAR-Expansion (z. B. BOOT_CMD mit "…"-Prompt) korrekt ankommen.
+env_get() {
+  [ -f "$1" ] || return 0
+  ( set +u; . "$1" >/dev/null 2>&1; eval "printf '%s' \"\${$2:-}\"" )
+}
+
+# expand_tilde — Registry speichert ~ ggf. literal (wie scut-router.sh/inbox-watch.sh).
+expand_tilde() { case "$1" in "~"/*) printf '%s' "$HOME/${1#\~/}";; *) printf '%s' "$1";; esac; }
+
+# lead_state <log> — "idle|done|busy|blocked|none:age_min" (aus inbox-watch.sh übernommen —
+# Kandidat für scripts/lib/standup.sh, Merge-Call des Engine-Leads).
+lead_state() {
+  local log="$1"
+  [ -f "$log" ] || { printf 'none:0'; return; }
+  local last; last="$(tail -n1 "$log")"
+  local ts st
+  ts="$(printf '%s' "$last" | cut -d'|' -f1 | sed 's/[[:space:]]*$//')"
+  st="$(printf '%s' "$last" | cut -d'|' -f2 | tr -d ' ')"
+  local es now age=99999
+  es="$(date -d "$ts" +%s 2>/dev/null || echo 0)"; now="$(date +%s)"
+  [ "$es" -gt 0 ] && age=$(( (now-es)/60 ))
+  printf '%s:%s' "${st:-none}" "$age"
+}
+
+log_line_count() { [ -f "$1" ] && wc -l < "$1" | tr -d ' ' || printf '0'; }
+
+# marker_since <log> <lines_before> <pattern> — NEUE Zeilen (nach Snapshot) auf Marker prüfen.
+marker_since() {
+  [ -f "$1" ] || return 1
+  tail -n "+$(( $2 + 1 ))" "$1" 2>/dev/null | grep -qi -- "$3"
+}
+
+heartbeat_since() { [ "$(log_line_count "$1")" -gt "$2" ]; }
+
+# ── [0] Auflösen + Vorflug ────────────────────────────────────────────────────────────────────────
+echo "=== recycle: $UID_ARG ==="
+echo "[0/4] Auflösen + Vorflug"
+
+proj="$(
+  REG_FILE="$REGISTRY" REG_UID="$UID_ARG" python3 - <<'PY'
+import json, os, sys
+uid = os.environ["REG_UID"]
+try:
+    data = json.load(open(os.environ["REG_FILE"]))
+except Exception:
+    sys.exit(1)
+for p in data.get("projects", []):
+    if isinstance(p, dict) and (p.get("uid") == uid or (not p.get("uid") and p.get("name") == uid)):
+        standup = p.get("standup") or os.path.join(p.get("path", ""), "_dev_team", "standup")
+        print("%s\t%s" % (p.get("path", ""), standup))
+        sys.exit(0)
+sys.exit(3)
+PY
+)" || { fail "UID '$UID_ARG' nicht in Registry ($REGISTRY)"; exit 64; }
+
+IFS=$'\t' read -r raw_path raw_standup <<< "$proj"
+path="$(expand_tilde "$raw_path")"
+standup="$(expand_tilde "$raw_standup")"
+envf="$path/_dev_team/dev-team.env"
+
+lead="$(env_get "$envf" TEAM_LEAD)"; lead="${lead:-Bob}"
+session="$(env_get "$envf" MUX_SESSION)"
+boot_cmd="$(env_get "$envf" BOOT_CMD)"
+leadlog="$standup/$lead.log"
+
+pass "Registry: path=$path"
+pass "Lead=$lead · Log=$leadlog"
+
+[ -n "$session" ] || { fail "MUX_SESSION fehlt in $envf — report-only-Projekt, nichts zu recyclen"; exit 65; }
+[ -n "$boot_cmd" ] || { fail "BOOT_CMD fehlt in $envf — ohne Boot-Pfad wird NICHT gekillt"; exit 65; }
+pass "Session=$session · BOOT_CMD gesetzt"
+
+mux_backend >/dev/null 2>&1 || { fail "kein Multiplexer (tmux/zellij) auffindbar"; exit 5; }
+
+session_up=0
+mux_has "$session" 2>/dev/null && session_up=1
+st_age="$(lead_state "$leadlog")"; st="${st_age%%:*}"; age="${st_age##*:}"
+if [ "$session_up" = 1 ]; then
+  pass "Session läuft · Lead-Heartbeat: $st (${age}min alt)"
+else
+  warn "Session '$session' existiert nicht — Übergabe/Kill entfallen, recycle == frischer Boot"
+fi
+
+# Gate: in laufende Arbeit wird nicht hineingekillt (idle-Lead ≠ kaputt — lessons.md).
+if [ "$session_up" = 1 ] && [ "$FORCE" != 1 ]; then
+  if { [ "$st" = busy ] && [ "$age" -lt "$STALE_MIN" ]; } || [ "$st" = blocked ]; then
+    fail "Lead $lead ist $st (${age}min) — kein Recycle in laufende/blockierte Arbeit (--force übersteuert)"
+    exit 3
+  fi
+fi
+
+# Rückfrage (Mensch am Terminal), außer --yes/--dry-run. Non-interaktiv OHNE --yes = Abbruch.
+if [ "$YES" != 1 ] && [ "$DRYRUN" != 1 ]; then
+  if [ -t 0 ]; then
+    printf 'Session "%s" (Lead %s, %s) wird beendet + frisch gebootet. Weiter? [y/N] ' "$session" "$lead" "$UID_ARG"
+    read -r answer
+    case "$answer" in y|Y|yes|j|J|ja) : ;; *) echo "Abbruch."; exit 2 ;; esac
+  else
+    fail "non-interaktiv ohne --yes — Abbruch (Automation bitte explizit --yes geben)"
+    exit 2
+  fi
+fi
+
+ts_now() { date '+%Y-%m-%d %H:%M'; }
+
+# ── [1] ÜBERGABE ──────────────────────────────────────────────────────────────────────────────────
+echo "[1/4] ÜBERGABE (Continuity sichern)"
+handover_note="Übergabe übersprungen"
+if [ "$session_up" != 1 ]; then
+  note "Session down — nichts zu übergeben."
+  handover_note="Session war down (kein Übergabe-Versuch)"
+elif [ "$HARD" = 1 ]; then
+  warn "HARD: Übergabe übersprungen — letzte Lead-Aktivität: $st vor ${age}min"
+  [ -f "$leadlog" ] && note "letzte Heartbeat-Zeile: $(tail -n1 "$leadlog")"
+  note "Ungesicherter Kontext seit dieser Aktivität geht verloren."
+  handover_note="HARD ohne Übergabe (letzte Aktivität: $st vor ${age}min)"
+elif [ "$DRYRUN" = 1 ]; then
+  note "(dry-run) würde Übergabe-Bitte an '$session' senden und bis ${HANDOVER_TIMEOUT_S}s auf Heartbeat-Marker 'recycle-ready' warten"
+else
+  lines_before="$(log_line_count "$leadlog")"
+  handover_text="♻️ RECYCLE [$UID_ARG]: Kontext-Tausch angesetzt. Bitte JETZT Continuity sichern — NEXT_SESSION aktualisieren, standup committen+pushen (Feierabend-light) — und als Quittung heartbeaten: Status done mit Text \"recycle-ready\". Deine Session wird danach automatisch frisch gebootet; Weiterarbeit per Stand-up."
+  mux_send "$session" "$handover_text" 2>/dev/null || warn "mux_send meldete Fehler — warte trotzdem auf Heartbeat (rc ist ohnehin nicht belastbar, #48)"
+  deadline=$(( $(date +%s) + HANDOVER_TIMEOUT_S )); repinged=0; ready=0
+  while [ "$(date +%s)" -lt "$deadline" ]; do
+    if marker_since "$leadlog" "$lines_before" "recycle-ready"; then ready=1; break; fi
+    if [ "$repinged" = 0 ] && [ "$(date +%s)" -ge $(( deadline - HANDOVER_TIMEOUT_S / 2 )) ]; then
+      mux_flush_draft "$session" 2>/dev/null   # hängenden zellij-Draft submitten (Muster inbox-watch)
+      mux_send "$session" "$handover_text" 2>/dev/null
+      repinged=1
+      note "Halbzeit — Draft geflusht + Re-Ping gesendet"
+    fi
+    sleep "$POLL_S"
+  done
+  if [ "$ready" = 1 ]; then
+    pass "Lead quittierte 'recycle-ready' — Continuity gesichert"
+    handover_note="Übergabe quittiert (recycle-ready)"
+  else
+    fail "Übergabe-Timeout (${HANDOVER_TIMEOUT_S}s) — Lead reagierte nicht"
+    note "Lagebild: letzte Lead-Aktivität $st vor ${age}min$( [ -f "$leadlog" ] && printf ' — %s' "$(tail -n1 "$leadlog")" )"
+    note "Kein Auto-Kill: wenn du den Verlust des ungesicherten Kontexts akzeptierst → --hard"
+    exit 4
+  fi
+fi
+
+# ── [2] KILL ──────────────────────────────────────────────────────────────────────────────────────
+echo "[2/4] KILL"
+if [ "$session_up" != 1 ]; then
+  note "Session bereits down — übersprungen."
+elif [ "$DRYRUN" = 1 ]; then
+  note "(dry-run) würde Session '$session' beenden (mux_kill + Verify am Resultat)"
+else
+  mux_kill "$session" >/dev/null 2>&1 || true
+  sleep 1
+  if mux_has "$session" 2>/dev/null; then
+    mux_kill "$session" >/dev/null 2>&1 || true
+    sleep 2
+    if mux_has "$session" 2>/dev/null; then
+      fail "Session '$session' lebt nach 2 Kill-Versuchen noch — Abbruch (nichts gebootet)"
+      exit 5
+    fi
+  fi
+  pass "Session beendet"
+fi
+
+# ── [3] BOOT ──────────────────────────────────────────────────────────────────────────────────────
+echo "[3/4] BOOT (frischer Kontext, Briefing inbox-first)"
+briefing="♻️ Recycle $(ts_now): deine Session wurde geordnet neu gestartet (frischer Kontext; $handover_note). Bitte Stand-up: Continuity/NEXT_SESSION + Inbox lesen, Heartbeat setzen, weitermachen."
+if [ "$DRYRUN" = 1 ]; then
+  note "(dry-run) würde Briefing nach $standup/_inbox.md droppen und '$session' spawnen mit:"
+  note "BOOT_CMD: $boot_cmd"
+  echo "[4/4] VERIFY"
+  note "(dry-run) würde bis ${BOOT_TIMEOUT_S}s auf frischen Lead-Heartbeat warten"
+  echo "--- recycle (dry-run): kein Eingriff erfolgt ---"
+  exit 0
+fi
+lines_boot="$(log_line_count "$leadlog")"
+# BOOT_CMD läuft in einer FRISCHEN Shell (mux_spawn) — dev-team.env vorher sourcen, damit
+# $PROJECT_ROOT & Co. im Kommando tragen (die Datei ist per Kontrakt sourcebar; ein
+# Source-Fehler bricht den Boot nicht ab).
+start_cmd="{ [ -f $(printf '%q' "$envf") ] && . $(printf '%q' "$envf"); } >/dev/null 2>&1; $boot_cmd"
+if BOOT_INBOX="$standup/_inbox.md" BOOT_TO="$lead" BOOT_FROM="bin/recycle" \
+   mux_boot "$session" "$start_cmd" "$briefing"; then
+  pass "Session '$session' gespawnt (Briefing liegt in der Inbox)"
+else
+  fail "mux_boot fehlgeschlagen — Session konnte nicht gestartet werden"
+  note "Manuell prüfen: BOOT_CMD=$boot_cmd"
+  exit 5
+fi
+
+# ── [4] VERIFY ────────────────────────────────────────────────────────────────────────────────────
+echo "[4/4] VERIFY (Heartbeat des frischen Leads)"
+deadline=$(( $(date +%s) + BOOT_TIMEOUT_S ))
+alive=0
+while [ "$(date +%s)" -lt "$deadline" ]; do
+  if heartbeat_since "$leadlog" "$lines_boot"; then alive=1; break; fi
+  sleep "$POLL_S"
+done
+if [ "$alive" = 1 ]; then
+  pass "Lead $lead heartbeatet wieder — Recycle komplett ♻️"
+  echo "--- recycle: OK ($UID_ARG · $handover_note) ---"
+  exit 0
+else
+  warn "Session gebootet, aber kein Heartbeat nach ${BOOT_TIMEOUT_S}s"
+  note "Mögliche Ursachen: Boot dauert noch · Permission-Dialog wartet auf Mensch (Modus = Mensch-Call) · BOOT_CMD defekt"
+  note "Prüfen: attach '$session' bzw. $leadlog"
+  echo "--- recycle: UNVERIFIZIERT ($UID_ARG) ---"
+  exit 6
+fi

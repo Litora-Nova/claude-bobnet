@@ -67,7 +67,10 @@
 # Instanz-Kontrakt (`<projekt>/_dev_team/dev-team.env`, alles optional):
 #   TEAM_LEAD              Name, unter dem der Lead heartbeatet (Log-Dateiname). Default: Bob.
 #   MUX_SESSION             Multiplexer-Session des Leads (für den Nudge). Fehlt → report-only.
-#   BOOT_CMD                Start-Kommando des Leads (nur mit INBOX_WATCH_BOOT=1 genutzt).
+#   BOOT_CMD                Start-Kommando des Leads (nur mit INBOX_WATCH_BOOT=1 genutzt). Läuft
+#                           in einer FRISCHEN Shell (mux_spawn) — die eigene dev-team.env wird
+#                           davor gesourct (Kontrakt: sourcebar), damit z. B. $PROJECT_ROOT im
+#                           Kommando trägt (gleicher Fußgänger + gleiche Kur wie bin/recycle).
 #   INBOX_WATCH_ALERT_CMD   Eskalations-Hook (überschreibt den gleichnamigen Prozess-Env-Fallback
 #                           unten). Kontrakt: `$ALERT_CMD <uid> <lead> <standup-pfad>`.
 #
@@ -326,7 +329,11 @@ while IFS=$'\t' read -r uid path standup; do
   else
     if [ "$DO_BOOT" = 1 ]; then
       boot_cmd="$(env_of "$envf" BOOT_CMD)"
-      if [ -n "$boot_cmd" ] && mux_boot "$session" "$boot_cmd" "" >/dev/null 2>&1; then
+      # BOOT_CMD läuft in einer FRISCHEN Shell (mux_spawn) — dev-team.env vorher sourcen, damit
+      # $PROJECT_ROOT & Co. im Kommando tragen (Kontrakt: die Datei ist sourcebar; ein
+      # Source-Fehler bricht den Boot nicht ab). Gleicher Fußgänger + gleiche Kur wie bin/recycle.
+      start_cmd="{ [ -f $(printf '%q' "$envf") ] && . $(printf '%q' "$envf"); } >/dev/null 2>&1; $boot_cmd"
+      if [ -n "$boot_cmd" ] && mux_boot "$session" "$start_cmd" "" >/dev/null 2>&1; then
         echo "[inbox-watch] $uid: Session down → GEBOOTET ($session; liest Inbox beim Start)"
         state_write_final "$statef" "$sig"
         n_nudge=$((n_nudge+1))

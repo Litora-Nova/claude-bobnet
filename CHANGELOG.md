@@ -4,6 +4,34 @@ All notable engine changes are documented here. Versioning follows SemVer (`VERS
 human-facing); machine compatibility is anchored separately by `SCHEMA_VERSION` (integer) —
 see `.claude/rules/contract.md`. `skills/update-bobs` points teams here after an update.
 
+## [0.15.0] — 2026-07-15
+
+### Added
+- **`bin/recycle <uid>`** — orderly lead-session swap in ONE command (PO order
+  2026-07-15): a long-running lead whose context has filled up is handed over
+  (continuity note requested via nudge, receipt verified through the lead's
+  heartbeat-log line-count — the same delivered-means-heartbeat principle the
+  0.14.0 watcher uses, never the mux return code), then killed **measured on the
+  outcome**, rebooted via `mux_boot` with an inbox-first standup briefing written
+  BEFORE the spawn (headless-safe), and verified through a fresh lead heartbeat.
+  Guards: never kill without a configured `BOOT_CMD`; a fresh-`busy`/`blocked`
+  lead is only recycled with `--force`; a handover timeout **aborts** instead of
+  silently going hard (`--hard` is an explicit caller decision); `--yes` for
+  automation (Colonel/cron), `--dry-run` touches nothing. Documented limit:
+  graceful handover is only realistic with an attached client (zellij delivers
+  drafts headless) — automation is expected to run `--hard` after a continuity
+  freshness check. New `tests/recycle_spec.sh` (33 checks), suite now 28 specs.
+- `scripts/dev-team.env.example` now documents the `MUX_SESSION` / `BOOT_CMD` /
+  `INBOX_WATCH_ALERT_CMD` instance contract in one place.
+
+### Fixed
+- **inbox-watch boot path runs `BOOT_CMD` with the project env sourced** — the
+  command used to start in a fresh shell where `$PROJECT_ROOT` (and everything
+  else from `dev-team.env`) was empty; now the project's `dev-team.env` is
+  sourced in front of the boot command (same cure `bin/recycle` ships). The spec
+  covers the real boot path for the first time (live `mux_boot` run, marker file
+  asserts the expanded env; skipped cleanly where tmux is unavailable).
+
 ## [0.14.0] — 2026-07-09
 
 ### Fixed
