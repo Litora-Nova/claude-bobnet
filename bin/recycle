@@ -285,8 +285,12 @@ if [ "$DRYRUN" = 1 ]; then
   exit 0
 fi
 lines_boot="$(log_line_count "$leadlog")"
+# BOOT_CMD läuft in einer FRISCHEN Shell (mux_spawn) — dev-team.env vorher sourcen, damit
+# $PROJECT_ROOT & Co. im Kommando tragen (die Datei ist per Kontrakt sourcebar; ein
+# Source-Fehler bricht den Boot nicht ab).
+start_cmd="{ [ -f $(printf '%q' "$envf") ] && . $(printf '%q' "$envf"); } >/dev/null 2>&1; $boot_cmd"
 if BOOT_INBOX="$standup/_inbox.md" BOOT_TO="$lead" BOOT_FROM="bin/recycle" \
-   mux_boot "$session" "$boot_cmd" "$briefing"; then
+   mux_boot "$session" "$start_cmd" "$briefing"; then
   pass "Session '$session' gespawnt (Briefing liegt in der Inbox)"
 else
   fail "mux_boot fehlgeschlagen — Session konnte nicht gestartet werden"
