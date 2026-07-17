@@ -36,7 +36,19 @@ S="${FAKE_MUX_DIR:?}"
 cmd="${1:-}"; shift || true
 case "$cmd" in
   has-session)  [ -e "$S/${2:?}" ] ;;
-  kill-session) rm -f "$S/${2:?}"; echo "kill-session ${2}" >> "$S/calls.log" ;;
+  kill-session)
+    name="${2:?}"
+    # .attached simuliert den Feld-Race: der Kill wurde angefordert, aber ein Client hält die
+    # alte Session noch kurz fest. Nach Detach entfernt der Retry sie normal.
+    [ -e "$S/$name.attached" ] || rm -f "$S/$name"
+    echo "kill-session $name" >> "$S/calls.log" ;;
+  list-clients)
+    name=""
+    while [ $# -gt 0 ]; do
+      case "$1" in -t) name="$2"; shift 2 ;; -F) shift 2 ;; *) shift ;; esac
+    done
+    [ -e "$S/$name.attached" ] && echo "client-1"
+    : ;;
   send-keys)    echo "send-keys $*" >> "$S/calls.log" ;;
   list-sessions) ls "$S" 2>/dev/null | grep -v '^calls\.log$' ;;
   new-session)
@@ -145,6 +157,119 @@ wait
 t "Session down → recycle == Boot, rc 0" "0" "$rc"
 t "down: kein kill, kein send" "0" "$(grep -c -E 'kill-session|send-keys' "$tmp/mux/calls.log")"
 t "down: gebootet" "1" "$(grep -c 'new-session alpha_sess' "$tmp/mux/calls.log")"
+
+# ── recycle v2 (1): attached Client vor Boot — warten/retry oder klar blockieren ────────────────
+: > "$tmp/mux/calls.log"; : > "$tmp/mux/alpha_sess"; : > "$tmp/mux/alpha_sess.attached"
+echo "$(now) | idle | alter Stand" > "$A/Zed.log"
+( sleep 2; rm -f "$tmp/mux/alpha_sess.attached" ) & detach_pid=$!
+( for _ in $(seq 1 30); do
+    sleep 0.5
+    if grep -q new-session "$tmp/mux/calls.log" 2>/dev/null; then
+      echo "$(now) | busy | stand-up nach attached-race" >> "$A/Zed.log"; break
+    fi
+  done ) & beat_pid=$!
+out="$(run RECYCLE_ATTACHED_WAIT_S=5 RECYCLE_ATTACHED_POLL_S=1 -- alpha --yes --hard)"; rc=$?
+wait "$detach_pid" "$beat_pid"
+t "v2 attached: Client löst sich im Wartefenster → Recycle gelingt" "0" "$rc"
+case "$out" in *"Interaktiver Client hängt noch"*) pass=$((pass+1));; *) fail=$((fail+1)); echo "FAIL: v2 attached: Warnung fehlt";; esac
+t "v2 attached: alte Session nach Detach erneut gekillt" "2" "$(grep -c 'kill-session alpha_sess' "$tmp/mux/calls.log")"
+t "v2 attached: frischer Boot genau einmal" "1" "$(grep -c 'new-session alpha_sess' "$tmp/mux/calls.log")"
+
+: > "$tmp/mux/calls.log"; : > "$tmp/mux/alpha_sess"; : > "$tmp/mux/alpha_sess.attached"
+echo "$(now) | idle | alter Stand" > "$A/Zed.log"
+out="$(run RECYCLE_ATTACHED_WAIT_S=2 RECYCLE_ATTACHED_POLL_S=1 -- alpha --yes --hard)"; rc=$?
+t "v2 attached: persistenter Client blockiert mit rc 5" "5" "$rc"
+case "$out" in *"frischer Boot blockiert"*) pass=$((pass+1));; *) fail=$((fail+1)); echo "FAIL: v2 attached: Blocker-Meldung fehlt";; esac
+t "v2 attached: bei Blocker KEIN neuer Boot" "0" "$(grep -c 'new-session' "$tmp/mux/calls.log")"
+rm -f "$tmp/mux/alpha_sess.attached" "$tmp/mux/alpha_sess"
+
+# ── recycle v2 (2): zellij-Lifecycle — EXITED != live, kill + delete, frischer Spawn ───────────
+cat > "$tmp/bin/zellij" <<'SH'
+#!/usr/bin/env bash
+S="${FAKE_MUX_DIR:?}"
+cmd="${1:-}"; shift || true
+case "$cmd" in
+  list-sessions)
+    for f in "$S"/zj-*.live; do
+      [ -e "$f" ] || continue; name="${f##*/zj-}"; name="${name%.live}"
+      if [ -e "$S/zj-$name.attached" ]; then echo "$name [Created now] (current)"
+      else echo "$name [Created now]"; fi
+    done
+    for f in "$S"/zj-*.exited; do
+      [ -e "$f" ] || continue; name="${f##*/zj-}"; name="${name%.exited}"
+      echo "$name [Created ago] (EXITED - attach to resurrect)"
+    done ;;
+  --session)
+    name="${1:?}"; shift
+    [ "${1:-}" = action ] && [ "${2:-}" = list-clients ] || exit 1
+    [ -e "$S/zj-$name.live" ] || exit 1
+    echo "CLIENT_ID ZELLIJ_PANE_ID RUNNING_COMMAND"
+    [ -e "$S/zj-$name.attached" ] && echo "1 terminal_1 claude"
+    exit 0 ;;
+  kill-session)
+    name="${1:?}"; echo "zellij-kill $name" >> "$S/calls.log"
+    if [ -e "$S/zj-$name.live" ]; then rm -f "$S/zj-$name.live"; : > "$S/zj-$name.exited"; fi ;;
+  delete-session)
+    name="${1:?}"; echo "zellij-delete $name" >> "$S/calls.log"
+    rm -f "$S/zj-$name.exited" ;;
+  attach)
+    name="${2:?}"; echo "zellij-attach $name" >> "$S/calls.log"
+    [ -e "$S/zj-$name.exited" ] && echo "resurrected $name" >> "$S/calls.log"
+    : > "$S/zj-$name.live" ;;
+  *) exit 0 ;;
+esac
+SH
+chmod +x "$tmp/bin/zellij"
+MUX_LIB="$HERE/../scripts/lib/mux.sh"
+mux_zj(){ env BOBNET_MUX=zellij PATH="$tmp/bin:$PATH" FAKE_MUX_DIR="$tmp/mux" \
+  bash -c '. "$1"; shift; "$@"' _ "$MUX_LIB" "$@"; }
+
+: > "$tmp/mux/calls.log"; : > "$tmp/mux/zj-shell.exited"
+mux_zj mux_has shell >/dev/null 2>&1; t "v2 zellij: EXITED-Hülle zählt NICHT als live" "1" "$?"
+t "v2 zellij: mux_list blendet EXITED-Hülle aus" "0" "$(mux_zj mux_list | grep -c '^shell$')"
+mux_zj mux_spawn shell >/dev/null 2>&1; t "v2 zellij: frischer Spawn nach EXITED-Hülle gelingt" "0" "$?"
+t "v2 zellij: EXITED-State vor Attach gelöscht (keine Resurrection)" "0" "$(grep -c 'resurrected shell' "$tmp/mux/calls.log")"
+ok "v2 zellij: frische Live-Session existiert" test -e "$tmp/mux/zj-shell.live"
+
+: > "$tmp/mux/zj-shell.attached"
+mux_zj mux_attached shell >/dev/null 2>&1; t "v2 zellij: attached/current Client erkannt" "0" "$?"
+rm -f "$tmp/mux/zj-shell.attached"
+mux_zj mux_attached shell >/dev/null 2>&1; t "v2 zellij: clientlose Live-Session ist detached" "1" "$?"
+: > "$tmp/mux/calls.log"
+mux_zj mux_kill shell >/dev/null 2>&1; t "v2 zellij: mux_kill beendet Live-Session + Hülle" "0" "$?"
+t "v2 zellij: kill-session und delete-session liefen BEIDE" "2" "$(grep -cE 'zellij-(kill|delete) shell' "$tmp/mux/calls.log")"
+ok "v2 zellij: weder live noch EXITED bleibt" bash -c "test ! -e '$tmp/mux/zj-shell.live' && test ! -e '$tmp/mux/zj-shell.exited'"
+
+# ── recycle v2 (3): optionaler Prozess-Verify = Heartbeat UND Agent mit Projekt-CWD ──────────
+procroot="$tmp/proc"; mkdir -p "$procroot"
+: > "$tmp/mux/calls.log"; : > "$tmp/mux/alpha_sess"
+echo "$(now) | idle | alter Stand" > "$A/Zed.log"
+( for _ in $(seq 1 30); do
+    sleep 0.5
+    if grep -q new-session "$tmp/mux/calls.log" 2>/dev/null; then
+      mkdir -p "$procroot/9001"; ln -s "$tmp/alpha" "$procroot/9001/cwd"
+      printf 'claude\n' > "$procroot/9001/comm"; printf '/usr/bin/claude\0' > "$procroot/9001/cmdline"
+      echo "$(now) | busy | stand-up mit Prozess" >> "$A/Zed.log"; break
+    fi
+  done ) & proc_pid=$!
+out="$(run RECYCLE_VERIFY_PROCESS=1 RECYCLE_PROC_ROOT="$procroot" RECYCLE_BOOT_TIMEOUT_S=5 -- alpha --yes --hard)"; rc=$?
+wait "$proc_pid"
+t "v2 process: Heartbeat + Agentprozess mit Projekt-CWD → rc 0" "0" "$rc"
+case "$out" in *"Agent-Prozess läuft mit Projekt-CWD"*) pass=$((pass+1));; *) fail=$((fail+1)); echo "FAIL: v2 process: Erfolgsnachweis fehlt";; esac
+rm -rf "$procroot/9001"
+
+: > "$tmp/mux/calls.log"; : > "$tmp/mux/alpha_sess"
+echo "$(now) | idle | alter Stand" > "$A/Zed.log"
+( for _ in $(seq 1 30); do
+    sleep 0.5
+    if grep -q new-session "$tmp/mux/calls.log" 2>/dev/null; then
+      echo "$(now) | busy | Heartbeat ohne Agentprozess" >> "$A/Zed.log"; break
+    fi
+  done ) & beat_only_pid=$!
+out="$(run RECYCLE_VERIFY_PROCESS=1 RECYCLE_PROC_ROOT="$procroot" RECYCLE_BOOT_TIMEOUT_S=2 -- alpha --yes --hard)"; rc=$?
+wait "$beat_only_pid"
+t "v2 process: Heartbeat allein reicht bei Opt-in NICHT → rc 6" "6" "$rc"
+case "$out" in *"Kein passender Agent-Prozess"*) pass=$((pass+1));; *) fail=$((fail+1)); echo "FAIL: v2 process: fehlender-Prozess-Meldung fehlt";; esac
 
 echo "── recycle_spec: $pass ✓ / $fail ✗"
 [ "$fail" = 0 ]

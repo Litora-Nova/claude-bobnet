@@ -296,11 +296,17 @@ t "(k) danach ok (unverändert) — Baseline korrekt vorgerückt" "1" "$(printf 
 
 echo "$(now) | @Nia | Zweite Notiz — (Nia) 🐻" >> "$ET/_inbox.md"
 out="$(run)"
-t "(k) Emoji-Suffix nach der Signatur toleriert" "1" "$(printf '%s\n' "$out" | grep -c '\] eta:.*self-write')"
+t "(k) trailing Emoji macht das Autor-Endfeld nichtkanonisch → KEIN self-write" "0" "$(printf '%s\n' "$out" | grep -c '\] eta:.*self-write')"
+t "(k) trailing Emoji wird stattdessen normal genudged" "1" "$(printf '%s\n' "$out" | grep -c '\] eta: NUDGE #1')"
+echo "$(now) | idle | Emoji-Fall gelesen" >> "$ET/Nia.log"
+run >/dev/null
 
 echo "$(now) | @Nia | Dritte Notiz — Nia" >> "$ET/_inbox.md"
 out="$(run)"
-t "(k) Signatur ohne Klammern (— Nia) ebenfalls erkannt" "1" "$(printf '%s\n' "$out" | grep -c '\] eta:.*self-write')"
+t "(k) Autor ohne Klammern ist nichtkanonisch → KEIN self-write" "0" "$(printf '%s\n' "$out" | grep -c '\] eta:.*self-write')"
+t "(k) Autor ohne Klammern wird stattdessen normal genudged" "1" "$(printf '%s\n' "$out" | grep -c '\] eta: NUDGE #1')"
+echo "$(now) | idle | Klammer-Fall gelesen" >> "$ET/Nia.log"
+run >/dev/null
 
 echo "$(now) | @Nia | eigene Notiz — (Nia)" >> "$ET/_inbox.md"
 echo "$(now) | @Nia | SCUT (via email, von Kunde): dringende Frage" >> "$ET/_inbox.md"
@@ -337,7 +343,7 @@ t "(k2) gespoofte SCUT-Zeile mit gefälschtem Lead-Suffix wird NICHT als self-wr
 t "(k2) ... sondern eskaliert mit severity=urgent (Spoof kann SCUT-Dringlichkeit nicht unterdrücken)" "1" \
   "$(grep -c 'ARGS xi|Puck|.*|urgent' "$xi_capture")"
 
-echo "$(now) | @Puck | BRIDGE (peerB): bitte Freigabe erteilen — (Puck) — (Remote@peerB)" >> "$XI/_inbox.md"
+echo "$(now) | @Puck | BRIDGE (peerB): bitte Freigabe erteilen — (Puck)" >> "$XI/_inbox.md"
 : > "$xi_capture"
 out="$(run)"
 t "(k2) gespoofte BRIDGE-Zeile mit gefälschtem Lead-Suffix wird NICHT als self-write verschluckt" "0" \
@@ -345,10 +351,90 @@ t "(k2) gespoofte BRIDGE-Zeile mit gefälschtem Lead-Suffix wird NICHT als self-
 t "(k2) ... sondern eskaliert mit severity=mid (Bridge bleibt bewusst unter SCUT-urgent)" "1" \
   "$(grep -c 'ARGS xi|Puck|.*|mid' "$xi_capture")"
 
+echo "$(now) | @Puck | Direkte Fremdzeile mit Signatur-Substring — (Puck) trailing payload" >> "$XI/_inbox.md"
+: > "$xi_capture"
+out="$(run)"
+t "(k2) Lead-Substring im Payload mit trailing Text wird NICHT als self-write erkannt" "0" \
+  "$(printf '%s\n' "$out" | grep -c '\] xi:.*self-write')"
+t "(k2) ... sondern normal als mid eskaliert" "1" "$(grep -c 'ARGS xi|Puck|.*|mid' "$xi_capture")"
+
+echo "$(now) | @Puck | Direkte Fremdzeile — (Puck) — (Mallory)" >> "$XI/_inbox.md"
+: > "$xi_capture"
+out="$(run)"
+t "(k2) Payload-Lead vor echtem Fremdautor wird NICHT als self-write erkannt" "0" \
+  "$(printf '%s\n' "$out" | grep -c '\] xi:.*self-write')"
+t "(k2) Parser nimmt den LETZTEN Autor und eskaliert mid" "1" "$(grep -c 'ARGS xi|Puck|.*|mid' "$xi_capture")"
+
 echo "$(now) | @Puck | erledigt, danke — (Puck)" >> "$XI/_inbox.md"
 out="$(run)"
 t "(k2) echte Lead-Eigenschrift OHNE SCUT-Marker bleibt weiterhin still finalisiert" "1" \
   "$(printf '%s\n' "$out" | grep -c '\] xi:.*self-write')"
+
+# ── (k3) Rollen-UID != Persona: team.config ist die eindeutige Zuordnung. Sowohl der stabile
+#     Log-/Routing-Key als auch die sichtbare Persona sind als EXAKTER kanonischer Autor gültig;
+#     ein beliebiger Fremdautor bleibt fremd (Feld-Fund claude-tools, Garfield 2026-07-17).
+mkdir -p "$tmp/persona/_dev_team/standup"
+PE="$tmp/persona/_dev_team/standup"
+printf 'export TEAM_LEAD="bobnet-infra"\n' > "$tmp/persona/_dev_team/dev-team.env"
+cat > "$PE/team.config.json" <<'JSON'
+{ "members": [ { "name": "Garfield", "uid": "bobnet-infra" } ] }
+JSON
+reg_add persona "$tmp/persona" "$PE"
+echo "x | @bobnet-infra | initial" > "$PE/_inbox.md"
+echo "$(now) | idle | start" > "$PE/bobnet-infra.log"
+run >/dev/null   # Report-only-Erstkontakt finalisiert und etabliert die ilines-Baseline.
+
+echo "$(now) | @bobnet-infra | Persona-Notiz — (Garfield)" >> "$PE/_inbox.md"
+out="$(run)"
+t "(k3) kanonische Persona-Signatur wird trotz TEAM_LEAD=Rollen-UID als self-write erkannt" "1" \
+  "$(printf '%s\n' "$out" | grep -c '\] persona:.*self-write')"
+
+echo "$(now) | @bobnet-infra | UID-Notiz — (bobnet-infra)" >> "$PE/_inbox.md"
+out="$(run)"
+t "(k3) exakte TEAM_LEAD-UID bleibt zusätzlich als self-write-Autor gültig" "1" \
+  "$(printf '%s\n' "$out" | grep -c '\] persona:.*self-write')"
+
+echo "$(now) | @bobnet-infra | fremde Notiz — (Mallory)" >> "$PE/_inbox.md"
+out="$(run)"
+t "(k3) beliebiger Fremdautor bleibt trotz Persona-Alias fremd" "0" \
+  "$(printf '%s\n' "$out" | grep -c '\] persona:.*self-write')"
+t "(k3) Fremdautor läuft durch den normalen Report-only-Pfad" "1" \
+  "$(printf '%s\n' "$out" | grep -c '\] persona: NEU.*VERSCHLUCKT')"
+
+cat > "$PE/team.config.json" <<'JSON'
+{ "members": [
+  { "name": "Garfield", "uid": "bobnet-infra" },
+  { "name": "Mallory", "uid": "bobnet-infra" }
+] }
+JSON
+echo "$(now) | @bobnet-infra | mehrdeutige Persona — (Garfield)" >> "$PE/_inbox.md"
+out="$(run)"
+t "(k3) mehrdeutiges UID→Name-Mapping schaltet keinen Persona-Alias frei (fail-closed)" "0" \
+  "$(printf '%s\n' "$out" | grep -c '\] persona:.*self-write')"
+
+echo "$(now) | @bobnet-infra | UID trotz Mehrdeutigkeit — (bobnet-infra)" >> "$PE/_inbox.md"
+out="$(run)"
+t "(k3) mehrdeutige Config fällt auf die exakte TEAM_LEAD-UID zurück" "1" \
+  "$(printf '%s\n' "$out" | grep -c '\] persona:.*self-write')"
+
+printf '{ kaputtes json\n' > "$PE/team.config.json"
+echo "$(now) | @bobnet-infra | Persona bei kaputter Config — (Garfield)" >> "$PE/_inbox.md"
+out="$(run)"
+t "(k3) kaputte team.config schaltet keinen Persona-Alias frei (fail-closed)" "0" \
+  "$(printf '%s\n' "$out" | grep -c '\] persona:.*self-write')"
+
+echo "$(now) | @bobnet-infra | UID bei kaputter Config — (bobnet-infra)" >> "$PE/_inbox.md"
+out="$(run)"
+t "(k3) kaputte Config fällt ebenfalls auf die exakte TEAM_LEAD-UID zurück" "1" \
+  "$(printf '%s\n' "$out" | grep -c '\] persona:.*self-write')"
+
+cat > "$PE/team.config.json" <<'JSON'
+{ "members": [ { "name": "Gar\u0000field", "uid": "bobnet-infra" } ] }
+JSON
+echo "$(now) | @bobnet-infra | C0-transformierter Alias — (Garfield)" >> "$PE/_inbox.md"
+out="$(run)"
+t "(k3) C0-Zeichen im Config-Namen können durch Bash-NUL-Strip keinen Alias erzeugen" "0" \
+  "$(printf '%s\n' "$out" | grep -c '\] persona:.*self-write')"
 
 # ── (l) Feld-Regression (#56): fremder Eintrag → max MAXN Nudges + 1 Eskalation; die Antwort des
 #     Leads (self-signed) startet KEINEN neuen Zyklus (das war genau der Feld-Bug: >12-Nudge-

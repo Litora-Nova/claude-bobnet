@@ -12,11 +12,13 @@
 #                   Verifikation über NEUE Heartbeat-Zeilen (Zeilenzahl-Snapshot — Muster aus
 #                   inbox-watch.sh/#48), NICHT über den mux_send-Returncode. Zur Halbzeit einmal
 #                   mux_flush_draft + Re-Ping (zellij-Draft-Grenze, s. u.).
-#   [2/4] KILL      Session beenden (mux_kill — misst am Resultat, nicht am rc; 1 Retry).
+#   [2/4] KILL      Session beenden (mux_kill — misst am Resultat, nicht am rc; 1 Retry) und
+#                   sicherstellen, dass kein Client/keine tote Backend-Hülle den Boot überlebt.
 #   [3/4] BOOT      Frisch starten via mux_boot (lib/boot.sh): Boot-Briefing landet VOR dem Spawn
 #                   in der Ziel-Inbox, der SessionStart-Hook liest sie beim Boot. Funktioniert
 #                   HEADLESS (zellij #35: spawn geht ohne attached Client, write-chars nicht).
-#   [4/4] VERIFY    Warten, bis der frische Lead heartbeatet (neue Log-Zeile) — sonst ⚠ (rc 6).
+#   [4/4] VERIFY    Warten, bis der frische Lead heartbeatet (neue Log-Zeile). Optional zusätzlich
+#                   einen Agent-Prozess mit Projekt-CWD verlangen — sonst ⚠ (rc 6).
 #
 # Sicherheits-Gates (VOR jedem Eingriff):
 #   - BOOT_CMD fehlt                 → ABBRUCH (65). NIE killen ohne Boot-Pfad.
@@ -45,6 +47,12 @@
 #   RECYCLE_POLL_S              Poll-Intervall (Default 15)
 #   RECYCLE_STALE_MIN           busy gilt nach N Minuten als stale → recycelbar (Default 90,
 #                               analog INBOX_WATCH_STALE_MIN)
+#   RECYCLE_ATTACHED_WAIT_S     Wartefenster auf absterbende attached Clients vor Boot (Default 10)
+#   RECYCLE_ATTACHED_POLL_S     Poll-Intervall für den Client-Check (Default 1)
+#   RECYCLE_VERIFY_PROCESS      1 = Heartbeat reicht nicht: zusätzlich Agent-Prozess mit
+#                               Projekt-CWD verlangen (Default 0)
+#   RECYCLE_AGENT_PROCESS_RE    ERE für comm/cmdline des Agent-Prozesses
+#                               (Default: claude|codex als eigenes Kommando-Token)
 #
 # Exit: 0 ok · 2 usage/Abbruch · 3 Gate (busy/blocked) · 4 Übergabe-Timeout · 5 Kill-/Boot-Fehler ·
 #       6 Boot ohne Heartbeat-Verify · 64 UID unbekannt · 65 Instanz-Konfig unvollständig
@@ -61,6 +69,11 @@ HANDOVER_TIMEOUT_S="${RECYCLE_HANDOVER_TIMEOUT_S:-600}"
 BOOT_TIMEOUT_S="${RECYCLE_BOOT_TIMEOUT_S:-600}"
 POLL_S="${RECYCLE_POLL_S:-15}"
 STALE_MIN="${RECYCLE_STALE_MIN:-90}"
+ATTACHED_WAIT_S="${RECYCLE_ATTACHED_WAIT_S:-10}"
+ATTACHED_POLL_S="${RECYCLE_ATTACHED_POLL_S:-1}"
+VERIFY_PROCESS="${RECYCLE_VERIFY_PROCESS:-0}"
+AGENT_PROCESS_RE="${RECYCLE_AGENT_PROCESS_RE:-(^|[/[:space:]])(claude|codex)([[:space:]]|$)}"
+PROC_ROOT="${RECYCLE_PROC_ROOT:-/proc}"   # Test-Seam; produktiv bleibt Linux-/proc.
 
 usage() {
   cat <<'USAGE'
@@ -80,8 +93,9 @@ Beispiele:
   bin/recycle acme                 # interaktiv, graceful
   bin/recycle acme --hard --yes    # nicht erreichbarer Lead, automatisiert
 
-Env: RECYCLE_HANDOVER_TIMEOUT_S (600) · RECYCLE_BOOT_TIMEOUT_S (600) · RECYCLE_POLL_S (15) ·
-     RECYCLE_STALE_MIN (90) · DEV_TEAM_REGISTRY (<tool-hub>/projects.registry.json)
+  Env: RECYCLE_HANDOVER_TIMEOUT_S (600) · RECYCLE_BOOT_TIMEOUT_S (600) · RECYCLE_POLL_S (15) ·
+     RECYCLE_STALE_MIN (90) · RECYCLE_ATTACHED_WAIT_S (10) · RECYCLE_VERIFY_PROCESS (0) ·
+     RECYCLE_AGENT_PROCESS_RE (claude|codex) · DEV_TEAM_REGISTRY (<tool-hub>/projects.registry.json)
 Exit: 0 ok · 2 usage/Abbruch · 3 Gate · 4 Übergabe-Timeout · 5 Kill-/Boot-Fehler ·
       6 kein Heartbeat-Verify · 64 UID unbekannt · 65 Konfig unvollständig
 USAGE
@@ -122,6 +136,47 @@ marker_since() {
   tail -n "+$(( $2 + 1 ))" "$1" 2>/dev/null | grep -qi -- "$3"
 }
 
+# agent_process_alive <project-path> -> 0 wenn ein passender Agent-Prozess mit CWD im Projekt
+# lebt; 1 wenn keiner passt; 2 wenn /proc nicht verfügbar ist. Prozessname UND cwd müssen
+# passen, damit ein beliebiger globaler claude/codex-Prozess kein falsches VERIFY erzeugt.
+agent_process_alive() {
+  local project="$1" pd cwd comm cmdline
+  [ -d "$PROC_ROOT" ] || return 2
+  project="$(readlink -f "$project" 2>/dev/null || printf '%s' "$project")"
+  for pd in "$PROC_ROOT"/[0-9]*; do
+    [ -d "$pd" ] || continue
+    cwd="$(readlink -f "$pd/cwd" 2>/dev/null)" || continue
+    case "$cwd" in "$project"|"$project"/*) : ;; *) continue ;; esac
+    comm="$(cat "$pd/comm" 2>/dev/null || true)"
+    cmdline="$(tr '\000' ' ' < "$pd/cmdline" 2>/dev/null || true)"
+    printf '%s\n%s\n' "$comm" "$cmdline" | grep -Eiq -- "$AGENT_PROCESS_RE" && return 0
+  done
+  return 1
+}
+
+# wait_until_detached <session> -> 0 sicher detached/nicht vorhanden; 1 Timeout; 2 Probe-Fehler.
+# Der Check liegt bewusst VOR dem frischen Boot: ein alter interaktiver Client kann sonst den
+# neuen Lead in dieselbe absterbende Backend-Session hineinziehen und direkt wieder beenden.
+wait_until_detached() {
+  local target="$1" deadline rc warned=0
+  deadline=$(( $(date +%s) + ATTACHED_WAIT_S ))
+  while :; do
+    mux_attached "$target" >/dev/null 2>&1; rc=$?
+    case "$rc" in
+      1) return 0 ;;
+      2) fail "Attached-Status für '$target' nicht zuverlässig prüfbar — Boot blockiert"; return 2 ;;
+      0) ;;
+      *) fail "Attached-Status für '$target' lieferte unerwarteten rc=$rc — Boot blockiert"; return 2 ;;
+    esac
+    if [ "$warned" = 0 ]; then
+      warn "Interaktiver Client hängt noch an '$target' — warte bis ${ATTACHED_WAIT_S}s vor dem Boot"
+      warned=1
+    fi
+    [ "$(date +%s)" -ge "$deadline" ] && return 1
+    sleep "$ATTACHED_POLL_S"
+  done
+}
+
 # ── [0] Auflösen + Vorflug ────────────────────────────────────────────────────────────────────────
 echo "=== recycle: $UID_ARG ==="
 echo "[0/4] Auflösen + Vorflug"
@@ -159,6 +214,14 @@ pass "Lead=$lead · Log=$leadlog"
 [ -n "$session" ] || { fail "MUX_SESSION fehlt in $envf — report-only-Projekt, nichts zu recyclen"; exit 65; }
 [ -n "$boot_cmd" ] || { fail "BOOT_CMD fehlt in $envf — ohne Boot-Pfad wird NICHT gekillt"; exit 65; }
 pass "Session=$session · BOOT_CMD gesetzt"
+
+case "$VERIFY_PROCESS" in 0|1) : ;; *) fail "RECYCLE_VERIFY_PROCESS muss 0 oder 1 sein"; exit 65 ;; esac
+if [ "$VERIFY_PROCESS" = 1 ]; then
+  [ -d "$PROC_ROOT" ] || { fail "Prozess-Verify aktiviert, aber $PROC_ROOT ist nicht verfügbar"; exit 65; }
+  printf '' | grep -Eq -- "$AGENT_PROCESS_RE"; re_rc=$?
+  [ "$re_rc" -le 1 ] || { fail "RECYCLE_AGENT_PROCESS_RE ist keine gültige ERE"; exit 65; }
+  pass "Prozess-Verify aktiv · CWD unter $path · Muster=$AGENT_PROCESS_RE"
+fi
 
 mux_backend >/dev/null 2>&1 || { fail "kein Multiplexer (tmux/zellij) auffindbar"; exit 5; }
 
@@ -237,9 +300,14 @@ echo "[2/4] KILL"
 if [ "$session_up" != 1 ]; then
   note "Session bereits down — übersprungen."
 elif [ "$DRYRUN" = 1 ]; then
-  note "(dry-run) würde Session '$session' beenden (mux_kill + Verify am Resultat)"
+  note "(dry-run) würde Session '$session' beenden, attached Clients abwarten und Backend-Hüllen entfernen"
 else
   mux_kill "$session" >/dev/null 2>&1 || true
+  wait_until_detached "$session"; detach_rc=$?
+  if [ "$detach_rc" -ne 0 ]; then
+    [ "$detach_rc" = 1 ] && fail "Client blieb an '$session' attached — frischer Boot blockiert"
+    exit 5
+  fi
   sleep 1
   if mux_has "$session" 2>/dev/null; then
     mux_kill "$session" >/dev/null 2>&1 || true
@@ -259,10 +327,23 @@ if [ "$DRYRUN" = 1 ]; then
   note "(dry-run) würde Briefing nach $standup/_inbox.md droppen und '$session' spawnen mit:"
   note "BOOT_CMD: $boot_cmd"
   echo "[4/4] VERIFY"
-  note "(dry-run) würde bis ${BOOT_TIMEOUT_S}s auf frischen Lead-Heartbeat warten"
+  note "(dry-run) würde bis ${BOOT_TIMEOUT_S}s auf frischen Lead-Heartbeat warten$( [ "$VERIFY_PROCESS" = 1 ] && printf ' + Agent-Prozess mit Projekt-CWD' )"
   echo "--- recycle (dry-run): kein Eingriff erfolgt ---"
   exit 0
 fi
+
+# Letztes Boot-Gate unabhängig vom Kill-Pfad (auch `Session war down` kann bei zellij eine
+# absterbende/attached Hülle verbergen). Unbekannter Status und persistenter Client sind blocker.
+wait_until_detached "$session"; detach_rc=$?
+if [ "$detach_rc" -ne 0 ]; then
+  [ "$detach_rc" = 1 ] && fail "Client blieb an '$session' attached — frischer Boot blockiert"
+  exit 5
+fi
+if mux_has "$session" 2>/dev/null; then
+  fail "Session '$session' existiert unmittelbar vor dem Boot noch — keine Doppel-/Resurrection-Session gestartet"
+  exit 5
+fi
+
 lines_boot="$(log_line_count "$leadlog")"
 # BOOT_CMD läuft in einer FRISCHEN Shell (mux_spawn) — dev-team.env vorher sourcen, damit
 # $PROJECT_ROOT & Co. im Kommando tragen (die Datei ist per Kontrakt sourcebar; ein
@@ -278,19 +359,38 @@ else
 fi
 
 # ── [4] VERIFY ────────────────────────────────────────────────────────────────────────────────────
-echo "[4/4] VERIFY (Heartbeat des frischen Leads)"
+if [ "$VERIFY_PROCESS" = 1 ]; then
+  echo "[4/4] VERIFY (Heartbeat + Agent-Prozess mit Projekt-CWD)"
+else
+  echo "[4/4] VERIFY (Heartbeat des frischen Leads)"
+fi
 deadline=$(( $(date +%s) + BOOT_TIMEOUT_S ))
-alive=0
+alive=0; heartbeat_ok=0; process_ok=0; process_probe_failed=0
 while [ "$(date +%s)" -lt "$deadline" ]; do
-  if heartbeat_since "$leadlog" "$lines_boot"; then alive=1; break; fi
+  heartbeat_since "$leadlog" "$lines_boot" && heartbeat_ok=1
+  if [ "$VERIFY_PROCESS" = 1 ]; then
+    agent_process_alive "$path"; proc_rc=$?
+    case "$proc_rc" in 0) process_ok=1 ;; 1) process_ok=0 ;; *) process_ok=0; process_probe_failed=1 ;; esac
+  else
+    process_ok=1
+  fi
+  if [ "$heartbeat_ok" = 1 ] && [ "$process_ok" = 1 ]; then alive=1; break; fi
   sleep "$POLL_S"
 done
 if [ "$alive" = 1 ]; then
-  pass "Lead $lead heartbeatet wieder — Recycle komplett ♻️"
+  if [ "$VERIFY_PROCESS" = 1 ]; then
+    pass "Lead $lead heartbeatet und Agent-Prozess läuft mit Projekt-CWD — Recycle komplett ♻️"
+  else
+    pass "Lead $lead heartbeatet wieder — Recycle komplett ♻️"
+  fi
   echo "--- recycle: OK ($UID_ARG · $handover_note) ---"
   exit 0
 else
-  warn "Session gebootet, aber kein Heartbeat nach ${BOOT_TIMEOUT_S}s"
+  [ "$heartbeat_ok" = 1 ] || warn "Session gebootet, aber kein Heartbeat nach ${BOOT_TIMEOUT_S}s"
+  if [ "$VERIFY_PROCESS" = 1 ] && [ "$process_ok" != 1 ]; then
+    warn "Kein passender Agent-Prozess mit CWD unter '$path' nach ${BOOT_TIMEOUT_S}s"
+    [ "$process_probe_failed" = 1 ] && note "Mindestens eine /proc-Probe schlug fehl; Prozess-Verify blieb fail-closed."
+  fi
   note "Mögliche Ursachen: Boot dauert noch · Permission-Dialog wartet auf Mensch (Modus = Mensch-Call) · BOOT_CMD defekt"
   note "Prüfen: attach '$session' bzw. $leadlog"
   echo "--- recycle: UNVERIFIZIERT ($UID_ARG) ---"

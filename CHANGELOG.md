@@ -4,6 +4,39 @@ All notable engine changes are documented here. Versioning follows SemVer (`VERS
 human-facing); machine compatibility is anchored separately by `SCHEMA_VERSION` (integer) —
 see `.claude/rules/contract.md`. `skills/update-bobs` points teams here after an update.
 
+## [0.18.0] — 2026-07-17
+
+Both features built by **Bob One** (Codex/GPT runtime, cross-model pilot #61); gated by the Claude team.
+
+### Added
+- **`bin/recycle` v2 — attached-client / lifecycle hardening (field findings)**: a new
+  dual-backend `mux_attached` helper (`scripts/lib/mux.sh`) — tmux `list-clients`,
+  zellij `list-clients`/current with header filtering — lets recycle **wait/block before
+  the boot** when a client is still attached or the state is unclear, instead of killing
+  the lead into a dead husk (field collision: a freshly booted lead died against an
+  attached client). zellij `EXITED != live` handling plus a kill-then-purge of the
+  resurrection state before spawn. Optional `RECYCLE_VERIFY_PROCESS` makes VERIFY honest:
+  requires a fresh heartbeat AND a claude/codex process with the project cwd ("session
+  exists ≠ lead lives"). `recycle_spec.sh` 33→54 checks.
+
+### Changed
+- **`self_write_line()` now parses the canonical author field exactly** (`scripts/inbox-watch.sh`)
+  instead of matching a lead-like substring anywhere in the last 48 characters (the permissive
+  heuristic flagged in 0.17.1's follow-up). It anchors the trailing `— (<author>)` field and
+  accepts the lead **UID or an unambiguous persona** resolved from team.config — fixing the
+  field case where a persona-signed lead line (e.g. `Garfield`) was never recognized as a
+  self-write because `TEAM_LEAD` held the role UID (`bobnet-infra`), causing empty re-nudges.
+  Fail-closed on missing/malformed/ambiguous/control-char author fields; the server-stamped
+  foreign markers (`SCUT (`, `BRIDGE (`) stay unconditional non-self-writes. inbox_watch_spec
+  extended to 121 checks.
+
+  **Known limitation (behavior change):** the exact author-field anchor requires the line to end
+  in `— (<author>)` with nothing after the closing paren. A trailing emoji after the paren
+  (e.g. `— (Garfield) 🐱`) is no longer recognized as a self-write and runs through the normal
+  nudge cycle. Safe direction (more alerting, no bypass), but affects the currently-lived
+  signature style of several personas. Canon (`comms.md`) already prefers the emoji BEFORE the
+  dash (`🐱 — (Garfield)`) — teams should align their signature style accordingly.
+
 ## [0.17.1] — 2026-07-17
 
 ### Fixed
