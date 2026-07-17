@@ -21,6 +21,7 @@
 #   mux_send bob "[SCUT] hallo"    # Text + Enter (Notfall-Injection)
 #   mux_flush_draft bob            # nur zellij: hängenden Draft submitten (No-Op bei tmux)
 #   mux_capture bob                # sichtbarer Pane-Inhalt -> STDOUT
+#   mux_attached bob               # exit 0 wenn mindestens ein interaktiver Client attached ist
 #   mux_kill scut
 #
 # Backend-Wahl (BOBNET_MUX):
@@ -84,6 +85,32 @@ mux_backend() { _mux_resolve || return 1; echo "$_MUX_BACKEND"; }
 # Verben
 # ---------------------------------------------------------------------------
 
+# _mux_zellij_session_line NAME -> volle list-sessions-Zeile (leer wenn unbekannt).
+# Anders als `--short` enthält die volle Form den für die Lifecycle-Hygiene entscheidenden
+# `(EXITED - attach to resurrect)`-Marker. Eine gespeicherte Hülle ist KEINE laufende Session.
+_mux_zellij_session_line() {
+  local name="$1"
+  "$_MUX_BIN" list-sessions --no-formatting 2>/dev/null \
+    | awk -v wanted="$name" '$1 == wanted { print; exit }'
+}
+
+# _mux_zellij_purge_exited NAME -> gespeicherte EXITED-Hülle löschen und am Ergebnis prüfen.
+# Gegen den kurzen kill→persist-Race wird mehrfach nachgesehen; eine LIVE-Zeile wird niemals als
+# löschbare Hülle behandelt, sondern bleibt ein Fehler für den Aufrufer.
+_mux_zellij_purge_exited() {
+  local name="$1" line i
+  for i in 1 2 3; do
+    line="$(_mux_zellij_session_line "$name")"
+    [ -z "$line" ] && return 0
+    case "$line" in
+      *"(EXITED"*) "$_MUX_BIN" delete-session "$name" --force >/dev/null 2>&1 || true ;;
+      *) return 1 ;;
+    esac
+    [ "$i" -lt 3 ] && sleep 1
+  done
+  [ -z "$(_mux_zellij_session_line "$name")" ]
+}
+
 # mux_spawn NAME [CMD...]
 #   Startet eine DETACHED Session NAME. Ist CMD angegeben, läuft CMD darin.
 #   Idempotent: existiert die Session schon, passiert nichts (exit 0).
@@ -97,6 +124,15 @@ mux_spawn() {
     if [ -n "$cmd" ]; then "$_MUX_BIN" new-session -d -s "$name" "$cmd";
     else "$_MUX_BIN" new-session -d -s "$name"; fi
   else
+    # 0.44+ listet gespeicherte tote Sessions weiter als EXITED. `attach --create-background`
+    # würde diese Hülle resurrecten statt einen garantiert frischen Kontext anzulegen. Vor dem
+    # Spawn deshalb nur die explizit tote Persistenz löschen; eine live Session wurde durch
+    # mux_has() oben bereits idempotent abgefangen.
+    local old_line
+    old_line="$(_mux_zellij_session_line "$name")"
+    case "$old_line" in
+      *"(EXITED"*) _mux_zellij_purge_exited "$name" || return 1 ;;
+    esac
     # zellij: detached Session anlegen, dann Command als Pane starten.
     "$_MUX_BIN" attach --create-background "$name" >/dev/null 2>&1 || true
     if [ -n "$cmd" ]; then
@@ -112,7 +148,10 @@ mux_has() {
   if [ "$_MUX_BACKEND" = tmux ]; then
     "$_MUX_BIN" has-session -t "$name" 2>/dev/null
   else
-    "$_MUX_BIN" list-sessions --no-formatting --short 2>/dev/null | grep -qx -- "$name"
+    local line
+    line="$(_mux_zellij_session_line "$name")"
+    [ -n "$line" ] || return 1
+    case "$line" in *"(EXITED"*) return 1 ;; *) return 0 ;; esac
   fi
 }
 
@@ -122,7 +161,37 @@ mux_list() {
   if [ "$_MUX_BACKEND" = tmux ]; then
     "$_MUX_BIN" list-sessions -F '#{session_name}' 2>/dev/null
   else
-    "$_MUX_BIN" list-sessions --no-formatting --short 2>/dev/null
+    "$_MUX_BIN" list-sessions --no-formatting 2>/dev/null \
+      | awk 'index($0, "(EXITED") == 0 { print $1 }'
+  fi
+}
+
+# mux_attached NAME -> exit 0 wenn mindestens ein interaktiver Client attached ist;
+# exit 1 bei sicher detached/nicht vorhanden; exit 2 wenn die Backend-Probe fehlschlägt.
+# Recycle behandelt 2 fail-closed: ein unbekannter Client-Zustand darf keinen frischen Boot
+# in eine noch absterbende interaktive Session hinein auslösen.
+mux_attached() {
+  _mux_resolve || return 2
+  local name="$1" out rc line listing
+  [ -n "$name" ] || { echo "mux_attached: Session-Name fehlt" >&2; return 2; }
+  if [ "$_MUX_BACKEND" = tmux ]; then
+    mux_has "$name" || return 1
+    out="$("$_MUX_BIN" list-clients -t "$name" -F '#{client_name}' 2>/dev/null)"; rc=$?
+    if [ "$rc" -ne 0 ]; then mux_has "$name" && return 2 || return 1; fi
+    [ -n "$out" ]
+  else
+    listing="$("$_MUX_BIN" list-sessions --no-formatting 2>/dev/null)"; rc=$?
+    [ "$rc" -eq 0 ] || return 2
+    line="$(printf '%s\n' "$listing" | awk -v wanted="$name" '$1 == wanted { print; exit }')"
+    [ -n "$line" ] || return 1
+    case "$line" in *"(EXITED"*) return 1 ;; *"(current)"*) return 0 ;; esac
+    # Zellij 0.44 exposes connected clients through the session-scoped action. This catches
+    # clients other than the caller; `(current)` above is the cheap local fast path.
+    out="$("$_MUX_BIN" --session "$name" action list-clients 2>/dev/null)"; rc=$?
+    if [ "$rc" -ne 0 ]; then mux_has "$name" && return 2 || return 1; fi
+    # list-clients druckt auch ohne Datenzeile den Header `CLIENT_ID ...`; nur mindestens eine
+    # Nicht-Header-Zeile beweist einen verbundenen Client.
+    printf '%s\n' "$out" | awk 'NF && $1 != "CLIENT_ID" { found=1 } END { exit(found ? 0 : 1) }'
   fi
 }
 
@@ -170,12 +239,16 @@ mux_kill() {
   if [ "$_MUX_BACKEND" = tmux ]; then
     "$_MUX_BIN" kill-session -t "$name" 2>/dev/null
   else
-    # zellij: delete-session/kill-session liefern gegen sehr junge Sessions einen
-    # unzuverlässigen Exit-Code (Race: rc!=0 "not found", obwohl der Kill GREIFT).
-    # Darum am RESULTAT messen (Session weg?), nicht am rc des Kill-Verbs.
-    "$_MUX_BIN" delete-session "$name" --force >/dev/null 2>&1 \
-      || "$_MUX_BIN" kill-session "$name" >/dev/null 2>&1 || true
-    ! mux_has "$name"   # rc 0 ⇔ Session ist tatsächlich weg
+    # Zellij trennt die live Session vom gespeicherten Resurrection-State: kill-session beendet
+    # den Server, kann aber eine `(EXITED ...)`-Hülle hinterlassen; delete-session entfernt diese
+    # Persistenz. Beide Verben müssen deshalb IMMER in dieser Reihenfolge laufen (kein `||`-
+    # Kurzschluss). Ihre rc sind bei jungen Sessions racy — der beobachtete Zustand entscheidet.
+    "$_MUX_BIN" kill-session "$name" >/dev/null 2>&1 || true
+    # kill-session kann den Resurrection-State leicht verzögert persistieren. Ein kurzer Settle
+    # macht die nachfolgende Ergebnisprüfung deterministisch und verhindert eine spät auftauchende
+    # EXITED-Hülle direkt vor dem nächsten mux_spawn.
+    sleep 1
+    _mux_zellij_purge_exited "$name"
   fi
 }
 
