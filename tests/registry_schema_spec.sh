@@ -181,28 +181,48 @@ cat > "$TMP/extra_prop.json" <<'JSON'
 JSON
 not_ok valid_against "$TMP/extra_prop.json"
 
-# ── 5) MALFORMED: bad uid-pattern (Großbuchstabe/Underscore verletzt ^[a-z0-9][a-z0-9-]*$) ─
+# ── 5) surface-Feld (Kanon-Drift-Fix 2026-07-17): legitim + additiv, aber enum-begrenzt ───
+#   bin/onboard-codex schreibt "surface":"codex" in die Registry — vorher lehnte das Schema
+#   das als additionalProperty ab (Widerspruch Code↔Schema). Jetzt: bekanntes enum ist VALID,
+#   ein Tippfehler/unbekannter Wert bleibt INVALID (kein Freifahrtschein für beliebige Strings).
+it "surface: 'codex' (wie bin/onboard-codex schreibt) → VALID"
+cat > "$TMP/surface_codex.json" <<'JSON'
+{ "version": 1, "projects": [ { "uid": "acme", "name": "acme-app", "path": "/srv/acme", "standup": "/srv/acme/standup", "surface": "codex" } ] }
+JSON
+ok valid_against "$TMP/surface_codex.json"
+it "surface: 'claude' → VALID"
+cat > "$TMP/surface_claude.json" <<'JSON'
+{ "version": 1, "projects": [ { "uid": "acme", "name": "acme-app", "path": "/srv/acme", "standup": "/srv/acme/standup", "surface": "claude" } ] }
+JSON
+ok valid_against "$TMP/surface_claude.json"
+it "malformed: surface 'windsurf' (nicht im enum) → abgelehnt"
+cat > "$TMP/surface_bad.json" <<'JSON'
+{ "version": 1, "projects": [ { "uid": "acme", "name": "acme-app", "path": "/srv/acme", "standup": "/srv/acme/standup", "surface": "windsurf" } ] }
+JSON
+not_ok valid_against "$TMP/surface_bad.json"
+
+# ── 6) MALFORMED: bad uid-pattern (Großbuchstabe/Underscore verletzt ^[a-z0-9][a-z0-9-]*$) ─
 it "malformed: uid 'Acme_X' verletzt das uid-pattern → abgelehnt"
 cat > "$TMP/bad_uid.json" <<'JSON'
 { "version": 1, "projects": [ { "uid": "Acme_X", "name": "acme-app", "path": "/srv/acme", "standup": "/srv/acme/standup" } ] }
 JSON
 not_ok valid_against "$TMP/bad_uid.json"
 
-# ── 6) MALFORMED: owns-Dupe (uniqueItems) ─────────────────────────────────────────────────
+# ── 7) MALFORMED: owns-Dupe (uniqueItems) ─────────────────────────────────────────────────
 it "malformed: doppelter owns-Eintrag (uniqueItems) → abgelehnt"
 cat > "$TMP/owns_dupe.json" <<'JSON'
 { "version": 1, "projects": [ { "uid": "acme", "name": "acme-app", "path": "/srv/acme", "standup": "/srv/acme/standup", "owns": ["acme-app/backend", "acme-app/backend"] } ] }
 JSON
 not_ok valid_against "$TMP/owns_dupe.json"
 
-# ── 7) MALFORMED: version als String statt integer ────────────────────────────────────────
+# ── 8) MALFORMED: version als String statt integer ────────────────────────────────────────
 it "malformed: version \"1\" (String statt integer) → abgelehnt"
 cat > "$TMP/ver_str.json" <<'JSON'
 { "version": "1", "projects": [ { "uid": "acme", "name": "acme-app", "path": "/srv/acme", "standup": "/srv/acme/standup" } ] }
 JSON
 not_ok valid_against "$TMP/ver_str.json"
 
-# ── 8) Passt das Schema zur mitgelieferten projects.registry.example.json? ────────────────
+# ── 9) Passt das Schema zur mitgelieferten projects.registry.example.json? ────────────────
 #   Auflösung wie bin/who-owns: TOOLHUB = ENGINE_ROOT/.. . Sucht im Engine-Root, im
 #   Tool-Hub-Root und (worktree-robust, white-label) am echten Repo-Root via git-common-dir
 #   + dessen Parent. Fehlt die Datei (reines public-Repo-Checkout) → grüner Skip.
