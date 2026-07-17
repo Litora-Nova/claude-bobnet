@@ -158,6 +158,12 @@ normalisiert zu Events, `scripts/scut-router.sh` triagiert datengetrieben (Regis
    Nudge trotzdem als zugestellt; bewusst in Kauf genommen, weil verlässlicher als der
    mux_send-rc. Details/Env: Kopf von
    `scripts/inbox-watch.sh`.
+   **Kanon (PO 2026-07-17): Boot/Spawn-first, Nudge nur Fallback.** Ein frischer Boot mit
+   Inbox-Briefing (`INBOX_WATCH_BOOT=1` + `BOOT_CMD`, oder ein manuell gestarteter Lead, der die
+   Inbox liest) gilt als zugestellt und schlägt jeden Nudge — ein Nudge ist der Weckversuch für
+   eine BEREITS laufende, nur idle/blockierte Session; er ersetzt keinen Boot und ist ihm nicht
+   gleichwertig. Wo beides möglich ist (Session down, `INBOX_WATCH_BOOT` verfügbar), hat der Boot
+   Vorrang vor endlosem Re-Nudge-Versuch gegen eine tote Session.
 4. **Cross-Installation (BobNet-Bridge, #45):** `bobnet-send.sh <peer> "[uid][@Agent]: …"` →
    drüben forced-command `bridge-receive.sh <peer>` (Pflicht-Adressierung, Empfänger stempelt
    ts/Identität selbst, flock-Append, Audit-Log beidseitig). Die beiden Seiten wiegen dabei

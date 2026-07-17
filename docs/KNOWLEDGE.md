@@ -59,7 +59,7 @@ Dauerbetrieb/Selbstheilung ist Instanz-Sache (z. B. systemd-User-Units — Runbo
 | **Projekt-Inbox** (`<standup>/_inbox.md`) | Agent-zu-Agent IM Team, @-adressiert, append-only | `team-rules/comms.md` |
 | **News-Box** (`scripts/news.sh`) | Broadcast an ALLE Teams der Installation (Releases, neue shared Tools/MCPs + How-to-Pfad) | `team-rules/news.md` |
 | **SCUT / Telegram** | Mensch ↔ Team von unterwegs: `scut-poll.sh` (inbound → Inbox, Media-Download), `scut.sh "<text>" [info\|mid\|urgent]` (Antwort). EIN Poller pro Bot-Token! | `scripts/scut-poll.sh` Header |
-| **Multiplexer** (`scripts/lib/mux.sh`) | tmux/zellij-Adapter für Session-Checks + best-effort Live-Inject (Inbox-first bleibt Default) | `team-rules/comms.md` |
+| **Multiplexer** (`scripts/lib/mux.sh`) | tmux/zellij-Adapter für Session-Checks + best-effort Live-Inject (Inbox-first bleibt Default). Kanon seit #64: **tmux = Fleet-Default für headless Betrieb**, zellij nur noch für interaktive Sessions (deprecatet für headless, s. `mux.sh`-Kopf) | `team-rules/comms.md` + `scripts/lib/mux.sh`-Kopf |
 | **Bobiverse-Sync** (`bin/sync-share`) | Lese-/Edit-Fenster für Mensch + externe Coworker (Inbox/Plan/share) — kein State-Sync | `team-rules/comms.md` §6 |
 
 ## Geteilte Tools (`bin/` + `scripts/`)
