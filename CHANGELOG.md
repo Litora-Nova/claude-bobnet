@@ -36,6 +36,11 @@ see `.claude/rules/contract.md`. `skills/update-bobs` points teams here after an
   readable (conservative: no self-write detection until the state is first
   rewritten). Field repro: >12 empty nudges on an unchanged inbox, nudges on
   entries already delivered through other channels.
+- **Self-write detection is spoof-hardened** (review-gate finding): lines carrying
+  the server-stamped router marker `SCUT (` are never treated as self-writes,
+  regardless of their free-text suffix — a routed customer/attacker message ending
+  in a lead-like signature can no longer silence its own cycle. The self-write
+  path also gets its own summary counter (no more telemetry-free finalization).
 
 ### Changed
 - Shared lead-state helpers extracted to `scripts/lib/standup.sh` (inbox-watch and
