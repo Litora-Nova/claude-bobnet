@@ -6,7 +6,9 @@
 #                       (erbt die bewährte Instanz-onboard.sh-Logik 1:1)
 #   2  skills-Symlink   <PROJECT_ROOT>/.claude/skills → Engine/skills (falls vorhanden)
 #   3  agents           <PROJECT_ROOT>/.claude/agents (aus Engine/archetypes, nur wenn leer/fehlt)
-#   4  Hook-Install     <PROJECT_ROOT>/.claude/hooks/* Wrapper → Engine-Hooks  (Daten, NICHT settings.json)
+#   4  Hook-Install     <PROJECT_ROOT>/.claude/hooks/* Wrapper → Engine-Hooks (Daten, NICHT settings.json)
+#                       + .git/hooks/pre-push (git-nativer Hook, #59, s. Baustein-Kommentar unten:
+#                       ABWEICHT vom Wrapper-Muster — greift sofort, kein settings.json-Äquivalent).
 #   5  dev-team.env     aus scripts/dev-team.env.example generieren (nur wenn fehlt)
 #   6  registry         idempotenter JSON-Upsert (per uid) in die ZENTRALE Registry
 #                       ($TOOLHUB/projects.registry.json) — der Launcher liest GENAU diese.
@@ -129,6 +131,37 @@ exec \"$gi_src\" export \"\$@\""
   fi
 else
   note "⊘ Engine-Script fehlt: scripts/git-identity.sh — git-identity-Wiring übersprungen"
+fi
+
+# pre-push Identity-/Secret-Floor-Wrapper (Issue #59, separater Block wie git-identity oben).
+# Begründung: ein git-HOOK, kein Claude-Code-Hook — der Wrapper muss nach `.git/hooks/pre-push`
+# (nie versioniert, projekt-lokal), nicht nach `.claude/hooks/`. Opt-in + nie-klobbern: existiert
+# dort bereits EIN anderer Hook (nicht unser eigener Wrapper), wird er NICHT überschrieben — ein
+# Mensch könnte einen eigenen pre-push-Hook haben, den zu verlieren teurer wäre als der Floor.
+pp_src="$ENGINE_ROOT/hooks/pre-push-identity-floor.sh"
+if [ ! -f "$pp_src" ]; then
+  note "⊘ Engine-Hook fehlt: pre-push-identity-floor — Wiring übersprungen"
+# `git rev-parse --git-path hooks` statt hart `$PROJECT_ROOT/.git/hooks`: funktioniert auch bei
+# Worktrees/Submodulen, wo `.git` eine Datei mit Verweis ist, kein Verzeichnis. rev-parse liefert
+# ggf. einen relativen Pfad — von PROJECT_ROOT aus auflösen.
+elif ! pp_hooks_dir="$(git -C "$PROJECT_ROOT" rev-parse --git-path hooks 2>/dev/null)"; then
+  note "⊘ $PROJECT_ROOT ist kein Git-Repo (oder git fehlt) — pre-push-Wiring übersprungen"
+else
+  case "$pp_hooks_dir" in /*) : ;; *) pp_hooks_dir="$PROJECT_ROOT/$pp_hooks_dir" ;; esac
+  pp_wrap="$pp_hooks_dir/pre-push"
+  mkdir -p "$pp_hooks_dir"
+  pp_want="#!/usr/bin/env bash
+# Auto-generierter Projekt-Wrapper (bin/onboard). Ruft den Engine-Git-Hook auf (pre-push
+# Identity-/Secret-Floor, Issue #59) — Bypass: BOBNET_PUSH_FLOOR_SKIP=1 git push
+# Wird bei jedem onboard/upgrade NEU erzeugt — NICHT hier editieren.
+exec \"$pp_src\" \"\$@\""
+  if [ -f "$pp_wrap" ] && [ "$(cat "$pp_wrap")" = "$pp_want" ]; then
+    ok "Wrapper aktuell: pre-push-identity-floor"
+  elif [ -f "$pp_wrap" ]; then
+    note "⊘ .git/hooks/pre-push existiert bereits und ist NICHT unser Wrapper — nicht überschrieben (opt-in, klobbert nie einen bestehenden Hook). Prüfen: $pp_wrap"
+  else
+    printf '%s\n' "$pp_want" > "$pp_wrap"; chmod +x "$pp_wrap"; changed "Wrapper geschrieben: pre-push-identity-floor"
+  fi
 fi
 
 note "ℹ settings.json-Verdrahtung ist Stufe C (Scharfschalten, {HUMAN}-OK) — hier NICHT angefasst."
