@@ -92,9 +92,19 @@ out="$(push)"; rc=$?
 it "(4) Kein DEV_TEAM_EMAIL konfiguriert: Kanon-Form allein reicht → Push erlaubt"
 eq "$rc" "0"
 
+# Secret-Fixtures werden zur LAUFZEIT aus Teilen zusammengesetzt (Riker-Finding, #59-Delta):
+# ein Literal, das komplett im Quelltext dieser Datei steht, matcht das eigene SECRET_PATTERNS-
+# Set des Hooks — sobald der Hook auf DIESEM Repo scharf ist, würde jeder künftige Push, der
+# diese Zeilen berührt, sich selbst blockieren. Die zusammengesetzte Test-ABSICHT bleibt exakt
+# gleich (der resultierende String matcht das Pattern genauso), nur das Literal verschwindet
+# aus dem Tracked-Source-Diff.
+aws_p1="AKIA"; aws_p2="ABCDEFGHIJKLMNOP"
+glpat_p1="glpat-"; glpat_p2="ABCDEFGHIJKLMNOPQRST"
+ant_p1="sk-ant-"; ant_p2="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123"
+
 # ── (5) Secret-Muster im Diff → Push blockiert trotz sauberer Identität ────────────────────
 fresh_repo
-commit_as "Garfield (Acme Architect)" "team@example.com" "leaked aws key" "AKIAABCDEFGHIJKLMNOP"
+commit_as "Garfield (Acme Architect)" "team@example.com" "leaked aws key" "${aws_p1}${aws_p2}"
 out="$(push DEV_TEAM_EMAIL=team@example.com)"; rc=$?
 it "(5) AWS-Key-Muster im Diff → blockiert trotz sauberer Identität"
 neq "$rc" "0"
@@ -103,11 +113,20 @@ contains "$out" "secret/token pattern"
 
 # ── (5b) GitLab-PAT-Muster (glpat-) im Diff → ebenfalls blockiert ─────────────────────────
 fresh_repo
-commit_as "Garfield (Acme Architect)" "team@example.com" "leaked gitlab pat" "glpat-ABCDEFGHIJKLMNOPQRST"
+commit_as "Garfield (Acme Architect)" "team@example.com" "leaked gitlab pat" "${glpat_p1}${glpat_p2}"
 out="$(push DEV_TEAM_EMAIL=team@example.com)"; rc=$?
 it "(5b) GitLab-PAT-Muster (glpat-) im Diff → blockiert trotz sauberer Identität"
 neq "$rc" "0"
 it "(5b) ... Grund nennt secret/token pattern"
+contains "$out" "secret/token pattern"
+
+# ── (5c) Anthropic-Key-Muster (sk-ant-) im Diff → ebenfalls blockiert (Lead-Entscheid) ─────
+fresh_repo
+commit_as "Garfield (Acme Architect)" "team@example.com" "leaked anthropic key" "${ant_p1}${ant_p2}"
+out="$(push DEV_TEAM_EMAIL=team@example.com)"; rc=$?
+it "(5c) Anthropic-Key-Muster (sk-ant-) im Diff → blockiert trotz sauberer Identität"
+neq "$rc" "0"
+it "(5c) ... Grund nennt secret/token pattern"
 contains "$out" "secret/token pattern"
 
 # ── (6) fremde Email-Adresse im COMMITTETEN INHALT (nicht nur Metadaten) → blockiert ───────
@@ -161,8 +180,25 @@ out="$( cd "$WORK" && git push origin :feature/to-delete 2>&1)"; rc=$?
 it "(10) Branch-Löschung wird nicht geprüft (No-Op, kein Crash)"
 eq "$rc" "0"
 
-# ── (11) Self-Test-Modus läuft durch (Sanity, zählt NICHT als Gate — tests.md-Konvention) ──
-it "(11) --self-test läuft grün durch (eigener Modus, kein Gate-Ersatz)"
+# ── (11) Multi-Ref-Push: EIN Hook-Aufruf bekommt mehrere Zeilen auf stdin (Riker-Coverage) ──
+# git ruft pre-push GENAU EINMAL pro `git push`-Invokation auf, mit einer stdin-Zeile PRO Ref —
+# die while-read-Schleife im Hook war dafür schon gebaut, aber nie mit einem echten
+# Mehrfach-Refspec-Push geprüft worden. Zwei neue Branches, EIN Push-Kommando, zweiter Ref
+# trägt die schlechte Identität.
+fresh_repo
+git -C "$WORK" checkout -q -b feature/multi-a main
+commit_as "Garfield (Acme Architect)" "team@example.com" "multi-ref push, branch A (good)"
+git -C "$WORK" checkout -q -b feature/multi-b main
+commit_as "Some Human" "personal@gmail.com" "multi-ref push, branch B (bad identity)"
+out="$( cd "$WORK" && env DEV_TEAM_EMAIL=team@example.com \
+  git push origin feature/multi-a:feature/multi-a feature/multi-b:feature/multi-b 2>&1 )"; rc=$?
+it "(11) Multi-Ref-Push in einem Aufruf: ein schlechter Ref blockiert den gesamten Push"
+neq "$rc" "0"
+it "(11) ... die schlechte Identität aus dem ZWEITEN Ref wird erkannt (Schleife erfasst beide stdin-Zeilen)"
+contains "$out" "doesn't match the canon shape"
+
+# ── (12) Self-Test-Modus läuft durch (Sanity, zählt NICHT als Gate — tests.md-Konvention) ──
+it "(12) --self-test läuft grün durch (eigener Modus, kein Gate-Ersatz)"
 ok bash "$HOOK" --self-test
 
 summary

@@ -18,8 +18,10 @@
 #       must match it — catches a private address leaking either as commit metadata or as
 #       committed CONTENT (the actual field incident).
 #   (c) the diff carries none of a short, well-known set of secret/token patterns (AWS access
-#       key, PEM private key header, GitHub/Slack token prefixes). This is NOT a general secret
-#       scanner — it is a floor for the common, cheaply-detectable cases.
+#       key, PEM private key header, GitHub/GitLab/Slack/Anthropic token prefixes). This is NOT
+#       a general secret scanner — it is a floor for the common, cheaply-detectable cases. This
+#       list is minimal BY DESIGN (Riker/#59 review) — the Anthropic prefix was the last accepted
+#       addition, not a precedent for open-ended growth.
 #
 # Bypass (documented, not hidden): BOBNET_PUSH_FLOOR_SKIP=1 git push — skips ALL checks, still
 # logs loudly to stderr that it was skipped. The floor is opt-in infrastructure, not a
@@ -67,6 +69,7 @@ SECRET_PATTERNS=(
   'github_pat_[A-Za-z0-9_]{20,}'
   'glpat-[A-Za-z0-9_-]{20,}'
   'xox[baprs]-[A-Za-z0-9-]+'
+  'sk-ant-[A-Za-z0-9_-]{20,}'
 )
 
 warn() { printf 'pre-push-identity-floor: %s\n' "$*" >&2; }
