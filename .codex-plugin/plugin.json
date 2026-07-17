@@ -1,6 +1,6 @@
 {
   "name": "bobnet",
-  "version": "0.13.0",
+  "version": "0.18.0",
   "description": "BobNet/Bobiverse proof-of-concept for Codex: init-bobs skill, project onboarding helpers, and team-agent conventions.",
   "author": {
     "name": "Litora Nova",

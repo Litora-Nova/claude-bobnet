@@ -33,6 +33,7 @@
     }
   },
   "properties": {
+    "$schema": { "type": "string", "description": "IDE-Editor-Hinweis auf diese Schema-Datei (JSON-Schema-Konvention). Jedes themes/<id>/theme.json trägt es; muss deklariert sein, sonst schlägt additionalProperties:false auf JEDER Datei fehl (Kanon-Drift, README-Sync 2026-07-17, LOW)." },
     "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$", "description": "Theme-Slug = Ordnername (bobiverse, formal, minimal, custom)." },
     "label": { "$ref": "#/definitions/i18n", "description": "Anzeige-Name des Themes." },
     "description": { "$ref": "#/definitions/i18n" },

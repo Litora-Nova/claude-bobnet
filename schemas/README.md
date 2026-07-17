@@ -1,14 +1,17 @@
 # schemas/ — Struktur-Verträge
 
 JSON-Schemas (draft-07) für die maschinenlesbaren Teile des Team-OS. Validieren
-Archetypen, Themes und (später) `team.config` + Sprint-Lifecycle.
+Archetypen, Themes und die Registry; `team.config` wird bereits real gelesen
+(git-identity.sh, inbox-watch.sh, Dashboard-Backend) — sein Schema ist noch nicht geschrieben
+(s. Zeile "geplant" unten, Kanon-Drift-Fund README-Sync 2026-07-17: die Tabelle listete es
+bisher gleichrangig neben den drei tatsächlich existierenden Dateien).
 
-| Schema | Validiert | Schicht |
-|---|---|---|
-| `archetype.schema.json` | `archetypes/*.json` — *was* eine Rolle tut (universal) | ① Struktur |
-| `theme.schema.json` | `themes/<id>/theme.json` — *wie* eine Rolle erscheint (Flavor) | ② Theme |
-| `team.config.schema.json` | `<projekt>/_dev_team/standup/team.config.json` (Phase 3/4) | ③ Instanz |
-| `registry.schema.json` | `projects.registry.json` — das Bobiverse-Zuständigkeits-Verzeichnis (Hub-Root, gitignored), konsumiert von Dashboard + Launcher (FR#7) | Hub |
+| Schema | Validiert | Schicht | Status |
+|---|---|---|---|
+| `archetype.schema.json` | `archetypes/*.json` — *was* eine Rolle tut (universal) | ① Struktur | vorhanden |
+| `theme.schema.json` | `themes/<id>/theme.json` — *wie* eine Rolle erscheint (Flavor) | ② Theme | vorhanden |
+| `registry.schema.json` | `projects.registry.json` — das Bobiverse-Zuständigkeits-Verzeichnis (Hub-Root, gitignored), konsumiert von Dashboard + Launcher (FR#7) | Hub | vorhanden |
+| ~~`team.config.schema.json`~~ | `<projekt>/_dev_team/standup/team.config.json` — die Datei selbst wird bereits gelesen (s. o.), NUR das validierende Schema fehlt noch | ③ Instanz | **geplant, NICHT vorhanden** (Phase 3/4) |
 
 ## Join-Modell (die `id` ist der Dreh- und Angelpunkt)
 

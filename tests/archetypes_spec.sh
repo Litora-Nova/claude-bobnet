@@ -152,4 +152,62 @@ for t in "${ALL_TAGS[@]}"; do
   ok test -f "$TAGS_DIR/$t.md"
 done
 
+# ── 6. Schema-Drift-Regressionsschutz (Kanon-Drift-Fund, README-Sync 2026-07-17, LOW) ──────────
+# Jedes archetypes/*.json UND themes/*/theme.json trägt ein "$schema"-Feld (IDE-Hinweis, JSON-
+# Schema-Konvention) — additionalProperties:false in den Schemas muss das explizit erlauben,
+# sonst würde JEDE einzelne shipped Datei bei echter Validierung durchfallen (war der Fall, bis
+# beide Schemas "$schema" nachträglich deklarierten). Ebenso: jeder tatsächlich genutzte
+# canSpawn-Wert muss im Schema-Enum stehen (war der Fall für "advisor", bis das Enum nachzog).
+# Liest die Schemas selbst (keine hartkodierte Kopie der Property-Listen) — bleibt synchron,
+# auch wenn das Schema künftig weitere Felder bekommt.
+DRIFT_OUT="$("$PY" - "$ENGINE_ROOT" <<'PY'
+import json, glob, os, re, sys
+
+root = sys.argv[1]
+
+def undeclared(doc, schema):
+    if schema.get("additionalProperties") is not False:
+        return []
+    allowed = set(schema.get("properties", {}).keys())
+    pats = list(schema.get("patternProperties", {}).keys())
+    out = []
+    for k in doc.keys():
+        if k in allowed:
+            continue
+        if any(re.match(p, k) for p in pats):
+            continue
+        out.append(k)
+    return out
+
+errs = []
+
+arch_schema = json.load(open(os.path.join(root, "schemas/archetype.schema.json")))
+canspawn_enum = set(arch_schema.get("properties", {}).get("canSpawn", {}).get("items", {}).get("enum", []))
+for f in sorted(glob.glob(os.path.join(root, "archetypes/*.json"))):
+    doc = json.load(open(f))
+    for k in undeclared(doc, arch_schema):
+        errs.append("archetype %s: undeclared top-level key %r" % (os.path.basename(f), k))
+    for v in doc.get("canSpawn", []) or []:
+        if v not in canspawn_enum:
+            errs.append("archetype %s: canSpawn value %r not in schema enum" % (os.path.basename(f), v))
+
+theme_schema_path = os.path.join(root, "schemas/theme.schema.json")
+if os.path.exists(theme_schema_path):
+    theme_schema = json.load(open(theme_schema_path))
+    persona_def = theme_schema.get("definitions", {}).get("persona", {})
+    for f in sorted(glob.glob(os.path.join(root, "themes/*/theme.json"))):
+        doc = json.load(open(f))
+        for k in undeclared(doc, theme_schema):
+            errs.append("theme %s: undeclared top-level key %r" % (f, k))
+        for pid, p in (doc.get("personas") or {}).items():
+            for k in undeclared(p, persona_def):
+                errs.append("theme %s persona %s: undeclared key %r" % (f, pid, k))
+
+for e in errs:
+    print(e)
+PY
+)"
+it "6-schema-drift: kein archetypes/*.json oder themes/*/theme.json hat ein undeklariertes Feld, kein canSpawn-Wert fehlt im Enum"
+eq "$DRIFT_OUT" ""
+
 summary
