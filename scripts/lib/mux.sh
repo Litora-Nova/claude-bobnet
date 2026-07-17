@@ -184,9 +184,12 @@ mux_attached() {
     [ "$rc" -eq 0 ] || return 2
     line="$(printf '%s\n' "$listing" | awk -v wanted="$name" '$1 == wanted { print; exit }')"
     [ -n "$line" ] || return 1
+    # `(current)` marks the session the CALLER itself runs in ($ZELLIJ_SESSION_NAME) — NOT a
+    # proof that the target has a connected client. It only fires in the pathological self-recycle
+    # case (caller sits in the target), where treating it as attached is the safe direction.
     case "$line" in *"(EXITED"*) return 1 ;; *"(current)"*) return 0 ;; esac
-    # Zellij 0.44 exposes connected clients through the session-scoped action. This catches
-    # clients other than the caller; `(current)` above is the cheap local fast path.
+    # Authoritative check: Zellij 0.44 exposes connected clients through the session-scoped action.
+    # This is what actually detects an attached client (of any session, caller or not).
     out="$("$_MUX_BIN" --session "$name" action list-clients 2>/dev/null)"; rc=$?
     if [ "$rc" -ne 0 ]; then mux_has "$name" && return 2 || return 1; fi
     # list-clients druckt auch ohne Datenzeile den Header `CLIENT_ID ...`; nur mindestens eine

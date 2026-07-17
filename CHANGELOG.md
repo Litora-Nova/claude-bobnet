@@ -30,6 +30,13 @@ Both features built by **Bob One** (Codex/GPT runtime, cross-model pilot #61); g
   foreign markers (`SCUT (`, `BRIDGE (`) stay unconditional non-self-writes. inbox_watch_spec
   extended to 121 checks.
 
+  **Known limitation (behavior change):** the exact author-field anchor requires the line to end
+  in `— (<author>)` with nothing after the closing paren. A trailing emoji after the paren
+  (e.g. `— (Garfield) 🐱`) is no longer recognized as a self-write and runs through the normal
+  nudge cycle. Safe direction (more alerting, no bypass), but affects the currently-lived
+  signature style of several personas. Canon (`comms.md`) already prefers the emoji BEFORE the
+  dash (`🐱 — (Garfield)`) — teams should align their signature style accordingly.
+
 ## [0.17.1] — 2026-07-17
 
 ### Fixed
