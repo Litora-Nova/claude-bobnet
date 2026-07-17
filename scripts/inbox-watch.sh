@@ -17,15 +17,20 @@
 # Zustandsmaschine pro aktivem Registry-Projekt:
 #   1. Signatur "größe:anzahl:queue" aus `_inbox.md` + `_inbox/` + `_review-queue.md` bilden und
 #      gegen das State-File vergleichen.
-#   2. State-File pro uid, zwei Formen:
-#        final:   nackte Signatur (Alt-Format, weiter gelesen/geschrieben) — "bekannt/erledigt".
-#        pending: "PENDING sig=<sig> lines=<N> attempts=<n>" — ein Nudge ist raus, aber NICHT
-#                 über den mux_send-rc verifiziert. Verifikation läuft über den Lead-Heartbeat:
-#                 `<standup>/<TEAM_LEAD>.log` hat seit dem Nudge eine NEUE Zeile bekommen
-#                 (aktuelle Zeilenzahl > Snapshot bei Nudge-Zeit) — Stand-up beginnt kanonisch
-#                 mit Heartbeat + Inbox lesen, ein neuer Log-Eintrag gilt also als Zustellnachweis.
-#                 (Zeilenzahl statt Timestamp: `log.sh` schreibt nur Minutenauflösung — ein Nudge
-#                 + Heartbeat in derselben Minute wäre über Timestamps nicht sauber unterscheidbar.)
+#   2. State-File pro uid, drei Formen:
+#        final:        "FINAL sig=<sig> ilines=<N>" — bekannt/erledigt, N = _inbox.md-Zeilenzahl
+#                       zum Zeitpunkt der Finalisierung (Baseline für Self-Write-Erkennung, #56).
+#        final-legacy:  nackte Signatur (Alt-Format vor diesem Batch) — weiter gelesen, aber ab
+#                       dem nächsten Schreiben auf das neue Format gehoben. Ohne `ilines` ist
+#                       Self-Write-Erkennung diesen Zyklus NICHT möglich (konservativ, s. Punkt 7).
+#        pending:       "PENDING sig=<sig> lines=<N> attempts=<n> ilines=<M>" — ein Nudge ist
+#                       raus, aber NICHT über den mux_send-rc verifiziert. Verifikation läuft
+#                       über den Lead-Heartbeat: `<standup>/<TEAM_LEAD>.log` hat seit dem Nudge
+#                       eine NEUE Zeile bekommen (aktuelle Zeilenzahl > Snapshot bei Nudge-Zeit) —
+#                       Stand-up beginnt kanonisch mit Heartbeat + Inbox lesen, ein neuer
+#                       Log-Eintrag gilt also als Zustellnachweis. (Zeilenzahl statt Timestamp:
+#                       `log.sh` schreibt nur Minutenauflösung — ein Nudge + Heartbeat in
+#                       derselben Minute wäre über Timestamps nicht sauber unterscheidbar.)
 #   3. Bei ausstehendem Pending zuerst verifizieren:
 #        verifiziert                   → State finalisieren (auf die Signatur DES Nudges — ist
 #                                         die aktuelle Signatur seither weitergewandert, bleibt
@@ -38,20 +43,58 @@
 #        busy älter als STALE   → NUDGE (vergessener busy-Status blockiert sonst ewig)
 #        busy (frisch)|blocked  → SKIP (State bleibt „offen" → nächster Tick prüft erneut)
 #        Session down           → report (opt-in Boot via INBOX_WATCH_BOOT=1 + BOOT_CMD; ein
-#                                  Boot gilt als zugestellt — der SessionStart-Hook liest die
-#                                  Inbox selbst, das ist zuverlässiger als ein mux_send-Nudge)
+#                                  Boot gilt als zugestellt) ODER — ohne Boot — GENAU EINMAL pro
+#                                  Down-Vorgang eskalieren statt endlos zu loggen (Punkt 10, #55).
 #   5. Eskalation (`INBOX_WATCH_ALERT_CMD`, opt-in) läuft GENAU EINMAL pro Vorgang, wenn (a) die
 #      Re-Nudge-Versuche erschöpft sind, ohne verifiziert worden zu sein, oder (b) gar kein
 #      Weckweg existiert (report-only, kein MUX_SESSION). Ohne Alert-Cmd wird trotzdem finalisiert
 #      (kein Endlos-Loop) — aber laut als „VERSCHLUCKT" geloggt + in der Summary-Zeile gezählt.
 #      Schlägt der Alert-Cmd selbst fehl (rc≠0), zählt das NICHT als „eskaliert" mit — eigener
 #      Zähler „Alert-Fehlschlag(e)" in der Summary-Zeile (0.14.0-Gate, Riker-Fund).
-#   6. State fortschreiben NUR bei Nudge (→ pending) oder Verifikation/Eskalation/report-only
-#      (→ final) — busy/blocked-Skips + fehlgeschlagene Sends bleiben „offen". Eine korrupte
-#      PENDING-Zeile (Pflichtfeld sig/lines/attempts fehlt oder ist nicht numerisch) wird
-#      KONSERVATIV wie „kein State" behandelt — frischer Zyklus statt eines permissiven
+#   6. State fortschreiben NUR bei Nudge (→ pending) oder Verifikation/Eskalation/report-only/
+#      Self-Write (→ final) — busy/blocked-Skips + fehlgeschlagene Sends bleiben „offen". Eine
+#      korrupte PENDING-Zeile (Pflichtfeld sig/lines/attempts fehlt oder ist nicht numerisch)
+#      wird KONSERVATIV wie „kein State" behandelt — frischer Zyklus statt eines permissiven
 #      Default (0.14.0-Gate, Marvin-Fund: ein defaultendes `lines=0` hätte fast jeden Heartbeat
-#      sofort als Zustellnachweis durchgehen lassen).
+#      sofort als Zustellnachweis durchgehen lassen). Dieselbe Konservativität gilt für ein
+#      fehlendes `ilines` (Alt-Format) bei der Self-Write-Erkennung (Punkt 7).
+#   7. Self-Write-Erkennung (Anti-Lärm-Batch Welle 1, #56 — Feld-Fund 2026-07-10/07-16: Lead-
+#      eigene Inbox-Writes bzw. die Antwort auf einen Nudge starten sonst den NÄCHSTEN Zyklus,
+#      das erklärt >12-Nudge-Serien bei konstanter „echter" Inhaltslage): jedes State-Write
+#      merkt sich zusätzlich `ilines` = _inbox.md-Zeilenzahl zu diesem Zeitpunkt. Wächst
+#      _inbox.md seit der letzten bekannten `ilines`-Baseline, werden GENAU die neuen Zeilen
+#      geprüft — sind ALLE mit der Lead-Eigensignatur unterschrieben (comms.md-Kanon
+#      "Text — (Absender)": Zeile endet auf "— ($TEAM_LEAD" oder "— $TEAM_LEAD", Klammer
+#      optional, Emoji/Suffixe danach toleriert), gilt der Zyklus als Self-Write: still auf die
+#      aktuelle Signatur finalisiert, KEIN Nudge, KEINE Eskalation. Ist auch nur EINE neue Zeile
+#      fremd, läuft der Zyklus normal (Nudge/Eskalation) — nie eine feine Filterung pro Zeile.
+#      Reine `_inbox/`- oder Review-Queue-Änderungen sind NIE Self-Write (die schreibt sich
+#      niemand selbst in die eigene _inbox.md) und nudgen wie bisher; landen Media-Drop +
+#      zugehöriger Mail-Eintrag im selben Tick, ist es ohnehin EIN Zyklus (eine Signatur).
+#      Fehlt die `ilines`-Baseline (Alt-Format-State) oder ist gar kein State vorhanden
+#      (erster Kontakt), ist Self-Write-Erkennung diesen Zyklus nicht möglich — konservativ wie
+#      bisher behandelt (nudgen), heilt sich mit dem nächsten Schreiben selbst.
+#   8. Severity-Klassifikation für jede Eskalation (`urgent|mid|info`, s. `INBOX_WATCH_ALERT_CMD`
+#      unten): urgent = die Review-Queue ist gewachsen ODER eine neue fremde Zeile trägt den
+#      „SCUT (via "-Marker (Kunden-/Mensch-Kanal, s. scut-router.sh) ODER Session-down; mid =
+#      sonstige fremde neue Einträge (Nudges erschöpft/kein Weckweg); info = bekannt harmlose
+#      Restfälle (z. B. reiner `_inbox/`-Datei-Churn ohne begleitende _inbox.md-Zeile). Ohne
+#      verlässliche Baseline (Alt-Format) wird konservativ `mid` statt `info` klassifiziert.
+#      `INBOX_WATCH_ALERT_MIN_SEVERITY` (Default `mid`) filtert: Events darunter werden geloggt,
+#      aber NICHT an den Alert-Cmd gereicht — eigener Summary-Zähler „unterhalb-Mindest-
+#      Severity", nicht „verschluckt" (das bleibt reserviert für „kein Alert-Cmd konfiguriert").
+#   9. Off-Duty-Flag `<standup>/.off-duty` (vom Lead selbst am Feierabend berührt): solange die
+#      Datei existiert, werden für dieses Projekt WEDER Nudges NOCH Alerts ausgelöst (auch keine
+#      Session-down-Eskalation, Punkt 10) — State bleibt komplett unangetastet, der nächste
+#      Stand-up liest die Inbox ohnehin. Auto-Clear: heartbeatet der Lead NACH der mtime des
+#      Flags (er ist zurück), löscht der Watcher es selbst — kein manuelles Aufräumen nötig.
+#  10. Session-down-Eskalation (#55): ist MUX_SESSION konfiguriert, die Session aber down und
+#      INBOX_WATCH_BOOT=0, eskaliert der Watcher GENAU EINMAL pro Down-Vorgang (severity=urgent,
+#      source=session-down) statt bei jedem Tick dieselbe Zeile zu loggen. Ein separater
+#      Marker (`<STATE_DIR>/<uid>.sessiondown`, unabhängig vom Content-State) hält das fest;
+#      kommt die Session zurück (mux_has wieder wahr), wird der Marker gelöscht — die nächste
+#      Down-Episode eskaliert wieder frisch. Der Content-State selbst bleibt dabei unberührt
+#      (die Inbox wurde ja nicht zugestellt) — nur die Down-Tatsache wird gemeldet.
 #
 #   Bekannte Grenze (Riker-Review 0.14.0): die Heartbeat-Verifikation ist eine Heuristik, kein
 #   Beweis, dass die Inbox gelesen wurde — heartbeatet der Lead nach dem Nudge wegen ANDERER
@@ -65,14 +108,24 @@
 #   Durchlauf verletzt werden kann.
 #
 # Instanz-Kontrakt (`<projekt>/_dev_team/dev-team.env`, alles optional):
-#   TEAM_LEAD              Name, unter dem der Lead heartbeatet (Log-Dateiname). Default: Bob.
+#   TEAM_LEAD              Name, unter dem der Lead heartbeatet (Log-Dateiname) UND die eigene
+#                          Signatur für die Self-Write-Erkennung (Punkt 7). Default: Bob.
 #   MUX_SESSION             Multiplexer-Session des Leads (für den Nudge). Fehlt → report-only.
 #   BOOT_CMD                Start-Kommando des Leads (nur mit INBOX_WATCH_BOOT=1 genutzt). Läuft
 #                           in einer FRISCHEN Shell (mux_spawn) — die eigene dev-team.env wird
 #                           davor gesourct (Kontrakt: sourcebar), damit z. B. $PROJECT_ROOT im
 #                           Kommando trägt (gleicher Fußgänger + gleiche Kur wie bin/recycle).
 #   INBOX_WATCH_ALERT_CMD   Eskalations-Hook (überschreibt den gleichnamigen Prozess-Env-Fallback
-#                           unten). Kontrakt: `$ALERT_CMD <uid> <lead> <standup-pfad>`.
+#                           unten). Kontrakt v2 (additiv zu v1, abwärtskompatibel): `$ALERT_CMD
+#                           <uid> <lead> <standup-pfad> <severity>` + Env-Exports
+#                           `INBOX_WATCH_REASON` (Klartext-Grund) und `INBOX_WATCH_SOURCE`
+#                           (`inbox|review-queue|session-down`). Ein v1-Cmd, der nur die ersten
+#                           3 Args liest, funktioniert unverändert weiter.
+#
+# Off-Duty (Punkt 9, kein Env — Flag-File):
+#   `<standup>/.off-duty` anlegen (z. B. `touch`) unterdrückt für dieses Projekt jeden Nudge und
+#   jede Eskalation, bis die Datei wieder weg ist (manuell ODER automatisch, sobald der Lead
+#   danach wieder heartbeatet).
 #
 # Env:
 #   DEV_TEAM_REGISTRY       zentrale projects.registry.json (Default wie scut-router.sh)
@@ -81,7 +134,9 @@
 #   INBOX_WATCH_MAX_NUDGE   max. Re-Nudge-Versuche pro Vorgang, bevor eskaliert wird (Default 3)
 #   INBOX_WATCH_ALERT_CMD   Eskalations-Hook, Fallback wenn dev-team.env keinen setzt (Unit-Env,
 #                           gilt dann für alle Projekte ohne eigenen). Optional — ohne Alert-Cmd
-#                           wird nur laut geloggt (siehe Punkt 5).
+#                           wird nur laut geloggt (siehe Punkt 5). Kontrakt siehe oben.
+#   INBOX_WATCH_ALERT_MIN_SEVERITY   Mindest-Severity, ab der der Alert-Cmd überhaupt gerufen
+#                           wird (`info`|`mid`|`urgent`, Default `mid`) — s. Punkt 8.
 #   INBOX_WATCH_BOOT        1 = Lead bei Session-down via mux_boot wecken (Default 0)
 #   INBOX_WATCH_DRYRUN      1 = keine mux-Aufrufe (Nudge/Re-Nudge gelten als versucht); Pending-
 #                           State + Verifikation laufen normal weiter (deterministisch testbar)
@@ -96,6 +151,7 @@ STATE_DIR="${INBOX_WATCH_STATE:-$HOME/.claude/inbox-watch}"
 STALE_MIN="${INBOX_WATCH_STALE_MIN:-90}"
 MAX_NUDGE="${INBOX_WATCH_MAX_NUDGE:-3}"
 ALERT_CMD_DEFAULT="${INBOX_WATCH_ALERT_CMD:-}"
+MIN_SEVERITY="${INBOX_WATCH_ALERT_MIN_SEVERITY:-mid}"
 DO_BOOT="${INBOX_WATCH_BOOT:-0}"
 DRYRUN="${INBOX_WATCH_DRYRUN:-0}"
 . "$DIR/lib/boot.sh"      # liefert mux_boot + (via mux.sh) mux_has/mux_send/mux_flush_draft
@@ -112,6 +168,19 @@ flock -n 9 || { echo "[inbox-watch] Lauf übersprungen (eine andere Instanz läu
 # env_of <envfile> <key> — export KEY="wert" / export KEY=wert lesen (leer wenn fehlt).
 env_of() { [ -f "$1" ] && sed -n "s/^export $2=\"\{0,1\}\([^\"]*\)\"\{0,1\}.*/\1/p" "$1" | head -n1; }
 
+# last_heartbeat_epoch <log> -> Unix-Epoch der letzten Heartbeat-Zeile (0 wenn fehlt/unparsbar).
+# Eigenständig statt über lead_state() (liefert nur Alter in Minuten) — Off-Duty-Auto-Clear
+# (Punkt 9) braucht den absoluten Zeitpunkt, um ihn gegen die Flag-mtime zu vergleichen.
+last_heartbeat_epoch() {
+  local log="$1"
+  [ -f "$log" ] || { printf '0'; return; }
+  local last ts es
+  last="$(tail -n1 "$log")"
+  ts="$(printf '%s' "$last" | cut -d'|' -f1 | sed 's/[[:space:]]*$//')"
+  es="$(date -d "$ts" +%s 2>/dev/null || echo 0)"
+  printf '%s' "$es"
+}
+
 # watch_sig <standup> — Signatur "größe:anzahl:queue" von _inbox.md + _inbox/ + _review-queue.md
 # (die Review-Queue ist ein Eingang wie jeder andere — ungerichtete Router-Mails landen dort
 #  und dürfen nicht unbemerkt liegen; Fleet-Fund 2026-07-05: Kundenmail lag ~14h ungesehen).
@@ -123,53 +192,125 @@ watch_sig() {
   printf '%s:%s:%s' "$size" "$cnt" "$q"
 }
 
-# state_kind <statef> -> "final" | "pending" | "none"
+# sig_field <sig> <n> -> n-tes Feld (1-basiert) einer "größe:anzahl:queue"-Signatur, "0" wenn
+# leer/fehlend (leere/korrupte Signatur darf die Severity-Klassifikation nicht crashen).
+sig_field() {
+  local s="$1" n="$2" IFS=:
+  local -a parts
+  read -ra parts <<< "$s"
+  printf '%s' "${parts[$((n-1))]:-0}"
+}
+
+# state_kind <statef> -> "final" | "final-legacy" | "pending" | "none"
 state_kind() {
   [ -f "$1" ] || { printf 'none'; return; }
   case "$(cat "$1" 2>/dev/null)" in
     PENDING\ *) printf 'pending' ;;
-    *) printf 'final' ;;
+    FINAL\ *)   printf 'final' ;;
+    *)          printf 'final-legacy' ;;   # Alt-Format: nackte Signatur, kein ilines
   esac
 }
 
-# state_field <statef> <key> -> Wert aus einer "PENDING sig=... lines=... attempts=..."-Zeile.
+# state_field <statef> <key> -> Wert aus einer "... key=wert ..."-Zeile (PENDING oder FINAL).
 state_field() { sed -n "s/.* $2=\([^ ]*\).*/\1/p" "$1" 2>/dev/null | head -n1; }
 
 # is_uint <wert> -> true bei einer nichtleeren Ziffernfolge.
 is_uint() { case "$1" in ''|*[!0-9]*) return 1 ;; *) return 0 ;; esac; }
 
-# state_write_final <statef> <sig> -> Alt-Format: nackte Signatur, keine Newline.
-state_write_final() { printf '%s' "$2" > "$1"; }
+# state_write_final <statef> <sig> <ilines>
+state_write_final() { printf 'FINAL sig=%s ilines=%s' "$2" "$3" > "$1"; }
 
-# state_write_pending <statef> <sig> <lines> <attempts>
-state_write_pending() { printf 'PENDING sig=%s lines=%s attempts=%s' "$2" "$3" "$4" > "$1"; }
+# state_write_pending <statef> <sig> <lines> <attempts> <ilines>
+state_write_pending() { printf 'PENDING sig=%s lines=%s attempts=%s ilines=%s' "$2" "$3" "$4" "$5" > "$1"; }
 
-# run_alert <cmd> <uid> <lead> <standup> -> führt INBOX_WATCH_ALERT_CMD mit Kontrakt-Args aus.
-run_alert() {
-  local cmd="$1" uid="$2" lead="$3" standup="$4"
-  bash -c "$cmd"' "$@"' bash "$uid" "$lead" "$standup" >/dev/null 2>&1
+# self_write_line <line> <lead> -> true, wenn die Zeile mit der Lead-Eigensignatur endet
+# (comms.md-Kanon "Text — (Absender)": "— ($lead" oder "— $lead", Klammer optional). Toleranz-
+# fenster = die letzten 48 Zeichen der Zeile, damit ein Emoji/Satzzeichen NACH der Signatur
+# (z. B. "— (Bob) 🐻") nicht durchfällt — ein zufälliges "— (Bob)" mitten im Fließtext einer
+# LANGEN fremden Zeile zählt damit bewusst nicht als Signatur.
+self_write_line() {
+  local line="$1" lead="$2"
+  [ -n "$lead" ] || return 1
+  # ${line: -48} bei einer KÜRZEREN Zeile als 48 Zeichen liefert in bash leer statt der ganzen
+  # Zeile (Offset-Quirk, kein Trunkierungs-Bug) — deshalb erst die Länge prüfen.
+  local tail="$line"
+  [ "${#line}" -gt 48 ] && tail="${line: -48}"
+  case "$tail" in
+    *"— ($lead"*|*"—($lead"*|*"— $lead"*) return 0 ;;
+    *) return 1 ;;
+  esac
 }
 
-# escalate_or_swallow <statef> <sig> <uid> <lead> <standup> <alert_cmd> <reason>
-# Eskaliert GENAU EINMAL (falls alert_cmd gesetzt) oder verschluckt laut; finalisiert IMMER auf
-# <sig>. Setzt _ESC_RESULT=escalated|alert_failed|swallowed für den Aufrufer (Summary-Zähler) —
-# ein FEHLGESCHLAGENER Alert-Cmd zählt bewusst NICHT als "eskaliert" mit (0.14.0-Gate,
-# Riker-Fund: sonst würde ein kaputter Alert-Cmd sich als Erfolg tarnen).
-escalate_or_swallow() {
-  local statef="$1" sig="$2" uid="$3" lead="$4" standup="$5" alert_cmd="$6" reason="$7"
-  if [ -n "$alert_cmd" ]; then
-    if run_alert "$alert_cmd" "$uid" "$lead" "$standup"; then
-      echo "[inbox-watch] $uid: $reason — ESKALIERT → $alert_cmd"
-      _ESC_RESULT=escalated
-    else
-      echo "[inbox-watch] $uid: $reason — Eskalation an $alert_cmd FEHLGESCHLAGEN"
-      _ESC_RESULT=alert_failed
-    fi
-  else
-    echo "[inbox-watch] $uid: $reason — VERSCHLUCKT (kein INBOX_WATCH_ALERT_CMD konfiguriert)"
+# sev_rank <info|mid|urgent> -> numerischer Rang (Unbekanntes -> mid, konservative Mitte).
+sev_rank() { case "$1" in info) printf 0 ;; urgent) printf 2 ;; *) printf 1 ;; esac; }
+# severity_ge <sev> <min> -> true, wenn <sev> mindestens so hoch ist wie <min>.
+severity_ge() { [ "$(sev_rank "$1")" -ge "$(sev_rank "$2")" ]; }
+
+# classify_severity <old_sig> <new_sig> <new_foreign_lines> <have_baseline 0|1> -> info|mid|urgent
+# (Punkt 8): Review-Queue gewachsen ODER "SCUT (via "-Marker unter den neuen Zeilen -> urgent;
+# sonst irgendeine bekannte neue Zeile -> mid; nichts Textuelles Neues (bestätigt per Baseline,
+# z. B. reiner _inbox/-Datei-Churn) -> info; keine Baseline verfügbar -> konservativ mid.
+classify_severity() {
+  local old="$1" new="$2" lines="$3" have_baseline="$4" oq nq
+  oq="$(sig_field "$old" 3)"; is_uint "$oq" || oq=0
+  nq="$(sig_field "$new" 3)"; is_uint "$nq" || nq=0
+  if [ "$nq" -gt "$oq" ]; then printf 'urgent'; return; fi
+  if [ -n "$lines" ] && printf '%s\n' "$lines" | grep -q 'SCUT (via '; then printf 'urgent'; return; fi
+  if [ -n "$lines" ]; then printf 'mid'; return; fi
+  [ "$have_baseline" = 1 ] && { printf 'info'; return; }
+  printf 'mid'
+}
+
+# classify_source <old_sig> <new_sig> -> "review-queue" | "inbox" (Env INBOX_WATCH_SOURCE für
+# den Alert-Cmd, Punkt 8) — "session-down" wird an dessen eigener Aufrufstelle direkt gesetzt.
+classify_source() {
+  local old="$1" new="$2" oq nq
+  oq="$(sig_field "$old" 3)"; is_uint "$oq" || oq=0
+  nq="$(sig_field "$new" 3)"; is_uint "$nq" || nq=0
+  [ "$nq" -gt "$oq" ] && { printf 'review-queue'; return; }
+  printf 'inbox'
+}
+
+# run_alert <cmd> <uid> <lead> <standup> <severity> <reason> <source> -> führt INBOX_WATCH_ALERT_CMD
+# mit Kontrakt v2 aus (additiv zu v1 — ein Cmd, der nur die ersten 3 Args liest, bleibt unberührt).
+run_alert() {
+  local cmd="$1" uid="$2" lead="$3" standup="$4" severity="$5" reason="$6" source="$7"
+  INBOX_WATCH_REASON="$reason" INBOX_WATCH_SOURCE="$source" \
+    bash -c "$cmd"' "$@"' bash "$uid" "$lead" "$standup" "$severity" >/dev/null 2>&1
+}
+
+# run_severity_alert <alert_cmd> <uid> <lead> <standup> <severity> <reason> <source>
+# -> _ESC_RESULT=escalated|alert_failed|swallowed|gated. Rührt KEINEN Content-State an — das ist
+# Sache des Aufrufers (Content-State- und Session-down-Marker haben unterschiedliche Semantik,
+# Punkt 10: ein Session-down-Fund darf die Inbox NICHT als "zugestellt" markieren).
+run_severity_alert() {
+  local alert_cmd="$1" uid="$2" lead="$3" standup="$4" severity="$5" reason="$6" source="$7"
+  if [ -z "$alert_cmd" ]; then
+    echo "[inbox-watch] $uid: $reason — VERSCHLUCKT (kein INBOX_WATCH_ALERT_CMD konfiguriert) [severity=$severity]"
     _ESC_RESULT=swallowed
+    return
   fi
-  state_write_final "$statef" "$sig"
+  if ! severity_ge "$severity" "$MIN_SEVERITY"; then
+    echo "[inbox-watch] $uid: $reason — unterhalb Mindest-Severity ($severity < $MIN_SEVERITY), NICHT alarmiert (geloggt)"
+    _ESC_RESULT=gated
+    return
+  fi
+  if run_alert "$alert_cmd" "$uid" "$lead" "$standup" "$severity" "$reason" "$source"; then
+    echo "[inbox-watch] $uid: $reason — ESKALIERT ($severity) → $alert_cmd"
+    _ESC_RESULT=escalated
+  else
+    echo "[inbox-watch] $uid: $reason — Eskalation an $alert_cmd FEHLGESCHLAGEN"
+    _ESC_RESULT=alert_failed
+  fi
+}
+
+# escalate_or_swallow <statef> <sig> <uid> <lead> <standup> <alert_cmd> <reason> <severity> <source> <ilines>
+# Wie run_severity_alert, schreibt danach IMMER den Content-State final (Zustellung DIESES
+# Vorgangs gilt als abgeschlossen — Eskalation oder lautes Verschlucken ist die Abschluss-Handlung).
+escalate_or_swallow() {
+  local statef="$1" sig="$2" uid="$3" lead="$4" standup="$5" alert_cmd="$6" reason="$7" severity="$8" source="$9" ilines="${10}"
+  run_severity_alert "$alert_cmd" "$uid" "$lead" "$standup" "$severity" "$reason" "$source"
+  state_write_final "$statef" "$sig" "$ilines"
 }
 
 # Aktive Projekte als TSV "uid<TAB>path<TAB>standup" aus der Registry.
@@ -187,13 +328,14 @@ for p in data.get("projects", []):
 PY
 }
 
-n_new=0; n_nudge=0; n_escalated=0; n_alert_failed=0; n_swallowed=0
+n_new=0; n_nudge=0; n_escalated=0; n_alert_failed=0; n_gated=0; n_swallowed=0
 
-# esc_count <_ESC_RESULT> -> passenden Summary-Zähler hochzählen (escalated|alert_failed|swallowed).
+# esc_count <_ESC_RESULT> -> passenden Summary-Zähler hochzählen (escalated|alert_failed|gated|swallowed).
 esc_count() {
   case "$1" in
     escalated)    n_escalated=$((n_escalated+1)) ;;
     alert_failed) n_alert_failed=$((n_alert_failed+1)) ;;
+    gated)        n_gated=$((n_gated+1)) ;;
     *)            n_swallowed=$((n_swallowed+1)) ;;
   esac
 }
@@ -202,21 +344,51 @@ while IFS=$'\t' read -r uid path standup; do
   standup="$(expand_tilde "$standup")"; path="$(expand_tilde "$path")"
   [ -f "$standup/_inbox.md" ] || { echo "[inbox-watch] $uid: keine _inbox.md — skip"; continue; }
 
-  sig="$(watch_sig "$standup")"
   statef="$STATE_DIR/$uid.state"
   envf="$path/_dev_team/dev-team.env"
   lead="$(env_of "$envf" TEAM_LEAD)"; lead="${lead:-Bob}"
   session="$(env_of "$envf" MUX_SESSION)"
   alert_cmd="$(env_of "$envf" INBOX_WATCH_ALERT_CMD)"; alert_cmd="${alert_cmd:-$ALERT_CMD_DEFAULT}"
   leadlog="$standup/$lead.log"
+  sessiondown_marker="$STATE_DIR/$uid.sessiondown"
 
+  # Session-down-Reset (Punkt 10, #55): kommt die Session zurück, Marker weg — die nächste
+  # Down-Episode eskaliert wieder frisch. Unabhängig von Off-Duty/Inbox-Signatur, jeden Tick
+  # geprüft, aber billig (mux_has nur, wenn überhaupt ein Marker existiert).
+  if [ -n "$session" ] && [ -f "$sessiondown_marker" ] && mux_has "$session" 2>/dev/null; then
+    rm -f "$sessiondown_marker"
+    echo "[inbox-watch] $uid: Session $session wieder da — Down-Eskalation zurückgesetzt"
+  fi
+
+  # Off-Duty (Punkt 9): Lead hat Feierabend markiert — keine Nudges, keine Alerts (auch keine
+  # Session-down-Eskalation, s. u.). State bleibt IMMER offen (kein Statef-Touch) — der nächste
+  # Stand-up liest die Inbox ohnehin. Auto-Clear: heartbeatet der Lead NACH der Flag-mtime
+  # (er ist zurück), wird das Flag selbst gelöscht.
+  offduty="$standup/.off-duty"
+  if [ -f "$offduty" ]; then
+    flag_epoch="$(date -r "$offduty" +%s 2>/dev/null || echo 0)"
+    hb_epoch="$(last_heartbeat_epoch "$leadlog")"
+    if [ "$hb_epoch" -gt "$flag_epoch" ] 2>/dev/null; then
+      rm -f "$offduty"
+      echo "[inbox-watch] $uid: Off-Duty-Flag gelöscht (Lead $lead heartbeatete danach — zurück)"
+    else
+      echo "[inbox-watch] $uid: Off-Duty ($offduty) — Nudges/Alerts unterdrückt, State bleibt offen"
+      continue
+    fi
+  fi
+
+  sig="$(watch_sig "$standup")"
+  cur_ilines="$(log_line_count "$standup/_inbox.md")"
   kind="$(state_kind "$statef")"
-  attempts=0   # Versuche für die AKTUELL zu behandelnde Signatur (0 = frischer Zyklus)
+  attempts=0        # Versuche für die AKTUELL zu behandelnde Signatur (0 = frischer Zyklus)
+  prev_ilines=""     # ilines-Baseline VOR diesem Zyklus (leer = nicht verfügbar/Alt-Format)
+  old_sig=""         # letzte bekannte Signatur (für Review-Queue-Delta/Severity)
 
   if [ "$kind" = pending ]; then
     psig="$(state_field "$statef" sig)"
     plines_raw="$(state_field "$statef" lines)"
     patt_raw="$(state_field "$statef" attempts)"
+    pilines_raw="$(state_field "$statef" ilines)"
 
     if [ -z "$psig" ] || ! is_uint "$plines_raw" || ! is_uint "$patt_raw"; then
       # 0.14.0-Gate, Marvin-Fund: ein fehlendes Pflichtfeld NICHT permissiv defaulten (ein
@@ -225,9 +397,14 @@ while IFS=$'\t' read -r uid path standup; do
       echo "[inbox-watch] $uid: PENDING-State korrupt (Pflichtfeld fehlt/ungültig) — als frischer Zyklus behandelt"
     else
       plines="$plines_raw"; patt="$patt_raw"
+      is_uint "$pilines_raw" && prev_ilines="$pilines_raw"
+      old_sig="$psig"
       if heartbeat_since "$leadlog" "$plines"; then
         echo "[inbox-watch] $uid: Nudge verifiziert — Lead $lead heartbeatete seither ($patt Versuch(e))"
-        state_write_final "$statef" "$psig"
+        # cur_ilines statt der PENDING-Baseline: verifiziert markiert "jetzt vollständig
+        # abgearbeitet bis hierhin" — die (stabile, seit Zyklusbeginn unveränderte)
+        # Pending-Baseline bleibt Sache der Klassifikation weiter unten, nicht des Final-Writes.
+        state_write_final "$statef" "$psig" "$cur_ilines"
         if [ "$sig" = "$psig" ]; then
           continue
         fi
@@ -239,12 +416,50 @@ while IFS=$'\t' read -r uid path standup; do
       fi
     fi
   elif [ "$kind" = final ]; then
+    fsig="$(state_field "$statef" sig)"
+    filines_raw="$(state_field "$statef" ilines)"
+    is_uint "$filines_raw" && prev_ilines="$filines_raw"
+    old_sig="$fsig"
+    if [ "$sig" = "$fsig" ]; then
+      echo "[inbox-watch] $uid: ok (unverändert)"
+      continue
+    fi
+  elif [ "$kind" = final-legacy ]; then
     old="$(cat "$statef" 2>/dev/null || echo "")"
+    old_sig="$old"
     if [ "$sig" = "$old" ]; then
       echo "[inbox-watch] $uid: ok (unverändert)"
       continue
     fi
+    # Alt-Format ohne ilines: prev_ilines bleibt leer -> Self-Write-Erkennung diesen Zyklus
+    # bewusst nicht möglich (konservativ, wie bisher) — heilt sich mit dem nächsten State-Write.
   fi
+
+  # Self-Write-Erkennung (Punkt 7, #56): NUR wenn eine gültige ilines-Baseline vorliegt UND
+  # _inbox.md selbst gewachsen ist (reine _inbox/- oder Review-Queue-Änderungen sind NIE
+  # Self-Write). Sind ALLE neuen Zeilen mit der Lead-Signatur unterschrieben, still finalisieren.
+  new_inbox_lines=""
+  if is_uint "$prev_ilines" && [ "$cur_ilines" -gt "$prev_ilines" ]; then
+    new_inbox_lines="$(tail -n "+$((prev_ilines+1))" "$standup/_inbox.md" 2>/dev/null)"
+    all_self=1
+    while IFS= read -r nl || [ -n "$nl" ]; do
+      [ -z "$nl" ] && continue
+      self_write_line "$nl" "$lead" || { all_self=0; break; }
+    done <<< "$new_inbox_lines"
+    if [ "$all_self" = 1 ]; then
+      echo "[inbox-watch] $uid: neue Zeile(n) sind Lead-Eigenschrift (Signatur — ($lead)) — self-write, still finalisiert"
+      state_write_final "$statef" "$sig" "$cur_ilines"
+      continue
+    fi
+  fi
+
+  # baseline_ilines: die STABILE Baseline, aus der dieser Zyklus entstand (letzte final
+  # bekannte ilines) — bleibt über ALLE Re-Nudges dieses Zyklus unverändert (sonst würde jeder
+  # Re-Nudge die Baseline auf den aktuellen Stand hochziehen und Self-Write-/Severity-Prüfungen
+  # des NÄCHSTEN Re-Nudge-Ticks fälschlich "nichts Neues" sehen lassen — genau der Bug, den
+  # Riker im ersten Entwurf dieses Batches fand). Ohne bekannte Baseline (erster Kontakt/Alt-
+  # Format) fällt sie auf cur_ilines zurück (neue Baseline ab jetzt, konservativ).
+  baseline_ilines="${prev_ilines:-$cur_ilines}"
 
   n_new=$((n_new+1))
 
@@ -262,16 +477,20 @@ while IFS=$'\t' read -r uid path standup; do
     continue
   fi
 
+  have_baseline=0; is_uint "$prev_ilines" && have_baseline=1
+  severity="$(classify_severity "$old_sig" "$sig" "$new_inbox_lines" "$have_baseline")"
+  source_="$(classify_source "$old_sig" "$sig")"
+
   if [ -z "$session" ]; then
     escalate_or_swallow "$statef" "$sig" "$uid" "$lead" "$standup" "$alert_cmd" \
-      "NEU, Lead $lead=$st, kein Weckweg (kein MUX_SESSION konfiguriert)"
+      "NEU, Lead $lead=$st, kein Weckweg (kein MUX_SESSION konfiguriert)" "$severity" "$source_" "$cur_ilines"
     esc_count "$_ESC_RESULT"
     continue
   fi
 
   if [ "$attempts" -ge "$MAX_NUDGE" ]; then
     escalate_or_swallow "$statef" "$sig" "$uid" "$lead" "$standup" "$alert_cmd" \
-      "$attempts Nudge-Versuch(e) erschöpft (Limit $MAX_NUDGE), Lead $lead nicht verifiziert"
+      "$attempts Nudge-Versuch(e) erschöpft (Limit $MAX_NUDGE), Lead $lead nicht verifiziert" "$severity" "$source_" "$cur_ilines"
     esc_count "$_ESC_RESULT"
     continue
   fi
@@ -286,7 +505,7 @@ while IFS=$'\t' read -r uid path standup; do
 
   if [ "$DRYRUN" = 1 ]; then
     echo "[inbox-watch] $uid: NUDGE #$next_attempt → $session (dryrun, Lead $lead war $st) — wartet auf Heartbeat-Verifikation"
-    state_write_pending "$statef" "$sig" "$lines_before" "$next_attempt"
+    state_write_pending "$statef" "$sig" "$lines_before" "$next_attempt" "$baseline_ilines"
     n_nudge=$((n_nudge+1))
     continue
   fi
@@ -294,7 +513,7 @@ while IFS=$'\t' read -r uid path standup; do
   if mux_has "$session" 2>/dev/null; then
     if mux_send "$session" "$text" 2>/dev/null; then
       echo "[inbox-watch] $uid: NUDGE #$next_attempt → $session (Lead $lead war $st) — wartet auf Heartbeat-Verifikation"
-      state_write_pending "$statef" "$sig" "$lines_before" "$next_attempt"
+      state_write_pending "$statef" "$sig" "$lines_before" "$next_attempt" "$baseline_ilines"
       n_nudge=$((n_nudge+1))
     else
       echo "[inbox-watch] $uid: NUDGE #$next_attempt an $session fehlgeschlagen — State bleibt offen"
@@ -308,16 +527,27 @@ while IFS=$'\t' read -r uid path standup; do
       start_cmd="{ [ -f $(printf '%q' "$envf") ] && . $(printf '%q' "$envf"); } >/dev/null 2>&1; $boot_cmd"
       if [ -n "$boot_cmd" ] && mux_boot "$session" "$start_cmd" "" >/dev/null 2>&1; then
         echo "[inbox-watch] $uid: Session down → GEBOOTET ($session; liest Inbox beim Start)"
-        state_write_final "$statef" "$sig"
+        state_write_final "$statef" "$sig" "$cur_ilines"
         n_nudge=$((n_nudge+1))
       else
         echo "[inbox-watch] $uid: Session down, Boot nicht möglich (BOOT_CMD fehlt/Fehler) — State offen"
       fi
     else
-      echo "[inbox-watch] $uid: NEU, aber Session $session down (Boot aus) — State bleibt offen"
+      # Punkt 10, #55: Session down + kein Boot -> GENAU EINMAL pro Down-Vorgang eskalieren
+      # (severity=urgent, source=session-down), statt bei jedem Tick dieselbe Zeile zu loggen.
+      # Der Content-State bleibt ABSICHTLICH unangetastet — die Inbox wurde ja nicht zugestellt.
+      if [ -f "$sessiondown_marker" ]; then
+        echo "[inbox-watch] $uid: Session $session weiterhin down (Boot aus) — bereits eskaliert, State bleibt offen"
+      else
+        : > "$sessiondown_marker"
+        run_severity_alert "$alert_cmd" "$uid" "$lead" "$standup" urgent \
+          "Session $session down, kein Boot (INBOX_WATCH_BOOT=0) — Inbox bleibt ungesehen" session-down
+        esc_count "$_ESC_RESULT"
+        echo "[inbox-watch] $uid: NEU, aber Session $session down (Boot aus) — State bleibt offen (Down-Eskalation: $_ESC_RESULT)"
+      fi
     fi
   fi
 done <<< "$(projects)"
 
-echo "── inbox-watch: $n_new Projekt(e) mit Neuem, $n_nudge genudged/gebootet, $n_escalated eskaliert, $n_alert_failed Alert-Fehlschlag(e), $n_swallowed ungeweckt-verschluckt (registry=$REGISTRY)"
+echo "── inbox-watch: $n_new Projekt(e) mit Neuem, $n_nudge genudged/gebootet, $n_escalated eskaliert, $n_alert_failed Alert-Fehlschlag(e), $n_gated unterhalb-Mindest-Severity, $n_swallowed ungeweckt-verschluckt (registry=$REGISTRY)"
 exit 0

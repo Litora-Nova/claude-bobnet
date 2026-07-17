@@ -258,5 +258,247 @@ else
   echo "HINWEIS: tmux nicht verfügbar — Boot-Pfad-Tests (i)/(j) übersprungen"
 fi
 
+# ── Anti-Lärm-Batch Welle 1 (Bill): Self-Write · Litora-Regression · Severity · Off-Duty ·
+#    Session-down · Alt-State-Kompat. Jeweils EIGENE Projekte, damit diese Blöcke unabhängig vom
+#    alpha/beta/delta-Narrativ oben bleiben (keine Reihenfolge-Kopplung).
+reg_add() { # reg_add <uid> <path> <standup>
+  python3 - "$tmp/registry.json" "$1" "$2" "$3" <<'PY'
+import json, sys
+p, uid, path, standup = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+d = json.load(open(p))
+d["projects"].append({"uid": uid, "name": uid, "path": path, "standup": standup, "status": "active"})
+json.dump(d, open(p, "w"))
+PY
+}
+
+# ── (k) Self-Write-Erkennung (#56): reine Lead-Eigenschrift wird NICHT genudged ─────────────
+mkdir -p "$tmp/eta/_dev_team/standup"
+ET="$tmp/eta/_dev_team/standup"
+printf 'export TEAM_LEAD="Nia"\nexport MUX_SESSION="eta_sess"\n' > "$tmp/eta/_dev_team/dev-team.env"
+reg_add eta "$tmp/eta" "$ET"
+echo "hallo welt | @Nia | initial" > "$ET/_inbox.md"
+echo "$(now) | idle | start" > "$ET/Nia.log"
+MAXN=3
+out="$(run)"
+t "(k) eta Erstkontakt nudgt normal (keine Baseline, konservativ)" "1" "$(printf '%s\n' "$out" | grep -c '\] eta: NUDGE #1')"
+echo "$(now) | idle | zurueck" >> "$ET/Nia.log"
+out="$(run)"
+t "(k) eta Nudge verifiziert (Baseline jetzt gesetzt)" "1" "$(printf '%s\n' "$out" | grep -c '\] eta: Nudge verifiziert')"
+
+echo "$(now) | @Nia | Notiz an mich selbst — (Nia)" >> "$ET/_inbox.md"
+out="$(run)"
+t "(k) reine Lead-Eigenschrift wird NICHT genudged" "0" "$(printf '%s\n' "$out" | grep -c '\] eta: NUDGE')"
+t "(k) self-write wird geloggt + still finalisiert" "1" "$(printf '%s\n' "$out" | grep -c '\] eta:.*self-write')"
+out="$(run)"
+t "(k) danach ok (unverändert) — Baseline korrekt vorgerückt" "1" "$(printf '%s\n' "$out" | grep -c '\] eta: ok')"
+
+echo "$(now) | @Nia | Zweite Notiz — (Nia) 🐻" >> "$ET/_inbox.md"
+out="$(run)"
+t "(k) Emoji-Suffix nach der Signatur toleriert" "1" "$(printf '%s\n' "$out" | grep -c '\] eta:.*self-write')"
+
+echo "$(now) | @Nia | Dritte Notiz — Nia" >> "$ET/_inbox.md"
+out="$(run)"
+t "(k) Signatur ohne Klammern (— Nia) ebenfalls erkannt" "1" "$(printf '%s\n' "$out" | grep -c '\] eta:.*self-write')"
+
+echo "$(now) | @Nia | eigene Notiz — (Nia)" >> "$ET/_inbox.md"
+echo "$(now) | @Nia | SCUT (via email, von Kunde): dringende Frage" >> "$ET/_inbox.md"
+out="$(run)"
+t "(k) GEMISCHT (self-write + fremd) nudgt normal (nicht ALLE self-write)" "1" "$(printf '%s\n' "$out" | grep -c '\] eta: NUDGE #1')"
+t "(k) kein self-write-Log bei gemischtem Batch" "0" "$(printf '%s\n' "$out" | grep -c '\] eta:.*self-write')"
+
+# ── (l) Litora-Regression: fremder Eintrag → max MAXN Nudges + 1 Eskalation; die Antwort des
+#     Leads (self-signed) startet KEINEN neuen Zyklus (das war genau der Feld-Bug: >12-Nudge-
+#     Serien, weil die eigene Antwort als "neue Inbox-Änderung" durchging).
+mkdir -p "$tmp/theta/_dev_team/standup"
+TH="$tmp/theta/_dev_team/standup"
+printf 'export TEAM_LEAD="Deb2"\nexport MUX_SESSION="theta_sess"\n' > "$tmp/theta/_dev_team/dev-team.env"
+reg_add theta "$tmp/theta" "$TH"
+echo "x | @Deb2 | initial" > "$TH/_inbox.md"
+echo "$(now) | idle | start" > "$TH/Deb2.log"
+MAXN=3
+run >/dev/null   # Baseline etablieren + verifizieren
+echo "$(now) | idle | zurueck" >> "$TH/Deb2.log"
+run >/dev/null
+
+echo "$(now) | @Deb2 | SCUT (via email, von Kunde): bitte Vertrag pruefen" >> "$TH/_inbox.md"
+echo "$(now) | idle | warte" > "$TH/Deb2.log"
+out1="$(run)"; out2="$(run)"; out3="$(run)"; out4="$(run)"
+t "(l) genau 3 Nudges vor der Eskalation" "3" \
+  "$(printf '%s\n%s\n%s\n%s\n' "$out1" "$out2" "$out3" "$out4" | grep -c 'theta: NUDGE #')"
+t "(l) NUDGE #1/#2/#3 in dieser Reihenfolge" "1" "$(printf '%s\n' "$out1" | grep -c 'theta: NUDGE #1')"
+t "(l) ...#2" "1" "$(printf '%s\n' "$out2" | grep -c 'theta: NUDGE #2')"
+t "(l) ...#3" "1" "$(printf '%s\n' "$out3" | grep -c 'theta: NUDGE #3')"
+t "(l) 4. Lauf: genau 1 Eskalation (erschöpft)" "1" "$(printf '%s\n' "$out4" | grep -c 'theta:.*erschöpft.*VERSCHLUCKT')"
+t "(l) 4. Lauf: KEIN 4. Nudge" "0" "$(printf '%s\n' "$out4" | grep -c 'theta: NUDGE #4')"
+
+echo "$(now) | @Deb2 | erledigt, danke — (Deb2)" >> "$TH/_inbox.md"
+out="$(run)"
+t "(l) Lead-Antwort (self-signed) löst KEINEN neuen Nudge-Zyklus aus" "0" "$(printf '%s\n' "$out" | grep -c 'theta: NUDGE')"
+t "(l) ... sondern self-write, still finalisiert" "1" "$(printf '%s\n' "$out" | grep -c 'theta:.*self-write')"
+out="$(run)"
+t "(l) danach ok (unverändert) — keine Endlos-Nudge-Serie mehr (Kern des #56-Feld-Bugs)" "1" \
+  "$(printf '%s\n' "$out" | grep -c 'theta: ok')"
+
+# ── (m) Severity-Klassifikation + ALERT_CMD-v2-Kontrakt (Args + Env) ────────────────────────
+mkdir -p "$tmp/iota/_dev_team/standup"
+IO="$tmp/iota/_dev_team/standup"
+printf 'export TEAM_LEAD="Kai"\n' > "$tmp/iota/_dev_team/dev-team.env"   # kein MUX_SESSION -> report-only
+reg_add iota "$tmp/iota" "$IO"
+capture="$tmp/iota-capture.log"
+cat > "$tmp/alert_capture.sh" <<SH
+#!/usr/bin/env bash
+printf 'ARGS %s|%s|%s|%s\n' "\$1" "\$2" "\$3" "\$4" >> "$capture"
+printf 'ENV reason=%s source=%s\n' "\$INBOX_WATCH_REASON" "\$INBOX_WATCH_SOURCE" >> "$capture"
+SH
+chmod +x "$tmp/alert_capture.sh"
+printf 'export INBOX_WATCH_ALERT_CMD="%s"\n' "$tmp/alert_capture.sh" >> "$tmp/iota/_dev_team/dev-team.env"
+echo "x | @Kai | initial" > "$IO/_inbox.md"
+echo "$(now) | idle | start" > "$IO/Kai.log"
+: > "$capture"
+run >/dev/null   # erste Eskalation etabliert nur die Baseline, Severity hier irrelevant
+
+echo "$(now) | @Kai | SCUT (via email, von Kunde X): dringende Frage" >> "$IO/_inbox.md"
+: > "$capture"
+run >/dev/null
+t "(m) SCUT-via-Marker -> severity=urgent (4. Alert-Arg)" "1" "$(grep -c 'ARGS iota|Kai|.*|urgent' "$capture")"
+t "(m) Alert-Env INBOX_WATCH_SOURCE=inbox" "1" "$(grep -c 'ENV reason=.*source=inbox' "$capture")"
+
+echo "y | UNGERICHTET (via email, von Kunde2) | allgemeine frage" >> "$IO/_review-queue.md"
+: > "$capture"
+run >/dev/null
+t "(m) Review-Queue-Wachstum -> severity=urgent" "1" "$(grep -c 'ARGS iota|Kai|.*|urgent' "$capture")"
+t "(m) Alert-Env INBOX_WATCH_SOURCE=review-queue" "1" "$(grep -c 'ENV reason=.*source=review-queue' "$capture")"
+
+echo "$(now) | @Kai | einfache interne Nachricht ohne Marker" >> "$IO/_inbox.md"
+: > "$capture"
+out="$(run)"
+t "(m) normale fremde Zeile -> severity=mid" "1" "$(grep -c 'ARGS iota|Kai|.*|mid' "$capture")"
+t "(m) mid mit Default-MIN_SEVERITY=mid wird ESKALIERT (nicht gated)" "1" "$(printf '%s\n' "$out" | grep -c 'iota:.*ESKALIERT')"
+
+echo "$(now) | @Kai | noch eine interne Nachricht ohne Marker" >> "$IO/_inbox.md"
+: > "$capture"
+out="$(INBOX_WATCH_ALERT_MIN_SEVERITY=urgent run)"
+t "(m) MIN_SEVERITY=urgent gate't ein 'mid'-Event (kein Alert-Aufruf)" "0" "$(wc -l < "$capture" | tr -d ' ')"
+t "(m) gegatetes Event korrekt geloggt (nicht VERSCHLUCKT)" "1" "$(printf '%s\n' "$out" | grep -c 'iota:.*unterhalb Mindest-Severity')"
+t "(m) gegatet zählt NICHT als VERSCHLUCKT" "0" "$(printf '%s\n' "$out" | grep -c 'iota:.*VERSCHLUCKT')"
+t "(m) Summary zählt unterhalb-Mindest-Severity separat (1)" "1" \
+  "$(printf '%s\n' "$out" | grep -cE '── inbox-watch:.*, 1 unterhalb-Mindest-Severity, ')"
+
+echo "z | UNGERICHTET (via email, von Kunde3) | dritte frage" >> "$IO/_review-queue.md"
+: > "$capture"
+out="$(INBOX_WATCH_ALERT_MIN_SEVERITY=urgent run)"
+t "(m) urgent übersteht selbst MIN_SEVERITY=urgent (wird trotzdem eskaliert)" "1" \
+  "$(grep -c 'ARGS iota|Kai|.*|urgent' "$capture")"
+
+# ── (n) Off-Duty: unterdrückt Nudges/Alerts komplett; Auto-Clear bei Heartbeat NACH der Flag-mtime.
+#     Feste synthetische Zeitstempel statt $(now): eine Heartbeat-Log-Zeile hat nur Minuten-
+#     Auflösung, ein Vergleich gegen die sekundengenaue Datei-mtime des Flags wäre sonst ein
+#     Zeitfenster-Rennen (0.14.0-Lehre: Zeilenzahl statt Timestamp, wo immer es geht — hier
+#     GEHT es nicht, also stattdessen eindeutig auseinanderliegende feste Zeitstempel).
+mkdir -p "$tmp/kappa/_dev_team/standup"
+KP="$tmp/kappa/_dev_team/standup"
+printf 'export TEAM_LEAD="Milo"\nexport MUX_SESSION="kappa_sess"\n' > "$tmp/kappa/_dev_team/dev-team.env"
+reg_add kappa "$tmp/kappa" "$KP"
+echo "x | @Milo | initial" > "$KP/_inbox.md"
+echo "2020-01-01 00:00 | idle | start" > "$KP/Milo.log"
+run >/dev/null   # NUDGE #1
+echo "2020-01-01 00:01 | idle | zurueck" >> "$KP/Milo.log"
+run >/dev/null   # verifiziert -> final
+
+touch -d "2020-06-01 00:00" "$KP/.off-duty"
+echo "irgendwas | @Milo | neue fremde Nachricht waehrend Feierabend" >> "$KP/_inbox.md"
+out="$(run)"
+t "(n) Off-Duty unterdrückt Nudge komplett" "0" "$(printf '%s\n' "$out" | grep -c 'kappa: NUDGE')"
+t "(n) Off-Duty-Log-Zeile erscheint" "1" "$(printf '%s\n' "$out" | grep -c 'kappa: Off-Duty')"
+ok "(n) Off-Duty-Flag existiert noch (kein Auto-Clear ohne späteren Heartbeat)" test -f "$KP/.off-duty"
+
+echo "2020-12-01 00:00 | idle | bin wieder da" >> "$KP/Milo.log"
+out="$(run)"
+t "(n) Auto-Clear löscht das Off-Duty-Flag (Heartbeat NACH der Flag-mtime)" "1" \
+  "$(printf '%s\n' "$out" | grep -c 'kappa:.*Off-Duty-Flag gelöscht')"
+ok "(n) Flag-Datei tatsächlich weg" bash -c "! test -f '$KP/.off-duty'"
+out="$(run)"
+t "(n) danach normaler Betrieb — NEU wird wieder erkannt/genudged" "1" "$(printf '%s\n' "$out" | grep -c 'kappa: NUDGE')"
+
+# ── (o) Session-down-Eskalation (#55): genau EINMAL pro Down-Vorgang, Reset bei Session-up,
+#     Off-Duty unterdrückt auch das. Fake-tmux-Shim (Muster aus recycle_spec.sh) statt echtem
+#     Multiplexer — deterministisch, kein Host-tmux nötig.
+mkdir -p "$tmp/lambda/_dev_team/standup" "$tmp/lambda_mux" "$tmp/lambda_bin"
+LM="$tmp/lambda/_dev_team/standup"
+printf 'export TEAM_LEAD="Rosa"\nexport MUX_SESSION="lambda_sess"\n' > "$tmp/lambda/_dev_team/dev-team.env"
+reg_add lambda "$tmp/lambda" "$LM"
+echo "x | @Rosa | initial" > "$LM/_inbox.md"
+echo "$(now) | idle | start" > "$LM/Rosa.log"
+cat > "$tmp/lambda_bin/tmux" <<'SH'
+#!/usr/bin/env bash
+S="${FAKE_MUX_DIR:?}"
+cmd="${1:-}"; shift || true
+case "$cmd" in
+  has-session) [ -e "$S/${2:?}" ] ;;
+  *) exit 0 ;;
+esac
+SH
+chmod +x "$tmp/lambda_bin/tmux"
+lambda_alerts="$tmp/lambda-alerts.log"
+cat > "$tmp/lambda_alert.sh" <<SH
+#!/usr/bin/env bash
+printf 'ALERT uid=%s severity=%s source=%s\n' "\$1" "\$4" "\$INBOX_WATCH_SOURCE" >> "$lambda_alerts"
+SH
+chmod +x "$tmp/lambda_alert.sh"
+printf 'export INBOX_WATCH_ALERT_CMD="%s"\n' "$tmp/lambda_alert.sh" >> "$tmp/lambda/_dev_team/dev-team.env"
+run_real() {
+  env DEV_TEAM_REGISTRY="$tmp/registry.json" INBOX_WATCH_STATE="$tmp/state" \
+      BOBNET_MUX=tmux PATH="$tmp/lambda_bin:$PATH" FAKE_MUX_DIR="$tmp/lambda_mux" \
+      bash "$BIN" 2>/dev/null
+}
+
+out="$(run_real)"
+t "(o) Session down (kein Boot) → EINMALIGE Eskalation (severity=urgent)" "1" \
+  "$(printf '%s\n' "$out" | grep -c 'lambda:.*Down-Eskalation: escalated')"
+t "(o) Alert-Cmd feuert genau einmal" "1" "$(grep -c 'ALERT uid=lambda severity=urgent source=session-down' "$lambda_alerts")"
+
+out="$(run_real)"
+t "(o) weiterer Tick, Session weiterhin down → KEIN erneuter Alert" "1" \
+  "$(printf '%s\n' "$out" | grep -c 'lambda:.*weiterhin down.*bereits eskaliert')"
+t "(o) Alert-Cmd feuert weiterhin nur einmal" "1" "$(wc -l < "$lambda_alerts" | tr -d ' ')"
+
+: > "$tmp/lambda_mux/lambda_sess"   # Session kommt zurück
+out="$(run_real)"
+t "(o) Session wieder da → Down-Eskalation zurückgesetzt (Marker weg)" "1" \
+  "$(printf '%s\n' "$out" | grep -c 'lambda:.*wieder da.*zurückgesetzt')"
+
+rm -f "$tmp/lambda_mux/lambda_sess"; echo "$(now) | idle | warte" > "$LM/Rosa.log"
+echo "noch eine nachricht" >> "$LM/_inbox.md"
+out="$(run_real)"
+t "(o) neue Down-Episode eskaliert wieder frisch" "1" \
+  "$(printf '%s\n' "$out" | grep -c 'lambda:.*Down-Eskalation: escalated')"
+t "(o) Alert-Cmd insgesamt zweimal ausgelöst (eine Eskalation pro Down-Episode)" "2" \
+  "$(wc -l < "$lambda_alerts" | tr -d ' ')"
+
+touch "$LM/.off-duty"
+out="$(run_real)"
+t "(o) Off-Duty unterdrückt auch die Session-down-Eskalation" "1" "$(printf '%s\n' "$out" | grep -c 'lambda: Off-Duty')"
+t "(o) kein dritter Alert während Off-Duty" "2" "$(wc -l < "$lambda_alerts" | tr -d ' ')"
+rm -f "$LM/.off-duty"
+
+# ── (p) Alt-State-Kompat: Self-Write-Erkennung ohne ilines-Baseline bewusst NICHT möglich —
+#     eine Lead-eigene Signatur-Zeile wird trotzdem normal genudged (konservativ). Eigenes,
+#     frisches Projekt mit HANDGESCHRIEBENEM Alt-Format-State (nackte Signatur, kein ilines) —
+#     delta oben ist ungeeignet: dessen State heilte in Test (f) bereits auf das neue Format.
+mkdir -p "$tmp/mu/_dev_team/standup"
+MU="$tmp/mu/_dev_team/standup"
+printf 'export TEAM_LEAD="Theo"\nexport MUX_SESSION="mu_sess"\n' > "$tmp/mu/_dev_team/dev-team.env"
+reg_add mu "$tmp/mu" "$MU"
+echo "erste zeile | @Theo | initial" > "$MU/_inbox.md"
+musig="$(wc -c < "$MU/_inbox.md" | tr -d ' '):0:0"
+printf '%s' "$musig" > "$tmp/state/mu.state"   # Alt-Format: nackte Signatur, kein ilines
+echo "$(now) | idle | warte" > "$MU/Theo.log"
+echo "$(now) | @Theo | eigene notiz — (Theo)" >> "$MU/_inbox.md"
+out="$(run)"
+t "(p) Alt-Format-State ohne ilines: Self-Write-Erkennung nicht möglich → normaler Nudge" "1" \
+  "$(printf '%s\n' "$out" | grep -c 'mu: NUDGE #1')"
+t "(p) ... kein self-write-Log (Erkennung mangels Baseline unmöglich, konservativ)" "0" \
+  "$(printf '%s\n' "$out" | grep -c 'mu:.*self-write')"
+
 echo "inbox_watch_spec: $pass passed, $fail failed"
 [ "$fail" = 0 ]
