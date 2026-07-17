@@ -64,8 +64,10 @@
 #      merkt sich zusätzlich `ilines` = _inbox.md-Zeilenzahl zu diesem Zeitpunkt. Wächst
 #      _inbox.md seit der letzten bekannten `ilines`-Baseline, werden GENAU die neuen Zeilen
 #      geprüft — sind ALLE mit der Lead-Eigensignatur unterschrieben (comms.md-Kanon
-#      "Text — (Absender)": Zeile endet auf "— ($TEAM_LEAD" oder "— $TEAM_LEAD", Klammer
-#      optional, Emoji/Suffixe danach toleriert), gilt der Zyklus als Self-Write: still auf die
+#      "Text — (Absender)": der Autor nach dem LETZTEN exakten ` — (`-Delimiter muss exakt
+#      die Lead-UID (`$TEAM_LEAD`) ODER deren Persona aus `team.config.json` sein (kein
+#      Substring, kein trailing Suffix), gilt der Zyklus als Self-Write:
+#      still auf die
 #      aktuelle Signatur finalisiert, KEIN Nudge, KEINE Eskalation. Ist auch nur EINE neue Zeile
 #      fremd, läuft der Zyklus normal (Nudge/Eskalation) — nie eine feine Filterung pro Zeile.
 #      Reine `_inbox/`- oder Review-Queue-Änderungen sind NIE Self-Write (die schreibt sich
@@ -74,9 +76,9 @@
 #      Fehlt die `ilines`-Baseline (Alt-Format-State) oder ist gar kein State vorhanden
 #      (erster Kontakt), ist Self-Write-Erkennung diesen Zyklus nicht möglich — konservativ wie
 #      bisher behandelt (nudgen), heilt sich mit dem nächsten Schreiben selbst.
-#      Delta-Gate-Härtung (Riker): der Router-Quell-Marker "SCUT (" (serverseitig von
-#      scut-router.sh gestempelt, NICHT vom Absender kontrollierbar) schließt Self-Write IMMER
-#      aus — sonst könnte eine extern geroutete Zeile (Kunde/Angreifer), die absichtlich auf
+#      Delta-Gate-Härtung (Riker): die serverseitigen Fremd-Marker "SCUT (" und "BRIDGE ("
+#      (von Router/Bridge gestempelt, NICHT vom Absender kontrollierbar) schließen Self-Write
+#      IMMER aus — sonst könnte eine extern geroutete Zeile, die absichtlich auf
 #      "— ($TEAM_LEAD)" endet, den Zyklus lautlos verschlucken (kein Nudge, keine Eskalation,
 #      keine Severity-Klassifikation). Jeder Self-Write-Finalize zählt zusätzlich in einen
 #      eigenen Summary-Zähler (`self-write-finalisiert`) — damit dieser Pfad nie wieder
@@ -115,8 +117,11 @@
 #   Durchlauf verletzt werden kann.
 #
 # Instanz-Kontrakt (`<projekt>/_dev_team/dev-team.env`, alles optional):
-#   TEAM_LEAD              Name, unter dem der Lead heartbeatet (Log-Dateiname) UND die eigene
-#                          Signatur für die Self-Write-Erkennung (Punkt 7). Default: Bob.
+#   TEAM_LEAD              UID/Name, unter dem der Lead heartbeatet (Log-Dateiname) und geroutet
+#                          wird. Für Self-Write (Punkt 7) sind diese UID sowie die eindeutig via
+#                          `<standup>/team.config.json` (`members[].uid|id -> name`) aufgelöste
+#                          Persona gültig. Kaputte/mehrdeutige Config fällt sicher auf die UID
+#                          zurück. Default: Bob.
 #   MUX_SESSION             Multiplexer-Session des Leads (für den Nudge). Fehlt → report-only.
 #   BOOT_CMD                Start-Kommando des Leads (nur mit INBOX_WATCH_BOOT=1 genutzt). Läuft
 #                           in einer FRISCHEN Shell (mux_spawn) — die eigene dev-team.env wird
@@ -175,6 +180,48 @@ flock -n 9 || { echo "[inbox-watch] Lauf übersprungen (eine andere Instanz läu
 # env_of <envfile> <key> — export KEY="wert" / export KEY=wert lesen (leer wenn fehlt).
 env_of() { [ -f "$1" ] && sed -n "s/^export $2=\"\{0,1\}\([^\"]*\)\"\{0,1\}.*/\1/p" "$1" | head -n1; }
 
+# lead_persona_of <team.config.json> <lead-uid> -> eindeutiger Persona-Name oder leer.
+# team.config ist die Instanz-SSoT für den stabilen Log-/Routing-Key (`uid`, Legacy/Theme: `id`)
+# und den sichtbaren Namen. JSON wird bewusst geparst statt per sed/regex gelesen. Fail-closed:
+# fehlt die Datei, ist sie kaputt oder liefern mehrere Treffer unterschiedliche Namen, wird KEIN
+# Alias freigeschaltet — der Aufrufer akzeptiert dann nur die unveränderte TEAM_LEAD-UID.
+lead_persona_of() {
+  local config="$1" lead="$2"
+  [ -f "$config" ] && [ -n "$lead" ] || return 0
+  TEAM_CONFIG_JSON="$config" TEAM_LEAD_UID="$lead" python3 - <<'PY' 2>/dev/null
+import json, os
+
+path = os.environ["TEAM_CONFIG_JSON"]
+lead = os.environ["TEAM_LEAD_UID"]
+try:
+    with open(path) as fh:
+        data = json.load(fh)
+except Exception:
+    raise SystemExit(0)
+
+if not isinstance(data, dict):
+    raise SystemExit(0)
+
+names = set()
+for member in data.get("members", []):
+    if not isinstance(member, dict):
+        continue
+    if lead not in (member.get("uid"), member.get("id"), member.get("name")):
+        continue
+    name = member.get("name")
+    if not isinstance(name, str):
+        continue
+    name = name.strip()
+    # Bash-Command-Substitution entfernt NUL-Bytes. Ein JSON-Name wie `Gar\u0000field` dürfte
+    # dadurch niemals unbemerkt zum Alias `Garfield` werden; C0 + DEL deshalb vor stdout ablehnen.
+    if name and all(ord(ch) >= 0x20 and ord(ch) != 0x7f for ch in name):
+        names.add(name)
+
+if len(names) == 1:
+    print(next(iter(names)), end="")
+PY
+}
+
 # last_heartbeat_epoch <log> -> Unix-Epoch der letzten Heartbeat-Zeile (0 wenn fehlt/unparsbar).
 # Eigenständig statt über lead_state() (liefert nur Alter in Minuten) — Off-Duty-Auto-Clear
 # (Punkt 9) braucht den absoluten Zeitpunkt, um ihn gegen die Flag-mtime zu vergleichen.
@@ -230,33 +277,41 @@ state_write_final() { printf 'FINAL sig=%s ilines=%s' "$2" "$3" > "$1"; }
 # state_write_pending <statef> <sig> <lines> <attempts> <ilines>
 state_write_pending() { printf 'PENDING sig=%s lines=%s attempts=%s ilines=%s' "$2" "$3" "$4" "$5" > "$1"; }
 
-# self_write_line <line> <lead> -> true, wenn die Zeile mit der Lead-Eigensignatur endet
-# (comms.md-Kanon "Text — (Absender)": "— ($lead" oder "— $lead", Klammer optional). Toleranz-
-# fenster = die letzten 48 Zeichen der Zeile, damit ein Emoji/Satzzeichen NACH der Signatur
-# (z. B. "— (Bob) 🐻") nicht durchfällt — ein zufälliges "— (Bob)" mitten im Fließtext einer
-# LANGEN fremden Zeile zählt damit bewusst nicht als Signatur.
+# self_write_line <line> <lead-uid> [lead-persona] -> true NUR für das kanonische Inbox-Format
+# `timestamp | @target | text — (author)`, wenn der Autor nach dem LETZTEN Signatur-Delimiter
+# exakt die Lead-UID ODER die eindeutig aufgelöste Lead-Persona ist. Keine Klammer-/Whitespace-/
+# Emoji-Toleranz: eine Signatur ist ein strukturelles Endfeld, kein Substring im Freitext-Tail.
 #
 # Delta-Gate-Fund (Riker): das Suffix ist reiner Freitext — eine extern geroutete Zeile
 # (Kunde/Angreifer) kann absichtlich auf "— ($lead)" enden und würde sonst lautlos als
 # Self-Write finalisiert (kein Nudge, keine Eskalation, kein Summary-Zähler — umginge sogar
-# den SCUT-urgent-Zwang, weil Self-Write VOR classify_severity läuft). Fix: der Router-
-# Quell-Marker "SCUT (" (von scut-router.sh SERVERSEITIG gestempelt, s. dessen `route_event` —
-# NICHT vom Absender kontrollierbar) schließt Self-Write IMMER aus, egal was das Suffix
-# behauptet. Nur eine Zeile OHNE diesen Marker kann Self-Write sein.
+# den SCUT-urgent-Zwang, weil Self-Write VOR classify_severity läuft). Fix: die serverseitigen
+# Quell-Marker "SCUT (" und "BRIDGE (" (von Router bzw. Bridge gestempelt, NICHT vom Absender
+# kontrollierbar) schließen Self-Write IMMER aus, egal was das Suffix behauptet. Nur eine Zeile
+# OHNE diese Marker kann Self-Write sein.
 self_write_line() {
-  local line="$1" lead="$2"
+  local line="$1" lead="$2" persona="${3:-}" after_ts target content author_field
   [ -n "$lead" ] || return 1
   case "$line" in
     *"SCUT ("*|*"BRIDGE ("*) return 1 ;;
   esac
-  # ${line: -48} bei einer KÜRZEREN Zeile als 48 Zeichen liefert in bash leer statt der ganzen
-  # Zeile (Offset-Quirk, kein Trunkierungs-Bug) — deshalb erst die Länge prüfen.
-  local tail="$line"
-  [ "${#line}" -gt 48 ] && tail="${line: -48}"
-  case "$tail" in
-    *"— ($lead"*|*"—($lead"*|*"— $lead"*) return 0 ;;
-    *) return 1 ;;
-  esac
+
+  # Struktur zuerst: genau die beiden kanonischen Feldtrenner müssen auffindbar sein und das
+  # Ziel ist ein @-Adressat. Freitext darf weitere Pipes enthalten; nur die ersten zwei trennen.
+  after_ts="${line#* | }"
+  [ "$after_ts" != "$line" ] || return 1
+  target="${after_ts%% | *}"
+  content="${after_ts#* | }"
+  [ "$content" != "$after_ts" ] || return 1
+  case "$target" in @?*) : ;; *) return 1 ;; esac
+
+  # `${..##* — (}` wählt bewusst den LETZTEN Signatur-Delimiter. Ein Lead-Substring im Payload
+  # kann damit niemals den echten abschließenden Autor überschreiben. Exakter Vergleich inklusive
+  # Schlussklammer ankert das Feld physisch am Zeilenende.
+  author_field="${content##* — (}"
+  [ "$author_field" != "$content" ] || return 1
+  [ "$author_field" = "$lead)" ] && return 0
+  [ -n "$persona" ] && [ "$author_field" = "$persona)" ]
 }
 
 # sev_rank <info|mid|urgent> -> numerischer Rang (Unbekanntes -> mid, konservative Mitte).
@@ -459,13 +514,17 @@ while IFS=$'\t' read -r uid path standup; do
   new_inbox_lines=""
   if is_uint "$prev_ilines" && [ "$cur_ilines" -gt "$prev_ilines" ]; then
     new_inbox_lines="$(tail -n "+$((prev_ilines+1))" "$standup/_inbox.md" 2>/dev/null)"
+    # Persona nur bei einem echten Inbox-Zeilen-Delta auflösen; unveränderte Projekte brauchen
+    # weder JSON-I/O noch einen Python-Prozess pro Watcher-Tick.
+    lead_persona="$(lead_persona_of "$standup/team.config.json" "$lead")"
     all_self=1
     while IFS= read -r nl || [ -n "$nl" ]; do
       [ -z "$nl" ] && continue
-      self_write_line "$nl" "$lead" || { all_self=0; break; }
+      self_write_line "$nl" "$lead" "$lead_persona" || { all_self=0; break; }
     done <<< "$new_inbox_lines"
     if [ "$all_self" = 1 ]; then
-      echo "[inbox-watch] $uid: neue Zeile(n) sind Lead-Eigenschrift (Signatur — ($lead)) — self-write, still finalisiert"
+      author_hint="$lead"; [ -n "$lead_persona" ] && [ "$lead_persona" != "$lead" ] && author_hint="$lead|$lead_persona"
+      echo "[inbox-watch] $uid: neue Zeile(n) sind Lead-Eigenschrift (Signatur — ($author_hint)) — self-write, still finalisiert"
       state_write_final "$statef" "$sig" "$cur_ilines"
       n_selfwrite=$((n_selfwrite+1))
       continue
