@@ -43,6 +43,9 @@ for u in d.get("result", []):
     date = m.get("date", 0)
     frm = m.get("from") or {}
     sender = frm.get("username") or frm.get("first_name") or "telegram"
+    # #57 follow-up (Riker): whitespace-normalize sender same as txt below — username/first_name
+    # come straight from Telegram, not through the same hygiene as the message text otherwise.
+    sender = " ".join(str(sender).split())
     txt = m.get("text") or m.get("caption") or "[non-text]"
     txt = " ".join(str(txt).split())
     print("%s\t%s\t%s\t%s\t%s" % (u["update_id"], cid, date, sender, txt))

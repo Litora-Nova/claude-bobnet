@@ -55,6 +55,14 @@ sondern die STRUKTUR der Inbox-Datei selbst angreifen:
      Inbox-Zeile (verifiziert in `tests/scut_router_spec.sh`, Abschnitt „#57 GRENZE").
      `telegram.sh`/`email.sh` normalisieren Whitespace bereits selbst (Python `split()`); künftige
      Channel-Adapter (github.sh/teams.sh) MÜSSEN das beim Ausbau ebenfalls tun.
+   - **Die Whitespace-Normalisierung ist PRO FELD, nicht pro Adapter** — kein struktureller
+     Zwang, jedes Feld eines Channel-Events zu erfassen. Feld-Fund (Riker-Review, #59-Delta):
+     `telegram.sh` normalisierte lange nur `txt`, NICHT `sender` (username/first_name kamen roh
+     von der Telegram-API) — mittlerweile gefixt, aber die LEHRE bleibt: ein neues Feld in einem
+     bestehenden oder künftigen Adapter normalisiert sich nicht von selbst mit, das muss der
+     Adapter-Autor jedes Mal explizit tun. Der Router-Kollaps (oben) fängt CR/LF/Pipe zwar
+     ohnehin nochmal ab (Konvergenzpunkt-Garantie) — diese Adapter-Ebene ist trotzdem die erste
+     Verteidigungslinie und sollte nicht implizit als „vollständig" angenommen werden.
    - Die Suspect-Heuristik ist bewusst naiv (Substring-/Regex-Matching auf gängige
      Injection-Phrasen) — sie erkennt keine Umschreibungen, Übersetzungen oder subtilere
      Formulierungen. Sie ist ein Hinweis, kein Filter.
