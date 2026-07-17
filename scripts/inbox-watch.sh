@@ -247,7 +247,7 @@ self_write_line() {
   local line="$1" lead="$2"
   [ -n "$lead" ] || return 1
   case "$line" in
-    *"SCUT ("*) return 1 ;;
+    *"SCUT ("*|*"BRIDGE ("*) return 1 ;;
   esac
   # ${line: -48} bei einer KÜRZEREN Zeile als 48 Zeichen liefert in bash leer statt der ganzen
   # Zeile (Offset-Quirk, kein Trunkierungs-Bug) — deshalb erst die Länge prüfen.
