@@ -4,6 +4,22 @@ All notable engine changes are documented here. Versioning follows SemVer (`VERS
 human-facing); machine compatibility is anchored separately by `SCHEMA_VERSION` (integer) —
 see `.claude/rules/contract.md`. `skills/update-bobs` points teams here after an update.
 
+## [0.17.1] — 2026-07-17
+
+### Fixed
+- **Bridge-originated input could spoof self-write detection and suppress every
+  notification** (found by the first cross-model review — a GPT-family reviewer
+  over the 0.16/0.17 range). `self_write_line()` excluded only the `SCUT (`
+  marker; a `BRIDGE (<peer>):` line (also a server-stamped foreign-source marker)
+  whose peer-controlled payload ended in a lead-like signature was classified as
+  lead-authored and finalized silently — no nudge, no severity, no alert. Same
+  silent-suppression class as the SCUT spoof fixed in 0.16.0 (`e6efb1e`), now via
+  the bridge ingress. Fix: both server-stamped markers (`SCUT (` and `BRIDGE (`)
+  are unconditional non-self-writes; regression spec covers a bridge line whose
+  payload carries the target-lead suffix (not finalized, escalates at `mid` — no
+  urgent-noise regression). Documented follow-up: replace the tail-substring
+  heuristic with strict anchoring of the canonical author field.
+
 ## [0.17.0] — 2026-07-17
 
 ### Added
