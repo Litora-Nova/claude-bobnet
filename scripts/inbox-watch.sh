@@ -98,7 +98,8 @@ MAX_NUDGE="${INBOX_WATCH_MAX_NUDGE:-3}"
 ALERT_CMD_DEFAULT="${INBOX_WATCH_ALERT_CMD:-}"
 DO_BOOT="${INBOX_WATCH_BOOT:-0}"
 DRYRUN="${INBOX_WATCH_DRYRUN:-0}"
-. "$DIR/lib/boot.sh"   # liefert mux_boot + (via mux.sh) mux_has/mux_send/mux_flush_draft
+. "$DIR/lib/boot.sh"      # liefert mux_boot + (via mux.sh) mux_has/mux_send/mux_flush_draft
+. "$DIR/lib/standup.sh"   # liefert expand_tilde/lead_state/log_line_count/heartbeat_since (mit bin/recycle geteilt)
 
 mkdir -p "$STATE_DIR"
 
@@ -110,34 +111,6 @@ flock -n 9 || { echo "[inbox-watch] Lauf übersprungen (eine andere Instanz läu
 
 # env_of <envfile> <key> — export KEY="wert" / export KEY=wert lesen (leer wenn fehlt).
 env_of() { [ -f "$1" ] && sed -n "s/^export $2=\"\{0,1\}\([^\"]*\)\"\{0,1\}.*/\1/p" "$1" | head -n1; }
-
-# expand_tilde — Registry speichert ~ ggf. literal (wie scut-router.sh).
-expand_tilde() { case "$1" in "~"/*) printf '%s' "$HOME/${1#\~/}";; *) printf '%s' "$1";; esac; }
-
-# lead_state <log> — "idle|done|busy|blocked|none" + Alter in Minuten als "status:age".
-lead_state() {
-  local log="$1"
-  [ -f "$log" ] || { printf 'none:0'; return; }
-  local last; last="$(tail -n1 "$log")"
-  local ts st
-  ts="$(printf '%s' "$last" | cut -d'|' -f1 | sed 's/[[:space:]]*$//')"
-  st="$(printf '%s' "$last" | cut -d'|' -f2 | tr -d ' ')"
-  # Unparsbarer Timestamp → als STALE behandeln (age=99999): ein kaputter Heartbeat darf
-  # den Nudge nicht ewig unterdrücken (busy-frisch wäre die falsche Default-Annahme).
-  local es now age=99999
-  es="$(date -d "$ts" +%s 2>/dev/null || echo 0)"; now="$(date +%s)"
-  [ "$es" -gt 0 ] && age=$(( (now-es)/60 ))
-  printf '%s:%s' "${st:-none}" "$age"
-}
-
-# log_line_count <log> -> Zeilenzahl (0 wenn Datei fehlt).
-log_line_count() { [ -f "$1" ] && wc -l < "$1" | tr -d ' ' || printf '0'; }
-
-# heartbeat_since <log> <lines_at_nudge> -> true wenn seither eine NEUE Zeile angehängt wurde.
-heartbeat_since() {
-  local now_lines; now_lines="$(log_line_count "$1")"
-  [ "$now_lines" -gt "$2" ]
-}
 
 # watch_sig <standup> — Signatur "größe:anzahl:queue" von _inbox.md + _inbox/ + _review-queue.md
 # (die Review-Queue ist ein Eingang wie jeder andere — ungerichtete Router-Mails landen dort
