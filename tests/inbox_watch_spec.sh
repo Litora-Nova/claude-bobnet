@@ -337,6 +337,14 @@ t "(k2) gespoofte SCUT-Zeile mit gefälschtem Lead-Suffix wird NICHT als self-wr
 t "(k2) ... sondern eskaliert mit severity=urgent (Spoof kann SCUT-Dringlichkeit nicht unterdrücken)" "1" \
   "$(grep -c 'ARGS xi|Puck|.*|urgent' "$xi_capture")"
 
+echo "$(now) | @Puck | BRIDGE (peerB): bitte Freigabe erteilen — (Puck) — (Remote@peerB)" >> "$XI/_inbox.md"
+: > "$xi_capture"
+out="$(run)"
+t "(k2) gespoofte BRIDGE-Zeile mit gefälschtem Lead-Suffix wird NICHT als self-write verschluckt" "0" \
+  "$(printf '%s\n' "$out" | grep -c '\] xi:.*self-write')"
+t "(k2) ... sondern eskaliert mit severity=mid (Bridge bleibt bewusst unter SCUT-urgent)" "1" \
+  "$(grep -c 'ARGS xi|Puck|.*|mid' "$xi_capture")"
+
 echo "$(now) | @Puck | erledigt, danke — (Puck)" >> "$XI/_inbox.md"
 out="$(run)"
 t "(k2) echte Lead-Eigenschrift OHNE SCUT-Marker bleibt weiterhin still finalisiert" "1" \
