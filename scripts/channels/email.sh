@@ -88,6 +88,17 @@
 #                       email_offset, gleiches Default-Muster, standardmäßig AN). Datei fehlt/ist
 #                       leer -> einfach noch keine bekannten Threads (kein Fehler); Tests
 #                       isolieren sich ueber einen expliziten Tmp-Pfad, wie bei email_offset ueblich.
+#                       TRUST BOUNDARY (delta-gate review): In-Reply-To/References are unauthenticated
+#                       email headers under the sender's control. Anyone who has SEEN a message-id
+#                       (e.g. a prior reply in the same thread, or a forwarded/leaked mail) can craft
+#                       a new message referencing it and inherit that thread's routing target — and
+#                       since every directed mail re-registers its OWN message-id, a successful ride-
+#                       along is self-reinforcing (their forged reply now seeds the map too). This is
+#                       the SAME trust class as SCUT_MAIL_SENDERS_FILE (a static claim about "who
+#                       this address is", not cryptographically verified) — no code change here, no
+#                       auto-exec results from a routing decision either way. The structural fix
+#                       (verifying thread continuity beyond a bare header match) is tracked as the
+#                       inbound-injection hardening gate (#57), not part of this batch.
 #   SCUT_MAIL_THREAD_MAP_MAXLINES   Rotation: die Map behält nur die letzten N Zeilen (Default
 #                       500) — verhindert unbegrenztes Wachstum bei Dauerbetrieb.
 #   SCUT_MAIL_EML_DIR   TESTMODUS: statt IMAP alle *.eml in diesem Ordner parsen (sortiert,

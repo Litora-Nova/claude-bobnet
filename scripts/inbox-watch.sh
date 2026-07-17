@@ -74,6 +74,13 @@
 #      Fehlt die `ilines`-Baseline (Alt-Format-State) oder ist gar kein State vorhanden
 #      (erster Kontakt), ist Self-Write-Erkennung diesen Zyklus nicht möglich — konservativ wie
 #      bisher behandelt (nudgen), heilt sich mit dem nächsten Schreiben selbst.
+#      Delta-Gate-Härtung (Riker): der Router-Quell-Marker "SCUT (" (serverseitig von
+#      scut-router.sh gestempelt, NICHT vom Absender kontrollierbar) schließt Self-Write IMMER
+#      aus — sonst könnte eine extern geroutete Zeile (Kunde/Angreifer), die absichtlich auf
+#      "— ($TEAM_LEAD)" endet, den Zyklus lautlos verschlucken (kein Nudge, keine Eskalation,
+#      keine Severity-Klassifikation). Jeder Self-Write-Finalize zählt zusätzlich in einen
+#      eigenen Summary-Zähler (`self-write-finalisiert`) — damit dieser Pfad nie wieder
+#      telemetrielos ist.
 #   8. Severity-Klassifikation für jede Eskalation (`urgent|mid|info`, s. `INBOX_WATCH_ALERT_CMD`
 #      unten): urgent = die Review-Queue ist gewachsen ODER eine neue fremde Zeile trägt den
 #      „SCUT (via "-Marker (Kunden-/Mensch-Kanal, s. scut-router.sh) ODER Session-down; mid =
@@ -228,9 +235,20 @@ state_write_pending() { printf 'PENDING sig=%s lines=%s attempts=%s ilines=%s' "
 # fenster = die letzten 48 Zeichen der Zeile, damit ein Emoji/Satzzeichen NACH der Signatur
 # (z. B. "— (Bob) 🐻") nicht durchfällt — ein zufälliges "— (Bob)" mitten im Fließtext einer
 # LANGEN fremden Zeile zählt damit bewusst nicht als Signatur.
+#
+# Delta-Gate-Fund (Riker): das Suffix ist reiner Freitext — eine extern geroutete Zeile
+# (Kunde/Angreifer) kann absichtlich auf "— ($lead)" enden und würde sonst lautlos als
+# Self-Write finalisiert (kein Nudge, keine Eskalation, kein Summary-Zähler — umginge sogar
+# den SCUT-urgent-Zwang, weil Self-Write VOR classify_severity läuft). Fix: der Router-
+# Quell-Marker "SCUT (" (von scut-router.sh SERVERSEITIG gestempelt, s. dessen `route_event` —
+# NICHT vom Absender kontrollierbar) schließt Self-Write IMMER aus, egal was das Suffix
+# behauptet. Nur eine Zeile OHNE diesen Marker kann Self-Write sein.
 self_write_line() {
   local line="$1" lead="$2"
   [ -n "$lead" ] || return 1
+  case "$line" in
+    *"SCUT ("*) return 1 ;;
+  esac
   # ${line: -48} bei einer KÜRZEREN Zeile als 48 Zeichen liefert in bash leer statt der ganzen
   # Zeile (Offset-Quirk, kein Trunkierungs-Bug) — deshalb erst die Länge prüfen.
   local tail="$line"
@@ -328,7 +346,7 @@ for p in data.get("projects", []):
 PY
 }
 
-n_new=0; n_nudge=0; n_escalated=0; n_alert_failed=0; n_gated=0; n_swallowed=0
+n_new=0; n_nudge=0; n_escalated=0; n_alert_failed=0; n_gated=0; n_swallowed=0; n_selfwrite=0
 
 # esc_count <_ESC_RESULT> -> passenden Summary-Zähler hochzählen (escalated|alert_failed|gated|swallowed).
 esc_count() {
@@ -449,6 +467,7 @@ while IFS=$'\t' read -r uid path standup; do
     if [ "$all_self" = 1 ]; then
       echo "[inbox-watch] $uid: neue Zeile(n) sind Lead-Eigenschrift (Signatur — ($lead)) — self-write, still finalisiert"
       state_write_final "$statef" "$sig" "$cur_ilines"
+      n_selfwrite=$((n_selfwrite+1))
       continue
     fi
   fi
@@ -549,5 +568,5 @@ while IFS=$'\t' read -r uid path standup; do
   fi
 done <<< "$(projects)"
 
-echo "── inbox-watch: $n_new Projekt(e) mit Neuem, $n_nudge genudged/gebootet, $n_escalated eskaliert, $n_alert_failed Alert-Fehlschlag(e), $n_gated unterhalb-Mindest-Severity, $n_swallowed ungeweckt-verschluckt (registry=$REGISTRY)"
+echo "── inbox-watch: $n_new Projekt(e) mit Neuem, $n_nudge genudged/gebootet, $n_escalated eskaliert, $n_alert_failed Alert-Fehlschlag(e), $n_gated unterhalb-Mindest-Severity, $n_swallowed ungeweckt-verschluckt, $n_selfwrite self-write-finalisiert (registry=$REGISTRY)"
 exit 0

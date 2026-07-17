@@ -416,6 +416,9 @@ t "Known-Sender Ende-zu-Ende: unbekannter Absender → Review-Queue (unveränder
   "$(grep -c 'UNGERICHTET (via email, von Unbekannt) | Andere Frage' "$ksreg/acme/_dev_team/standup/_review-queue.md")"
 
 # ── #54: In-Reply-To/References-Thread-Routing ─────────────────────────────────────────────
+# Trust boundary (delta-gate review, documented not fixed here — structural hardening is #57):
+# In-Reply-To/References are unauthenticated headers, so anyone who has seen a message-id can
+# ride along on its routing target; same trust class as SCUT_MAIL_SENDERS_FILE, no auto-exec.
 eml_tm="$tmp/eml_tm"; mkdir -p "$eml_tm"
 cat > "$eml_tm/01-original.eml" <<'EOF'
 From: Kunde Y <kunde-y@example.com>

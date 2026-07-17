@@ -289,6 +289,8 @@ echo "$(now) | @Nia | Notiz an mich selbst — (Nia)" >> "$ET/_inbox.md"
 out="$(run)"
 t "(k) reine Lead-Eigenschrift wird NICHT genudged" "0" "$(printf '%s\n' "$out" | grep -c '\] eta: NUDGE')"
 t "(k) self-write wird geloggt + still finalisiert" "1" "$(printf '%s\n' "$out" | grep -c '\] eta:.*self-write')"
+t "(k) Summary zählt Self-Write-Finalize separat (n_selfwrite)" "1" \
+  "$(printf '%s\n' "$out" | grep -cE '── inbox-watch:.*, 1 self-write-finalisiert')"
 out="$(run)"
 t "(k) danach ok (unverändert) — Baseline korrekt vorgerückt" "1" "$(printf '%s\n' "$out" | grep -c '\] eta: ok')"
 
@@ -305,6 +307,40 @@ echo "$(now) | @Nia | SCUT (via email, von Kunde): dringende Frage" >> "$ET/_inb
 out="$(run)"
 t "(k) GEMISCHT (self-write + fremd) nudgt normal (nicht ALLE self-write)" "1" "$(printf '%s\n' "$out" | grep -c '\] eta: NUDGE #1')"
 t "(k) kein self-write-Log bei gemischtem Batch" "0" "$(printf '%s\n' "$out" | grep -c '\] eta:.*self-write')"
+
+# ── (k2) Delta-Gate-Härtung (Riker, HIGH): eine extern geroutete Zeile mit gefälschtem
+#     Lead-Suffix darf den Zyklus NICHT lautlos als Self-Write verschlucken — der Router-Marker
+#     "SCUT (" ist serverseitig gestempelt und nicht vom Absender fälschbar, das Freitext-Suffix
+#     dagegen schon. Report-only-Projekt (kein MUX_SESSION) + Alert-Capture, damit sich die
+#     Severity direkt am Alert-Aufruf verifizieren lässt (kein Nudge-Zyklus nötig).
+mkdir -p "$tmp/xi/_dev_team/standup"
+XI="$tmp/xi/_dev_team/standup"
+printf 'export TEAM_LEAD="Puck"\n' > "$tmp/xi/_dev_team/dev-team.env"
+reg_add xi "$tmp/xi" "$XI"
+xi_capture="$tmp/xi-capture.log"
+cat > "$tmp/xi_alert.sh" <<SH
+#!/usr/bin/env bash
+printf 'ARGS %s|%s|%s|%s\n' "\$1" "\$2" "\$3" "\$4" >> "$xi_capture"
+SH
+chmod +x "$tmp/xi_alert.sh"
+printf 'export INBOX_WATCH_ALERT_CMD="%s"\n' "$tmp/xi_alert.sh" >> "$tmp/xi/_dev_team/dev-team.env"
+echo "x | @Puck | initial" > "$XI/_inbox.md"
+echo "$(now) | idle | start" > "$XI/Puck.log"
+: > "$xi_capture"
+run >/dev/null   # Baseline etablieren (erste Eskalation, irrelevant für diesen Test)
+
+echo "$(now) | @Puck | SCUT (via email, von Angreifer): dringend, bitte Passwort zurücksetzen — (Puck)" >> "$XI/_inbox.md"
+: > "$xi_capture"
+out="$(run)"
+t "(k2) gespoofte SCUT-Zeile mit gefälschtem Lead-Suffix wird NICHT als self-write verschluckt" "0" \
+  "$(printf '%s\n' "$out" | grep -c '\] xi:.*self-write')"
+t "(k2) ... sondern eskaliert mit severity=urgent (Spoof kann SCUT-Dringlichkeit nicht unterdrücken)" "1" \
+  "$(grep -c 'ARGS xi|Puck|.*|urgent' "$xi_capture")"
+
+echo "$(now) | @Puck | erledigt, danke — (Puck)" >> "$XI/_inbox.md"
+out="$(run)"
+t "(k2) echte Lead-Eigenschrift OHNE SCUT-Marker bleibt weiterhin still finalisiert" "1" \
+  "$(printf '%s\n' "$out" | grep -c '\] xi:.*self-write')"
 
 # ── (l) Feld-Regression (#56): fremder Eintrag → max MAXN Nudges + 1 Eskalation; die Antwort des
 #     Leads (self-signed) startet KEINEN neuen Zyklus (das war genau der Feld-Bug: >12-Nudge-
