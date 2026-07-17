@@ -8,6 +8,14 @@
 #                               → ASK (permissionDecision "ask", Exit 0), nicht unterschreitbar
 #                                 (ask_floor), aber per Projekt-Override verschärfbar (ask→block).
 #   - alles andere              → durchlassen (Exit 0, kein Output).
+#
+# Kanon-Drift-Fix #1 (README-Sync 2026-07-17): die Engine-eigene team-rules/deploy-guard.paths
+# (bzw. deploy-guard.ask.paths) wird jetzt IMMER geladen; ein Projekt-Override ist rein ADDITIV
+# (kann nur erweitern, nie ersetzen). Vorher konnte ein Projekt-Override, der die Engine-Liste
+# komplett ersetzte, die "breiteren" Production-Infra-Globs (recipes2go, nginx/*production*,
+# docker-compose.prod, k8s/production) unbemerkt verlieren — nur die 5 Secret-Kern-Globs waren
+# über t4_floor() wirklich unbedingt. t4_floor() selbst deckt jetzt zusätzlich als LETZTE Instanz
+# (fehlt die Engine-Datei ganz) auch die breiteren Globs ab.
 . "$(dirname "${BASH_SOURCE[0]}")/_helper.sh"
 
 HOOK="$ENGINE_ROOT/hooks/deploy-guard.sh"
@@ -81,6 +89,28 @@ run_guard "/proj/.secrets/token" "$TMP/proj"
 it "t4_floor: Override ohne Secrets blockt .secrets trotzdem (Exit 2)"; eq "$GUARD_RC" "2"
 run_guard "/proj/nur-eigene-glob/datei.txt" "$TMP/proj"
 it "Override-Glob erweitert den Block (Exit 2)"; eq "$GUARD_RC" "2"
+
+# --- Kanon-Drift #1 (README-Sync 2026-07-17): ein Projekt-Override, der die Engine-Liste
+#     NICHT erwähnt, darf die "breiteren" Production-Infra-Globs (recipes2go, nginx/*production*,
+#     docker-compose.prod, k8s/production) nicht verlieren — vorher waren NUR die 5 Secret-Globs
+#     wirklich unbedingt (t4_floor), diese vier lebten nur in den überschreibbaren Defaults.
+run_guard "/proj/recipes2go/recipe.rb" "$TMP/proj"
+it "Kanon-Drift #1: Override ohne recipes2go blockt es trotzdem (Exit 2)"; eq "$GUARD_RC" "2"
+run_guard "/proj/nginx/production.conf" "$TMP/proj"
+it "Kanon-Drift #1: Override ohne nginx/*production* blockt es trotzdem (Exit 2)"; eq "$GUARD_RC" "2"
+run_guard "/proj/docker-compose.prod.yml" "$TMP/proj"
+it "Kanon-Drift #1: Override ohne docker-compose.prod blockt es trotzdem (Exit 2)"; eq "$GUARD_RC" "2"
+run_guard "/proj/k8s/production/deployment.yml" "$TMP/proj"
+it "Kanon-Drift #1: Override ohne k8s/production blockt es trotzdem (Exit 2)"; eq "$GUARD_RC" "2"
+
+# --- Fehlende Engine-Datei komplett: t4_floor() alleine deckt jetzt auch die breiteren Globs ---
+FAKE_ENGINE_BROAD="$TMP/fake-engine-broad"
+mkdir -p "$FAKE_ENGINE_BROAD/hooks" "$FAKE_ENGINE_BROAD/team-rules"
+cp "$HOOK" "$FAKE_ENGINE_BROAD/hooks/deploy-guard.sh"
+GUARD_OUT="$(printf '{"tool_input":{"file_path":"/proj/k8s/production/deployment.yml"}}' \
+  | ENGINE_ROOT="$FAKE_ENGINE_BROAD" DEV_TEAM_ENV="$EMPTY_ENV" bash "$FAKE_ENGINE_BROAD/hooks/deploy-guard.sh" 2>/dev/null)"
+GUARD_RC=$?
+it "Kanon-Drift #1: fehlende Engine-paths → t4_floor blockt k8s/production trotzdem (Exit 2)"; eq "$GUARD_RC" "2"
 
 # --- Ask-Floor: leerer Projekt-Ask-Override → Deploy-Configs bleiben ask ---
 : > "$TMP/proj/_dev_team/team-rules/deploy-guard.ask.paths"

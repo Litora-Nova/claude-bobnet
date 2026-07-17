@@ -12,7 +12,8 @@
 # Trigger : PreToolUse — Edit|Write|MultiEdit (Pfad-Stufen) · Bash (Befehl-Stufe). Siehe team-rules/hooks.md.
 # Vertrag : Tool-JSON kommt auf stdin; wir ziehen file_path UND command jq-frei heraus.
 # Regel   : Block-Globs aus team-rules/deploy-guard.paths, Ask-Globs aus
-#           team-rules/deploy-guard.ask.paths (je: Projekt-Override > Engine > eingebauter Floor).
+#           team-rules/deploy-guard.ask.paths — je: Engine-Datei (oder eingebauter Fallback) IMMER
+#           geladen + Projekt-Override ERGÄNZT nur (additiv, kann die Engine-Liste nie verdrängen).
 #           Command-Globs aus team-rules/deploy-guard.commands (opt-in, KEIN Floor) +
 #           Ablauf-Text aus team-rules/deploy-guard.procedure (Projekt-Override > Engine-Default).
 # Ausgang : Exit 2 + Hinweis auf stderr = BLOCK · JSON {"permissionDecision":"ask"} auf stdout
@@ -20,6 +21,9 @@
 #
 # Daten vor Code: KEINE hartkodierten Projekt-Pfade — Globs leben in team-rules/*.paths.
 # Block schlägt Ask: ein Override darf nur ERWEITERN/verschärfen (ask→block ok), nie lockern.
+# Floor-Fix (2026-07-17, Kanon-Drift #1): vorher konnte ein Projekt-Override die ENGINE-Liste
+# komplett ERSETZEN (nur die 5 t4_floor-Secrets-Globs waren wirklich unbedingt). Jetzt ist die
+# ganze Engine-Liste (Secrets + recipes2go + Production-Infra) der Floor — Override ergänzt nur.
 set -uo pipefail
 
 # --- Engine-ROOT relativ zum Script ableiten (kein hartkodierter Pfad) ---
@@ -34,20 +38,20 @@ for env_candidate in \
   [ -n "$env_candidate" ] && [ -f "$env_candidate" ] && { . "$env_candidate"; break; }
 done
 
-# --- Glob-Listen laden: Projekt-Override > Engine-Daten > eingebaute Defaults ---
-PATHS_FILE=""
-for cand in \
-  "${PROJECT_ROOT:-}/_dev_team/team-rules/deploy-guard.paths" \
-  "$ENGINE_ROOT/team-rules/deploy-guard.paths"; do
-  [ -n "$cand" ] && [ -f "$cand" ] && { PATHS_FILE="$cand"; break; }
-done
+# --- Glob-Listen laden: Engine-Datei = Floor (IMMER geladen) + Projekt-Override = additiv ---
+# (vorher: Projekt-Override > Engine > Defaults — ein Override ersetzte damit die Engine-Liste
+# komplett statt sie nur zu ergänzen. Fix 2026-07-17, Kanon-Drift #1.)
+ENGINE_PATHS_FILE=""
+[ -f "$ENGINE_ROOT/team-rules/deploy-guard.paths" ] && ENGINE_PATHS_FILE="$ENGINE_ROOT/team-rules/deploy-guard.paths"
+PROJECT_PATHS_FILE=""
+[ -n "${PROJECT_ROOT:-}" ] && [ -f "${PROJECT_ROOT}/_dev_team/team-rules/deploy-guard.paths" ] \
+  && PROJECT_PATHS_FILE="${PROJECT_ROOT}/_dev_team/team-rules/deploy-guard.paths"
 
-ASK_PATHS_FILE=""
-for cand in \
-  "${PROJECT_ROOT:-}/_dev_team/team-rules/deploy-guard.ask.paths" \
-  "$ENGINE_ROOT/team-rules/deploy-guard.ask.paths"; do
-  [ -n "$cand" ] && [ -f "$cand" ] && { ASK_PATHS_FILE="$cand"; break; }
-done
+ENGINE_ASK_PATHS_FILE=""
+[ -f "$ENGINE_ROOT/team-rules/deploy-guard.ask.paths" ] && ENGINE_ASK_PATHS_FILE="$ENGINE_ROOT/team-rules/deploy-guard.ask.paths"
+PROJECT_ASK_PATHS_FILE=""
+[ -n "${PROJECT_ROOT:-}" ] && [ -f "${PROJECT_ROOT}/_dev_team/team-rules/deploy-guard.ask.paths" ] \
+  && PROJECT_ASK_PATHS_FILE="${PROJECT_ROOT}/_dev_team/team-rules/deploy-guard.ask.paths"
 
 COMMANDS_FILE=""
 for cand in \
@@ -64,33 +68,25 @@ for cand in \
 done
 
 load_globs() {
-  if [ -n "$PATHS_FILE" ]; then
-    # Kommentare + Leerzeilen raus
-    grep -vE '^[[:space:]]*(#|$)' "$PATHS_FILE"
-  else
-    # Fallback-Defaults (spiegeln team-rules/deploy-guard.paths)
-    cat <<'DEFAULTS'
-*recipes2go*
-*/.secrets/*
-*credentials.yml.enc
-*master.key
-*.env.production
-*/config/master.key
-*/nginx/*production*
-*docker-compose.prod*
-*/k8s/production/*
-DEFAULTS
-  fi
+  # Engine-Datei = Floor, IMMER geladen (fehlt sie ganz, greift t4_floor() weiter unten als
+  # letzte Instanz). Projekt-Datei ist rein ADDITIV — kann die Engine-Liste nie verdrängen,
+  # nur erweitern (Floor-Fix 2026-07-17, Kanon-Drift #1, s. Kopf-Kommentar).
+  [ -n "$ENGINE_PATHS_FILE" ] && grep -vE '^[[:space:]]*(#|$)' "$ENGINE_PATHS_FILE"
+  [ -n "$PROJECT_PATHS_FILE" ] && grep -vE '^[[:space:]]*(#|$)' "$PROJECT_PATHS_FILE"
 }
 
 load_ask_globs() {
-  if [ -n "$ASK_PATHS_FILE" ]; then
-    grep -vE '^[[:space:]]*(#|$)' "$ASK_PATHS_FILE"
-  fi
+  [ -n "$ENGINE_ASK_PATHS_FILE" ] && grep -vE '^[[:space:]]*(#|$)' "$ENGINE_ASK_PATHS_FILE"
+  [ -n "$PROJECT_ASK_PATHS_FILE" ] && grep -vE '^[[:space:]]*(#|$)' "$PROJECT_ASK_PATHS_FILE"
 }
 
 # --- T4-Floor (BLOCK): nicht-überschreibbare Kern-Globs (Production/Secrets, {HUMAN}-only) ---
 # Werden IMMER geprüft — auch wenn ein Projekt-Override sie weglässt. T4 ist Floor, nicht Ceiling.
+# Hardcodiert (nicht aus einer Datei gelesen) als LETZTE Instanz: greift selbst dann noch, wenn
+# die Engine-eigene team-rules/deploy-guard.paths komplett fehlt (kaputte/unvollständige
+# Installation) — deshalb auch hier die vollständige Liste, nicht nur die Secret-Kern-Globs
+# (Kanon-Drift #1: die "breiteren" Production-Infra-Globs dürfen nirgends nur von EINER Quelle
+# abhängen).
 t4_floor() {
   cat <<'FLOOR'
 */.secrets/*
@@ -98,6 +94,10 @@ t4_floor() {
 */config/master.key
 *credentials.yml.enc
 *.env.production
+*recipes2go*
+*/nginx/*production*
+*docker-compose.prod*
+*/k8s/production/*
 FLOOR
 }
 
@@ -165,7 +165,7 @@ if [ -n "$file_path" ]; then
     if [[ "$file_path" == $glob ]]; then
       echo "deploy-guard: BLOCKED — '$file_path' matcht geschützte Glob '$glob'." >&2
       echo "  Production-/Secret-Pfade sind Tier-4 ({HUMAN}-only). Edit nicht erlaubt." >&2
-      echo "  Liste: ${PATHS_FILE:-<eingebaute Defaults>} (+ T4-Floor) — erweitern via team-rules/deploy-guard.paths." >&2
+      echo "  Liste: ${ENGINE_PATHS_FILE:-<eingebauter T4-Floor>}${PROJECT_PATHS_FILE:+ + $PROJECT_PATHS_FILE} — erweitern (additiv) via _dev_team/team-rules/deploy-guard.paths." >&2
       exit 2
     fi
   done < <(load_globs; t4_floor)
