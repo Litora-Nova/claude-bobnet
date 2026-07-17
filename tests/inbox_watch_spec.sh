@@ -258,7 +258,7 @@ else
   echo "HINWEIS: tmux nicht verfügbar — Boot-Pfad-Tests (i)/(j) übersprungen"
 fi
 
-# ── Anti-Lärm-Batch Welle 1 (Bill): Self-Write · Litora-Regression · Severity · Off-Duty ·
+# ── Anti-Lärm-Batch Welle 1: Self-Write · Feld-Regression (#56) · Severity · Off-Duty ·
 #    Session-down · Alt-State-Kompat. Jeweils EIGENE Projekte, damit diese Blöcke unabhängig vom
 #    alpha/beta/delta-Narrativ oben bleiben (keine Reihenfolge-Kopplung).
 reg_add() { # reg_add <uid> <path> <standup>
@@ -306,7 +306,7 @@ out="$(run)"
 t "(k) GEMISCHT (self-write + fremd) nudgt normal (nicht ALLE self-write)" "1" "$(printf '%s\n' "$out" | grep -c '\] eta: NUDGE #1')"
 t "(k) kein self-write-Log bei gemischtem Batch" "0" "$(printf '%s\n' "$out" | grep -c '\] eta:.*self-write')"
 
-# ── (l) Litora-Regression: fremder Eintrag → max MAXN Nudges + 1 Eskalation; die Antwort des
+# ── (l) Feld-Regression (#56): fremder Eintrag → max MAXN Nudges + 1 Eskalation; die Antwort des
 #     Leads (self-signed) startet KEINEN neuen Zyklus (das war genau der Feld-Bug: >12-Nudge-
 #     Serien, weil die eigene Antwort als "neue Inbox-Änderung" durchging).
 mkdir -p "$tmp/theta/_dev_team/standup"

@@ -456,9 +456,9 @@ while IFS=$'\t' read -r uid path standup; do
   # baseline_ilines: die STABILE Baseline, aus der dieser Zyklus entstand (letzte final
   # bekannte ilines) — bleibt über ALLE Re-Nudges dieses Zyklus unverändert (sonst würde jeder
   # Re-Nudge die Baseline auf den aktuellen Stand hochziehen und Self-Write-/Severity-Prüfungen
-  # des NÄCHSTEN Re-Nudge-Ticks fälschlich "nichts Neues" sehen lassen — genau der Bug, den
-  # Riker im ersten Entwurf dieses Batches fand). Ohne bekannte Baseline (erster Kontakt/Alt-
-  # Format) fällt sie auf cur_ilines zurück (neue Baseline ab jetzt, konservativ).
+  # des NÄCHSTEN Re-Nudge-Ticks fälschlich "nichts Neues" sehen lassen — im ersten Entwurf dieses
+  # Batches per Spec-Lauf gefunden + gefixt, s. Testfälle (l)/(m)). Ohne bekannte Baseline
+  # (erster Kontakt/Alt-Format) fällt sie auf cur_ilines zurück (neue Baseline ab jetzt, konservativ).
   baseline_ilines="${prev_ilines:-$cur_ilines}"
 
   n_new=$((n_new+1))
