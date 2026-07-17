@@ -24,9 +24,12 @@ see `.claude/rules/contract.md`. `skills/update-bobs` points teams here after an
   `hooks/pre-push-identity-floor.sh`, wired by `bin/onboard` (never clobbers an
   existing hook): blocks pushes whose new commits violate the commit-identity canon
   (author/committer metadata AND committed content) or contain common secret
-  patterns (AWS, PEM, GitHub/GitLab/Slack tokens — a deliberate floor, not a
-  scanner). Bypass `BOBNET_PUSH_FLOOR_SKIP=1` (loud). Spec runs against the real
-  git pre-push mechanism with an isolated bare-remote/work-repo pair per scenario.
+  patterns (AWS, PEM, GitHub/GitLab/Slack and Anthropic `sk-ant-` tokens — a
+  deliberate floor, not a scanner; this set is frozen by design). Bypass
+  `BOBNET_PUSH_FLOOR_SKIP=1` (loud). Spec runs against the real git pre-push
+  mechanism with an isolated bare-remote/work-repo pair per scenario; secret
+  fixtures are runtime-composed so the floor never trips on its own spec source
+  (review-gate finding).
 
 ### Changed
 - **tmux is the fleet mux default for headless operation (#64)**; zellij is
@@ -36,10 +39,19 @@ see `.claude/rules/contract.md`. `skills/update-bobs` points teams here after an
   beats any nudge.
 
 ### Fixed
+- **telegram channel adapter never delivered a single event** (latent since its
+  creation, found while building its first spec): `python3 - <<'PY'` consumes the
+  heredoc as the program's stdin, so the piped API response never reached
+  `json.load(sys.stdin)` and a silent `except` swallowed the failure — zero
+  events, always. Field damage none (no unit or process used the adapter; the
+  standalone poller does the live work). Fixed via env-var handover (the pattern
+  the email adapter already uses); the adapter now has its own spec (17 checks,
+  new `SCUT_TG_FAKE_RESPONSE_FILE` test seam) including the newly added
+  whitespace normalization of the sender field.
 - Both mutation-confirmed coverage gaps from the 0.16.0 test gate closed by
   behavior-proving specs: legacy `PENDING` states without `ilines` (live in fleet
   state dirs on rollout day) and the previously never-exercised `info` severity
-  path (inbox_watch_spec 96→105; suite now 29 specs).
+  path (inbox_watch_spec 96→105; suite now 30 specs).
 
 ## [0.16.0] — 2026-07-17
 
