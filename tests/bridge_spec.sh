@@ -125,6 +125,24 @@ SSH_ORIGINAL_COMMAND='[alpha]@Bill: lang' recv longleadpeer >/dev/null 2>&1
 t "L7: Peer-Lead-Signatur auf 64 Zeichen gecappt" "1" "$(grep -cE -- "— \(${longlead:0:64}@longleadpeer\)\$" "$INBOX")"
 t "L7: ungecappte 100-Zeichen-Signatur NICHT vorhanden" "0" "$(grep -c -- "${longlead}@longleadpeer" "$INBOX")"
 
+# ── #57: Payload-Pipe → ¦ (broken bar), sowohl in der Kanon-Zeile als auch im Audit-Log ─────
+SSH_ORIGINAL_COMMAND='[alpha]@Bill: preis A|B ist teurer als C|D' recv peerB >/dev/null 2>&1
+t "#57: Payload-Pipe in der Inbox-Zeile wird zu ¦ kollabiert" "1" \
+  "$(grep -c 'preis A¦B ist teurer als C¦D' "$INBOX")"
+t "#57: kein rohes | im Payload-Teil der Inbox-Zeile" "0" "$(grep -c 'preis A|B' "$INBOX")"
+t "#57: Payload-Pipe im Audit-Log-Excerpt ebenfalls kollabiert (sonst Log-Feld-Fälschung)" "1" \
+  "$(grep -c 'preis A¦B ist teurer als C¦D' "$LOG")"
+
+# peers.json-lead mit Pipe → dieselbe Sanitize-Erweiterung wie L7 (Steuerzeichen), jetzt auch Pipe.
+cat > "$tmp/peers-pipe.json" <<JSON
+{ "pipepeer": { "host": "203.0.113.12", "lead": "Rob | FAKE | ACCEPT" } }
+JSON
+SSH_ORIGINAL_COMMAND='[alpha]@Bill: via pipepeer' \
+  DEV_TEAM_REGISTRY="$tmp/registry.json" BOBNET_PEERS="$tmp/peers-pipe.json" BRIDGE_LOG="$LOG" \
+  bash "$RECV" pipepeer >/dev/null 2>&1
+t "#57: peers.json-lead mit Pipe wird in der Signatur kollabiert" "1" \
+  "$(grep -c 'via pipepeer — (Rob ¦ FAKE ¦ ACCEPT@pipepeer)' "$INBOX")"
+
 # ── Sender: Vor-Validierung + Auflösung ─────────────────────────────────────────────────────
 t "send: ohne [uid]-Adressierung → exit 2 (lokal, vor Netz)" "2" \
   "$(BOBNET_PEERS="$tmp/peers.json" bash "$SEND" peerB "hallo ohne adresse" >/dev/null 2>&1; echo $?)"

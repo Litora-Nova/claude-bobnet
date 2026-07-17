@@ -115,3 +115,14 @@ oben bereits die `en`-Variante.)
   dann gilt der git-Default (besser als ein Commit mit `() <>`-Müll).
 - **Geteilte Email:** Distinkte Namen, gleicher Avatar (eine Email → ein GitHub/GitLab-Avatar). Das ist
   gewollt (Setup-arm); per-Agent-Avatare wären per-Agent-Emails = mehr Setup, bewusst NICHT gemacht.
+
+## Client-seitiger Floor (Issue #59)
+
+Der `Mario-Bug` oben (statisches `user.name` im Repo) und ein späterer Fund (eine private
+Mail-Adresse landete als Commit-Autor in einem öffentlichen Repo, erst NACH dem Push von der
+Compliance-Gate gefangen) zeigen: diese Doku allein verhindert eine falsche Identität nicht,
+sie erklärt nur, wie es richtig geht. `hooks/pre-push-identity-floor.sh` (Registry:
+`team-rules/hooks.md`) prüft AUTOMATISCH vor jedem `git push`, ob Autor/Committer dem Kanon-
+Format oben entsprechen — client-seitig, VOR dem Push, opt-in via `bin/onboard`. Es ist ein
+Floor/Frühwarnsystem, kein Ersatz für die Compliance-Gate-Beurteilung (die sieht mehr als ein
+Client-Hook je kann) — dokumentierter Bypass: `BOBNET_PUSH_FLOOR_SKIP=1 git push`.

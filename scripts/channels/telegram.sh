@@ -14,6 +14,12 @@
 #   SCUT_SECRETS_DIR  telegram_token/chat_id/offset (Default: <engine-root>/.secrets)
 #   SCUT_TG_ONESHOT   1 = einmal pollen + raus (für Tests/Cron); sonst Dauerschleife.
 #   DEV_TEAM_TZ       nur durchgereicht (Router formatiert die Zeit).
+#   SCUT_TG_FAKE_RESPONSE_FILE   TESTMODUS (analog email.sh SCUT_MAIL_EML_DIR): statt curl gegen
+#                       die echte Telegram-API liest poll_once() den getUpdates-JSON-Body aus
+#                       dieser Datei — macht die Python-Parse-/Normalisierungslogik ohne echten
+#                       Bot-Token/Netzzugriff spec-bar (Riker-Finding, #59-Delta: die
+#                       sender-Whitespace-Normalisierung war zuvor ungetestet). Rückt den Offset
+#                       trotzdem normal fort (kein Test-Sonderpfad in poll_once() selbst nötig).
 set -uo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENGINE_ROOT="${ENGINE_ROOT:-$(cd "$DIR/../.." && pwd)}"
@@ -27,14 +33,26 @@ offset="$(cat "$OFFSET_FILE" 2>/dev/null || echo 0)"
 
 poll_once() {
   local resp
-  resp="$(curl -s --max-time 70 "https://api.telegram.org/bot${TOKEN}/getUpdates?timeout=55&offset=${offset}")" || return 1
+  if [ -n "${SCUT_TG_FAKE_RESPONSE_FILE:-}" ]; then
+    resp="$(cat "$SCUT_TG_FAKE_RESPONSE_FILE" 2>/dev/null)" || return 1
+  else
+    resp="$(curl -s --max-time 70 "https://api.telegram.org/bot${TOKEN}/getUpdates?timeout=55&offset=${offset}")" || return 1
+  fi
   [ -z "$resp" ] && return 0
   # python3: pro Update eine Roh-Zeile "update_id\tcid\tdate\tsender\ttext" (Text whitespace-normalisiert).
+  # $resp geht als ENV VAR rein, NICHT gepiped (Bugfix, #59-Delta-Fund beim Bau des Testpfads für
+  # die sender-Normalisierung): `printf ... | python3 - <<'PY'` sieht harmlos aus, ist aber ein
+  # Stdin-Konflikt — `python3 -` liest sein PROGRAMM aus stdin, der Heredoc IST also stdin, und
+  # ist beim Start des Scripts bereits konsumiert (EOF). Ein `sys.stdin.read()`/`json.load(sys.stdin)`
+  # im Skript bekommt dadurch NIE die gepipete Antwort, sondern immer leer — `poll_once()` hat
+  # dadurch (verifiziert) JEDE echte Telegram-Antwort still verworfen (leerer `parsed`, kein
+  # Crash, kein Fehler sichtbar). Env-Var + `os.environ[...]` ist bereits das etablierte Muster
+  # in email.sh für genau diesen Fall (Daten in einen `python3 - <<'PY'`-Block hinein).
   local parsed
-  parsed="$(printf '%s' "$resp" | python3 - <<'PY'
-import sys, json
+  parsed="$(TG_RESP="$resp" python3 - <<'PY'
+import os, sys, json
 try:
-    d = json.load(sys.stdin)
+    d = json.loads(os.environ["TG_RESP"])
 except Exception:
     sys.exit(0)
 for u in d.get("result", []):
@@ -43,6 +61,9 @@ for u in d.get("result", []):
     date = m.get("date", 0)
     frm = m.get("from") or {}
     sender = frm.get("username") or frm.get("first_name") or "telegram"
+    # #57 follow-up (Riker): whitespace-normalize sender same as txt below — username/first_name
+    # come straight from Telegram, not through the same hygiene as the message text otherwise.
+    sender = " ".join(str(sender).split())
     txt = m.get("text") or m.get("caption") or "[non-text]"
     txt = " ".join(str(txt).split())
     print("%s\t%s\t%s\t%s\t%s" % (u["update_id"], cid, date, sender, txt))

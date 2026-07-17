@@ -13,6 +13,8 @@
 #
 # Event-Text = "<Subject> — <Body-Auszug>" (text/plain bevorzugt, whitespace-normalisiert).
 # Attachments werden in v1 NICHT gespeichert, nur gezählt ("[N Anhang/Anhänge im Postfach]").
+# #57: Absender/Text werden zusätzlich pipe-kollabiert (`|` → `¦`) — Konvergenzpunkt-Härtung
+# gegen Feld-Fälschung dupliziert an den Ingress (siehe scut-router.sh collapse_untrusted()).
 #
 # Secrets/Env (Präzedenz: Env-Var > Datei in SCUT_SECRETS_DIR > Default):
 #   SCUT_MAIL_HOST / email_host        IMAP-Host (PFLICHT)
@@ -253,6 +255,17 @@ def estimate_encoded_bytes(part):
 
 def norm(s):
     return " ".join(str(s or "").split())
+
+# #57: Pipe-Kollaps an der Body-/Subject-Extraktion — Konvergenzpunkt-Härtung von scut-router.sh
+# (siehe dessen collapse_untrusted()) DUPLIZIERT sich bewusst hierher: der Mailtext ist der
+# Ingress, an dem am ehesten ein literales "|" aus echtem Fließtext (Preislisten, Tabellen,
+# absichtliche Fälschungsversuche) auftaucht, BEVOR es überhaupt auf die TSV-Pipe zum Router
+# geht. norm() kollabiert CR/LF bereits (str.split() ohne Argument trennt auf jedem Whitespace,
+# auch \r/\n) — das hier ergänzt NUR die fehlende Pipe-Behandlung, dieselbe Wahl wie im Router
+# (broken bar `¦`, U+00A6): ein legitimes `|` im Mailtext wird sichtbar verändert, das ist der
+# Preis für Fälschungssicherheit der Inbox-Struktur (team-rules/untrusted-input.md).
+def collapse_pipe(s):
+    return str(s or "").replace("|", "¦")
 
 def dec_header(raw):
     parts = email.header.decode_header(raw or "")
@@ -510,7 +523,11 @@ def line_for(key, msg, prefix):
         if final_tag:
             text = final_tag + " " + text
     thread_map_record(own_mid, final_tag)
-    row = [key, ext, str(ts), sender, pfail, text]
+    # #57: Pipe-Kollaps erst HIER, ganz am Ende — final_tag/persist_mail-Anhangsnotizen sind
+    # selbst schon zeichenklassen-beschränkt bzw. eigene Formatierung, nicht roher Mailtext;
+    # sie sollen nicht nochmal umlaufen. sender/text sind die Felder mit rohem Absender-/
+    # Mailinhalt und damit der eigentliche Ingress.
+    row = [key, ext, str(ts), collapse_pipe(sender), pfail, collapse_pipe(text)]
     print("\t".join(f.replace("\t", " ") for f in row))
 
 eml_dir = os.environ.get("SCUT_MAIL_EML_DIR", "")

@@ -4,6 +4,55 @@ All notable engine changes are documented here. Versioning follows SemVer (`VERS
 human-facing); machine compatibility is anchored separately by `SCHEMA_VERSION` (integer) —
 see `.claude/rules/contract.md`. `skills/update-bobs` points teams here after an update.
 
+## [0.17.0] — 2026-07-17
+
+### Added
+- **Inbound injection gate (#57)**: the router — the convergence point where every
+  foreign-text channel (mail, messenger, bridge peers) meets the canon inbox — now
+  collapses CR/LF and `|` in every attacker-influenced field before a canon line is
+  built (newline smuggling can no longer forge inbox entries, senders or lead-like
+  signatures); optional `SCUT_FLAG_SUSPICIOUS=1` appends a visible suspect flag on
+  instruction-like payloads (flags only, never blocks). New canon
+  `team-rules/untrusted-input.md`: foreign inbox text is DATA, never instructions.
+  Documented limit: channel adapters own the no-raw-newline-on-the-wire duty.
+- **Verb-gateway canon (#58)**: bridge/SSH docs codify forced-command gateways as
+  the only access path for external agents (`command=`, `no-pty`, `from=` pinning;
+  full-shell keys for agents are forbidden), the `bridge:<peer>` key-comment
+  convention (command= keys are infrastructure, not legacy), an authorized_keys
+  cleanup checklist, and the full-key retirement path (key rework itself = T4).
+- **Pre-push identity/secret floor (#59)**: new git hook
+  `hooks/pre-push-identity-floor.sh`, wired by `bin/onboard` (never clobbers an
+  existing hook): blocks pushes whose new commits violate the commit-identity canon
+  (author/committer metadata AND committed content) or contain common secret
+  patterns (AWS, PEM, GitHub/GitLab/Slack and Anthropic `sk-ant-` tokens — a
+  deliberate floor, not a scanner; this set is frozen by design). Bypass
+  `BOBNET_PUSH_FLOOR_SKIP=1` (loud). Spec runs against the real git pre-push
+  mechanism with an isolated bare-remote/work-repo pair per scenario; secret
+  fixtures are runtime-composed so the floor never trips on its own spec source
+  (review-gate finding).
+
+### Changed
+- **tmux is the fleet mux default for headless operation (#64)**; zellij is
+  deprecated for headless use (draft phantom, client-only rendering) and stays
+  supported interactively. New canon sentence: **boot/spawn-first, nudge as
+  fallback** — a fresh boot with an inbox-first briefing counts as delivered and
+  beats any nudge.
+
+### Fixed
+- **telegram channel adapter never delivered a single event** (latent since its
+  creation, found while building its first spec): `python3 - <<'PY'` consumes the
+  heredoc as the program's stdin, so the piped API response never reached
+  `json.load(sys.stdin)` and a silent `except` swallowed the failure — zero
+  events, always. Field damage none (no unit or process used the adapter; the
+  standalone poller does the live work). Fixed via env-var handover (the pattern
+  the email adapter already uses); the adapter now has its own spec (17 checks,
+  new `SCUT_TG_FAKE_RESPONSE_FILE` test seam) including the newly added
+  whitespace normalization of the sender field.
+- Both mutation-confirmed coverage gaps from the 0.16.0 test gate closed by
+  behavior-proving specs: legacy `PENDING` states without `ilines` (live in fleet
+  state dirs on rollout day) and the previously never-exercised `info` severity
+  path (inbox_watch_spec 96→105; suite now 30 specs).
+
 ## [0.16.0] — 2026-07-17
 
 ### Added

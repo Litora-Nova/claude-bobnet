@@ -39,7 +39,14 @@
 
 ## Multiplexer-Automatisierung (Agent steuert fremde Panes — tmux | zellij)
 
-- **Engine ist multiplexer-agnostisch (tmux|zellij) über `scripts/lib/mux.sh`.** NIE direkt
+- **Kanon (PO-Entscheid 2026-07-17, #64): tmux ist der Fleet-Default für headless Betrieb,
+  zellij ist für headless deprecatet** (interaktive Sessions bleiben mit zellij unterstützt).
+  Auslöser: der zellij-Draft-Befund direkt unten war kein Rand-Fall, sondern der Grund für die
+  gesamte 0.14.0-Watcher-Härtung (Draft-Flush, Heartbeat-Verifikation statt rc, Re-Nudges,
+  Eskalation) — plus lingernde Session-Leichen nach Kill/Boot-Zyklen und spürbare
+  Verlangsamung bei vielen Sessions (Flotten-Maßstab). Neue/rollende Installationen setzen
+  `BOBNET_MUX=tmux` explizit, statt sich auf `auto` zu verlassen.
+- **Engine bleibt multiplexer-agnostisch (tmux|zellij) über `scripts/lib/mux.sh`.** NIE direkt
   `tmux` oder `zellij` aufrufen — immer die `mux_*`-Verben (`mux_spawn/has/list/send/capture/kill`).
   Eine Stelle entscheidet das Backend (`BOBNET_MUX=tmux|zellij|auto`, Default auto = tmux-bevorzugt);
   Direktaufrufe brechen auf dem jeweils anderen Backend und unterlaufen die Rückwärtskompat.

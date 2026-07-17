@@ -536,5 +536,79 @@ t "(p) Alt-Format-State ohne ilines: Self-Write-Erkennung nicht möglich → nor
 t "(p) ... kein self-write-Log (Erkennung mangels Baseline unmöglich, konservativ)" "0" \
   "$(printf '%s\n' "$out" | grep -c 'mu:.*self-write')"
 
+# ── (q) Marvin-Lücke 1: Legacy-PENDING ohne ilines (0.14/0.15-Format, liegt live in allen
+#     Flotten-State-Dirs am Rollout-Tag). Handgeschriebener PENDING-State ohne das ilines-Feld
+#     beweist: kein Crash, kein Self-Write-Versuch (Baseline fehlt, konservativ), normaler
+#     Zyklus läuft weiter, Severity bleibt trotz fehlender Baseline korrekt (mid statt Crash).
+mkdir -p "$tmp/omicron/_dev_team/standup"
+OM="$tmp/omicron/_dev_team/standup"
+printf 'export TEAM_LEAD="Fenn"\n' > "$tmp/omicron/_dev_team/dev-team.env"   # report-only + Alert-Capture
+reg_add omicron "$tmp/omicron" "$OM"
+om_capture="$tmp/omicron-capture.log"
+cat > "$tmp/omicron_alert.sh" <<SH
+#!/usr/bin/env bash
+printf 'ARGS %s|%s|%s|%s\n' "\$1" "\$2" "\$3" "\$4" >> "$om_capture"
+SH
+chmod +x "$tmp/omicron_alert.sh"
+printf 'export INBOX_WATCH_ALERT_CMD="%s"\n' "$tmp/omicron_alert.sh" >> "$tmp/omicron/_dev_team/dev-team.env"
+# BEIDE Zeilen sehen wie Lead-Eigenschrift aus (Signatur "— (Fenn)") — das ist Absicht: ein
+# permissiver Mutant, der ein fehlendes ilines als "0" statt "unverfügbar" behandelt, würde die
+# GESAMTE Datei (inkl. der "alten" ersten Zeile) fälschlich als "neu" ansehen und, weil ALLE
+# Zeilen self-signiert aussehen, lautlos self-write-finalisieren — korrektes Verhalten muss den
+# Self-Write-Versuch mangels Baseline komplett auslassen und stattdessen normal eskalieren,
+# unabhängig davon, wie die Zeilen aussehen. Nur so ist der Test mutationssensitiv (verifiziert).
+echo "erste zeile — (Fenn)" > "$OM/_inbox.md"
+oldsig="$(wc -c < "$OM/_inbox.md" | tr -d ' '):0:0"
+echo "$(now) | idle | schon zwei" > "$OM/Fenn.log"
+echo "$(now) | idle | zeilen" >> "$OM/Fenn.log"
+# Legacy-PENDING-State (Format vor diesem Batch): PENDING sig=... lines=... attempts=... OHNE ilines.
+printf 'PENDING sig=%s lines=2 attempts=1' "$oldsig" > "$tmp/state/omicron.state"
+echo "zweite zeile ebenfalls signiert — (Fenn)" >> "$OM/_inbox.md"
+: > "$om_capture"
+out="$(run)"
+t "(q) Legacy-PENDING ohne ilines: kein Crash / keine Korrupt-Meldung" "0" \
+  "$(printf '%s\n' "$out" | grep -c 'PENDING-State korrupt')"
+t "(q) ... kein Self-Write-Versuch (Baseline fehlt, konservativ)" "0" \
+  "$(printf '%s\n' "$out" | grep -c '\] omicron:.*self-write')"
+t "(q) ... normaler Zyklus läuft weiter (report-only → Eskalation statt Absturz)" "1" \
+  "$(printf '%s\n' "$out" | grep -c '\] omicron:.*kein Weckweg')"
+t "(q) ... Severity trotz fehlender ilines-Baseline korrekt klassifiziert (mid, kein Crash)" "1" \
+  "$(grep -c 'ARGS omicron|Fenn|.*|mid' "$om_capture")"
+out="$(run)"
+t "(q) State auf neues Format geheilt → danach ok (unverändert)" "1" \
+  "$(printf '%s\n' "$out" | grep -c '\] omicron: ok')"
+
+# ── (r) Marvin-Lücke 2: die info-Klassifikation wurde NIE erzeugt — der Zweig ließ sich
+#     ersatzlos aus classify_severity() löschen, ohne dass die Suite rot ging (toter Code laut
+#     Test). Reiner _inbox/-Datei-Churn OHNE begleitende neue _inbox.md-Zeile und OHNE
+#     Review-Queue-Wachstum ist der einzige Weg zu info (s. inbox-watch.sh-Kopf Punkt 8) — bei
+#     Default-MIN_SEVERITY=mid wird ein info-Event gegatet, NICHT alarmiert (kein Alert-Aufruf).
+mkdir -p "$tmp/rho/_dev_team/standup"
+RH="$tmp/rho/_dev_team/standup"
+printf 'export TEAM_LEAD="Sable"\n' > "$tmp/rho/_dev_team/dev-team.env"   # report-only + Alert-Capture
+reg_add rho "$tmp/rho" "$RH"
+rho_capture="$tmp/rho-capture.log"
+cat > "$tmp/rho_alert.sh" <<SH
+#!/usr/bin/env bash
+printf 'ARGS %s|%s|%s|%s\n' "\$1" "\$2" "\$3" "\$4" >> "$rho_capture"
+SH
+chmod +x "$tmp/rho_alert.sh"
+printf 'export INBOX_WATCH_ALERT_CMD="%s"\n' "$tmp/rho_alert.sh" >> "$tmp/rho/_dev_team/dev-team.env"
+echo "x | @Sable | initial" > "$RH/_inbox.md"
+echo "$(now) | idle | start" > "$RH/Sable.log"
+: > "$rho_capture"
+run >/dev/null   # Baseline etablieren (erste Eskalation, Severity hier irrelevant)
+
+mkdir -p "$RH/_inbox"; echo "anhang" > "$RH/_inbox/datei.txt"   # reiner Datei-Drop, keine neue Zeile
+: > "$rho_capture"
+out="$(run)"
+t "(r) reiner _inbox/-Datei-Churn (keine neue Zeile, keine Queue) → severity=info" "1" \
+  "$(printf '%s\n' "$out" | grep -c '\] rho:.*unterhalb Mindest-Severity (info < mid)')"
+t "(r) info-Event zählt als unterhalb-Mindest-Severity, nicht als ESKALIERT" "0" \
+  "$(printf '%s\n' "$out" | grep -c '\] rho:.*ESKALIERT')"
+t "(r) kein Alert-Aufruf für ein gegatetes info-Event" "0" "$(wc -l < "$rho_capture" | tr -d ' ')"
+t "(r) Summary zählt exakt 1 unterhalb-Mindest-Severity in diesem Tick" "1" \
+  "$(printf '%s\n' "$out" | grep -cE '── inbox-watch:.*, 1 unterhalb-Mindest-Severity, ')"
+
 echo "inbox_watch_spec: $pass passed, $fail failed"
 [ "$fail" = 0 ]

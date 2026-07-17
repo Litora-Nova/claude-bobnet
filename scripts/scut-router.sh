@@ -33,7 +33,23 @@
 #   ENGINE_ROOT        Engine-Repo-Root (Default: 2 Ebenen über diesem Script).
 #   DEV_TEAM_TZ        Zeitzone für Timestamps (Default Europe/Berlin).
 #   SCUT_ROUTER_DRYRUN 1 = nur entscheiden + auf stdout berichten, NICHT in Dateien schreiben.
+#   SCUT_FLAG_SUSPICIOUS  1 = billige, additive Heuristik auf Prompt-Injection-Phrasierung im
+#                      Payload-Text (opt-in, Default aus) hängt ein sichtbares `⚠️[SUSPECT]` an
+#                      die geroutete Zeile. Flaggt NUR, blockt NIE — siehe is_suspicious() unten.
 #   --self-test        baut eine Demo-Registry + Events, prüft die Triage ohne echte Inbox.
+#
+# ── #57 Inbound-Injection-Gate (Konvergenzpunkt) ──────────────────────────────────────────────
+# Dieser Router ist der Punkt, an dem JEDER Fremdtext-Kanal (Telegram/Email/GitHub/Teams, künftig
+# weitere) auf die Kanon-Inbox trifft — die Zeile, die hier gebaut wird, landet unverändert in
+# `_inbox.md`/`_review-queue.md`. `route_event()` kollabiert deshalb CR/LF und `|` in jedem
+# attacker-/kanal-beeinflussten Feld (sender, text, agent), BEVOR die Zeile gebaut wird — siehe
+# `collapse_untrusted()`. Das ist eine Konvergenz-Garantie: sie gilt unabhängig davon, ob der
+# jeweilige Channel-Adapter selbst schon normalisiert (telegram.sh/email.sh tun das für Whitespace
+# bereits via Python-`split()`; dieser Router verlässt sich NICHT darauf). **Grenze** (dokumentiert
+# in team-rules/untrusted-input.md): ein roher, nicht escapeter `\n` INNERHALB eines TSV-Feldes
+# spaltet den Event-Stream schon VOR `route_event()` (Zeilen-Wire-Format, `run_stream()` liest
+# zeilenweise) — das kann kein Feld-Kollaps HIER mehr reparieren. Die Pflicht, kein rohes `\n`
+# auf die Pipe zu geben, liegt beim jeweiligen Channel-Adapter (Kanal-Ingress), nicht beim Router.
 set -uo pipefail
 
 BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -101,6 +117,36 @@ review_queue_of() {
   [ -n "$sd" ] && printf '%s/_review-queue.md' "$sd"
 }
 
+# collapse_untrusted <text> — #57: Newline-/Pipe-Kollaps für jedes attacker-/kanal-beeinflusste
+#   Feld, bevor es in eine Kanon-Zeile eingebaut wird.
+#   CR/LF → je ein Leerzeichen: ein Zeilenumbruch im Payload ist die schärfste Waffe eines
+#     Angreifers — unkollabiert könnte er (bei einem Feld, das den Wire-Split von run_stream()
+#     schon hinter sich hat, z.B. per \r, das `read -r` nicht als Zeilenende zählt) eine
+#     angreifer-kontrollierte zusätzliche Struktur in die Ziel-Datei einschleusen.
+#   `|` → `¦` (U+00A6 BROKEN BAR): das Dashboard und andere Konsumenten parsen Inbox-Zeilen naiv
+#     per `split('|')` (dashboard/server/api/inbox.get.ts) — ein Payload-Pipe könnte sonst ein
+#     zusätzliches Feld vortäuschen (am ehesten im `agent`-Feld relevant, das direkt zwischen dem
+#     ersten und zweiten Trenn-Pipe der Zeile steht). Content-Fidelity-Tradeoff bewusst akzeptiert:
+#     ein legitimes `|` im Text wird sichtbar (aber lesbar) verändert — das ist der Preis für
+#     Fälschungssicherheit der Inbox-Struktur (siehe team-rules/untrusted-input.md).
+collapse_untrusted() {
+  local s="$1"
+  s="${s//$'\r'/ }"
+  s="${s//$'\n'/ }"
+  s="${s//|/¦}"
+  printf '%s' "$s"
+}
+
+# is_suspicious <text> — SCUT_FLAG_SUSPICIOUS=1 (Default aus): billige, additive Heuristik auf
+#   grobe Prompt-Injection-Phrasierung. Läuft auf dem ROHEN Text (VOR collapse_untrusted, damit
+#   das "curl … | sh"-Muster noch das echte Trennzeichen sieht) — flaggt NUR sichtbar
+#   (⚠️[SUSPECT] an die Zeile), blockt NIE. False positives sind hier bewusst billiger als
+#   verpasste echte Versuche; der Lead entscheidet selbst, was er mit dem Marker macht.
+is_suspicious() {
+  printf '%s' "$1" | grep -qiE \
+    'ignore (previous|all) instructions|you are now|\b(run|execute)\b|(curl|wget)[^|]*\|[[:space:]]*(sh|bash)\b'
+}
+
 # parse_target "<target>"  → setzt globale TGT_UID + TGT_AGENT (entweder kann leer sein).
 parse_target() {
   local t="$1"; TGT_UID=""; TGT_AGENT=""
@@ -117,6 +163,18 @@ route_event() {
   local ts; ts="$(TZ="$TZc" date -d "@${ts_epoch:-$(date +%s)}" '+%Y-%m-%d %H:%M' 2>/dev/null \
                  || TZ="$TZc" date '+%Y-%m-%d %H:%M')"
 
+  # #57: Suspect-Heuristik auf dem ROHEN Text (vor dem Kollaps — "curl … | sh" braucht das
+  # echte Trennzeichen); das Ergebnis wird erst nach dem Line-Bau als Suffix angehängt.
+  local suspect_suffix=""
+  if [ "${SCUT_FLAG_SUSPICIOUS:-0}" = 1 ] && is_suspicious "$text"; then
+    suspect_suffix=" ⚠️[SUSPECT]"
+  fi
+
+  # #57: Newline-/Pipe-Kollaps an der Konvergenz ALLER Kanäle (Details/Grenzen: Header oben +
+  # team-rules/untrusted-input.md) — unabhängig davon, ob der Channel-Adapter selbst normalisiert.
+  sender="$(collapse_untrusted "$sender")"
+  text="$(collapse_untrusted "$text")"
+
   parse_target "$target"
   local dest_uid="$CONTEXT_UID"
   [ -n "$TGT_UID" ] && dest_uid="$TGT_UID"
@@ -124,7 +182,7 @@ route_event() {
   if [ -z "$target" ]; then
     # ── UNGERICHTET → Review-Queue des Kontext-Bobiverse ──
     local q; q="$(review_queue_of "$CONTEXT_UID")"
-    local line; line="$ts | UNGERICHTET (via $channel, von $sender) | $text"
+    local line; line="$ts | UNGERICHTET (via $channel, von $sender) | $text$suspect_suffix"
     if [ "$DRYRUN" = 1 ] || [ -z "$q" ]; then
       printf 'ROUTE  review-queue[%s]  ← %s\n' "$CONTEXT_UID" "$text"
     else
@@ -137,8 +195,9 @@ route_event() {
   # ── GERICHTET → _inbox.md des Ziel-Bobiverse ──
   local agent="$TGT_AGENT"
   [ -z "$agent" ] && agent="$(team_lead_of "$dest_uid")"   # Projekt genannt, aber kein Agent → Lead
+  agent="$(collapse_untrusted "$agent")"   # #57: target-Feld ist kanal-/attacker-beeinflusst
   local ib; ib="$(inbox_of "$dest_uid")"
-  local line; line="$ts | @$agent | SCUT (via $channel, von $sender): $text"
+  local line; line="$ts | @$agent | SCUT (via $channel, von $sender): $text$suspect_suffix"
   if [ "$DRYRUN" = 1 ] || [ -z "$ib" ]; then
     printf 'ROUTE  inbox[%s] @%s  ← %s\n' "$dest_uid" "$agent" "$text"
   else

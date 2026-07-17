@@ -6,6 +6,13 @@
 # oder `zellij` direkt. Welcher Multiplexer benutzt wird, entscheidet EINE
 # Stelle — die Env-Variable BOBNET_MUX.
 #
+# Kanon (PO-Entscheid 2026-07-17, #64): **tmux ist der Fleet-Default für headless Betrieb.**
+# zellij ist für INTERAKTIVE Nutzung weiter unterstützt, aber für headless (unattended Leads,
+# Boot/Nudge/Recycle-Zyklen) deprecatet — der Feld-Befund darunter ("Bekannte Backend-
+# Unterschiede") war Auslöser der gesamten 0.14.0-Watcher-Härtung (Draft-Flush, Heartbeat-
+# Verifikation, Re-Nudges, Eskalation), nicht ein Rand-Thema. Neue/rollende Installationen
+# sollten `BOBNET_MUX=tmux` explizit setzen statt sich auf `auto` zu verlassen.
+#
 # Nutzung (sourcen):
 #   . "$(dirname "$0")/lib/mux.sh"
 #   mux_spawn scut "STANDUP_DIR=~/standup scripts/scut-poll.sh"
@@ -17,8 +24,8 @@
 #   mux_kill scut
 #
 # Backend-Wahl (BOBNET_MUX):
-#   tmux   -> immer tmux
-#   zellij -> immer zellij
+#   tmux   -> immer tmux (Fleet-Default, s. Kanon oben)
+#   zellij -> immer zellij (interaktive Sessions — nicht für headless Leads)
 #   auto   -> (Default) tmux falls vorhanden (Rückwärtskompat), sonst zellij.
 #             So flippt eine Bestands-Installation NICHT von selbst; der
 #             Wechsel auf zellij ist eine bewusste Entscheidung (BOBNET_MUX=zellij,
