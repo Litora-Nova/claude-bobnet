@@ -62,6 +62,10 @@
           "enum": ["active", "paused", "archived"],
           "description": "Registry-Lifecycle des Projekts (statisch, im Gegensatz zur runtime-abgeleiteten Activity working/running/idle). active = wird gefuehrt; paused = pausiert; archived = abgeschlossen/Backup. Heute real genutzt: active."
         },
+        "surface": {
+          "enum": ["claude", "codex"],
+          "description": "Welche CLI/Runtime-Surface dieser Bob onboarded wurde (bin/onboard = 'claude', bin/onboard-codex = 'codex'). Optional; fehlt der Wert (klassisches bin/onboard schreibt ihn nicht), gilt 'claude' als impliziter Default. Additiv (Kanon-Drift-Fix 2026-07-17) — konsumiert u. a. von bin/upgrade zur Surface-Erkennung."
+        },
         "responsibility": {
           "type": "string",
           "description": "Aufgabengebiet/Revier in Prosa (FR#7 — abfragbar 'who owns X'). Menschlich/grob; maschinen-genaue Owner-Pfade stehen in `owns`."

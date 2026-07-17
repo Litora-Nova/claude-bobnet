@@ -6,9 +6,16 @@
 
 ## Matrix (Risiko → Gate → Autonomie)
 
-<!-- TIER:1 -->**T1 — Text / Copy / Brand / i18n.** Gate: Review-30s-Tick + CI grün. → `{TEAM_LEAD}` autonom bis Staging.
-<!-- TIER:2 -->**T2 — Feature (Frontend / Backend).** Gate: Review + Tests + Release-Pre-Flight, CI grün. → `{TEAM_LEAD}` autonom bis Staging.
-<!-- TIER:3 -->**T3 — Security / Migration / Dependencies / Egress.** Gate: voller Circle inkl. Compliance, CI grün. → `{TEAM_LEAD}` autonom bis Staging **nach GRÜN**.
+**Kanon-Drift-Fix (README-Sync 2026-07-17, HIGH #2):** diese Matrix widersprach bis hierher der
+Aktions-Tabelle unten — „autonom bis Staging" klang nach autonomer STAGING-AUSFÜHRUNG, während
+die Aktions-Tabelle für „Staging-Deploy (Ausführung)" explizit Erlaubnis pro Aktion verlangt
+(außer bei dokumentiertem PO-Opt-in, s. u.). Die Matrix folgt jetzt derselben, strengeren Regel:
+autonom gilt bis zum grünen Gate (Bau/Umsetzung), die Staging-AUSFÜHRUNG selbst ist separat
+geregelt (Push-&Deploy-Leitplanken unten).
+
+<!-- TIER:1 -->**T1 — Text / Copy / Brand / i18n.** Gate: Review-30s-Tick + CI grün. → `{TEAM_LEAD}` autonom bis zum grünen Gate; Staging-AUSFÜHRUNG folgt den Push-&Deploy-Leitplanken unten.
+<!-- TIER:2 -->**T2 — Feature (Frontend / Backend).** Gate: Review + Tests + Release-Pre-Flight, CI grün. → `{TEAM_LEAD}` autonom bis zum grünen Gate; Staging-AUSFÜHRUNG folgt den Push-&Deploy-Leitplanken unten.
+<!-- TIER:3 -->**T3 — Security / Migration / Dependencies / Egress.** Gate: voller Circle inkl. Compliance, CI grün. → `{TEAM_LEAD}` autonom NUR NACH vollem grünem Circle; Staging-AUSFÜHRUNG folgt den Push-&Deploy-Leitplanken unten.
 <!-- TIER:4 -->**T4 — Production / DNS / Secrets / force-push & History-Rewrite.** Gate: alles + ausdrückliches `{HUMAN}`-OK. → **NUR `{HUMAN}` (human-only, harte Grenze).**
 
 ## Push- & Deploy-Leitplanken (PO-Doktrin 2026-06-10)

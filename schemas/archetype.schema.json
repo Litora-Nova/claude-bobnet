@@ -7,6 +7,7 @@
   "required": ["archetype", "category", "ring", "positionShort"],
   "additionalProperties": false,
   "properties": {
+    "$schema": { "type": "string", "description": "IDE-Editor-Hinweis auf diese Schema-Datei (JSON-Schema-Konvention). Jedes archetypes/*.json trägt es; muss deklariert sein, sonst schlägt additionalProperties:false auf JEDER Datei fehl (Kanon-Drift, README-Sync 2026-07-17, LOW)." },
     "archetype": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$", "description": "Archetyp-Slug = Dateiname (techlead, backend, review, process-auditor …)." },
     "category": {
       "enum": ["bob", "service", "coworker", "helper", "human"],
@@ -47,7 +48,7 @@
     },
     "canSpawn": {
       "type": "array",
-      "items": { "enum": ["roamer", "sonde", "guppi", "mario"] },
+      "items": { "enum": ["roamer", "sonde", "guppi", "mario", "advisor"] },
       "description": "Welche Helfer-/Sub-Klassen dieser Archetyp spawnen darf."
     },
     "areaType": {

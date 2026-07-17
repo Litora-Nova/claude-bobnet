@@ -328,8 +328,8 @@ ROAMER and Sonde use `haiku`; Advisor is an intentionally expensive, read-only `
 | **Sonde** 🛰️ | read-only | Read-only scout: find, read, inventory, report (where is X used, find all Y, check state). **Manipulates nothing.** For actual changes, spawn a ROAMER instead. Returns a conclusion, not file-dumps. |
 | **Advisor** 🦉 | read-only | Strategic second opinion for architecture, costly decisions and hard bugs. Recommends with reasoning; implementation stays with the team. |
 
-The Advisor's mission says a lead invokes it on demand, but the shipped `techlead.canSpawn[]`
-currently omits `advisor`; treat that as a catalog/permission-contract gap, not implicit authority.
+The Advisor's mission says a lead invokes it on demand — `techlead.canSpawn[]` now includes
+`advisor`, matching that intent (canon-drift fix, previously a catalog/permission-contract gap).
 
 (The 🕷️/🛰️ icons are *helper-class dashboard badges*, not persona emoji — team-members are always
 shown as an image, never an emoji. See the avatar rule under [Theme](#-theme--what-a-role-is-called).)
@@ -405,10 +405,10 @@ cadence, not a chain of command:
 ### Circle of Trust — 4 risk tiers
 
 Where `ring` is org-chart, `gateTier` is **risk and autonomy**. Every agent carries one. The source
-policy is [`team-rules/tiers.md`](./team-rules/tiers.md), which currently contains an internal
-conflict: its short T1–T3 matrix says “autonomous to staging”, while its detailed action table
-requires human permission for each staging deployment unless the PO documented a project opt-in.
-The table below follows that stricter, action-specific rule; the source-policy conflict remains open.
+policy is [`team-rules/tiers.md`](./team-rules/tiers.md). Its short T1–T3 matrix used to say
+“autonomous to staging” while its detailed action table required human permission for each staging
+deployment unless the PO documented a project opt-in — that internal conflict is now fixed at the
+source: the matrix follows the same stricter, action-specific rule described below.
 
 | Tier | Required gate / control | Autonomy boundary |
 |---|---|---|

@@ -1,8 +1,8 @@
 # team-rules/deploy-guard.paths — BLOCK-Globs (deklarativ): Edit nie erlaubt ({HUMAN}-only, Tier-4).
 #
-# Der Hook hooks/deploy-guard.sh liest DIESE Datei statt hartkodierter Globs.
-# Wenn ein PreToolUse-Edit/Write/MultiEdit eine dieser Globs trifft, blockt der Hook
-# (Exit 2) und gibt einen Hinweis aus — Production/Secrets sind {HUMAN}-only (Tier-4).
+# Der Hook hooks/deploy-guard.sh liest DIESE (Engine-)Datei — IMMER, ohne Ausnahme (Kanon-Drift-
+# Fix #1, README-Sync 2026-07-17). Wenn ein PreToolUse-Edit/Write/MultiEdit eine dieser Globs
+# trifft, blockt der Hook (Exit 2) — Production/Secrets sind {HUMAN}-only (Tier-4).
 # Deploy-CONFIGS (config/deploy*, Capfile, configuration.yml) sind seit PO-Doktrin 2026-06-15
 # NICHT mehr BLOCK, sondern bestätigungspflichtig PRO Edit („ask") — der Bob editiert, der {HUMAN}
 # stimmt jedem Schritt zu. Siehe team-rules/deploy-guard.ask.paths + tiers.md.
@@ -13,12 +13,16 @@
 #   - Matching ist substring-/glob-basiert gegen den absoluten file_path (case-sensitive)
 #   - '*' matcht beliebige Zeichen (auch '/'), passend zu Pfad-Fragmenten
 #
-# Schutz erweitern = Zeile anhängen. KEIN Code-Edit nötig. Block schlägt Ask.
-# Wenn diese Datei fehlt, fällt der Hook auf eingebaute Defaults zurück (gleiche Liste).
+# Schutz erweitern (Engine-weit) = Zeile hier anhängen. KEIN Code-Edit nötig. Block schlägt Ask.
+# Ein PROJEKT erweitert separat über `_dev_team/team-rules/deploy-guard.paths` — das ist rein
+# ADDITIV (kann diese Liste nur ergänzen, NIE ersetzen/verdrängen; vorher konnte ein Projekt-
+# Override, der diese Datei komplett ersetzte, die "breiteren" Production-Infra-Globs unten
+# unbemerkt verlieren — nur die 5 Secret-Kern-Globs waren wirklich unbedingt).
+# Fehlt DIESE Engine-Datei ganz (kaputte/unvollständige Installation), greift `t4_floor()` im
+# Hook als letzte Instanz — identische Liste, hardcodiert statt aus einer Datei gelesen.
 #
-# 🔒 T4-FLOOR: Die Secret-Kern-Globs (*/.secrets/*, *master.key, */config/master.key,
-#   *credentials.yml.enc, *.env.production) sind ein NICHT-überschreibbarer Floor — der Hook
-#   merged sie IMMER dazu (Funktion t4_floor), auch wenn ein Override sie weglässt. Override darf nur ERWEITERN.
+# 🔒 T4-FLOOR: JEDE Glob unten (nicht nur die Secret-Kern-Globs) ist ein NICHT-überschreibbarer
+#   Floor — Projekt-Overrides ergänzen nur, sie können keine dieser Zeilen verdrängen.
 #   (PO-Doktrin 2026-06-15: Capfile + configuration.yml sind NICHT mehr BLOCK-Floor, sondern
 #   ASK-Floor — bestätigungspflichtig pro Edit, siehe deploy-guard.ask.paths.)
 

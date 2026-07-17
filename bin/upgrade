@@ -25,7 +25,19 @@ if ! "$ENGINE_ROOT/bin/check-compat" "$PROJECT_ROOT"; then
   echo "  → Schema-Skew: Re-Onboard NICHT ausgeführt. Migration nötig (siehe Meldung oben)." >&2; exit 5
 fi
 
-# 3) Idempotenter Re-Onboard (refresht Symlinks/Hook-Wrapper; agents/env/standup non-destruktiv)
+# 3) Surface erkennen (Kanon-Drift-Fix 2026-07-17): bin/onboard-codex legt .codex/ an, das
+#    klassische bin/onboard legt .claude/ an — dieselbe Marker-Logik, kein neuer Mechanismus.
+#    Default bleibt der klassische Onboarder (auch ohne jede Surface-Spur, z. B. Upgrade vor dem
+#    ersten Onboard) — ein rein codex-onboardetes Projekt (nur .codex/, kein .claude/) ruft NUR
+#    onboard-codex; ist ein Projekt an beiden Surfaces onboarded, refresht upgrade beide idempotent.
+run_classic=1
+[ -d "$PROJECT_ROOT/.codex" ] && [ ! -d "$PROJECT_ROOT/.claude" ] && run_classic=0
+
 echo "[Re-Onboard]"
-"$ENGINE_ROOT/bin/onboard" "$PROJECT_ROOT"
+if [ "$run_classic" = 1 ]; then
+  "$ENGINE_ROOT/bin/onboard" "$PROJECT_ROOT"
+fi
+if [ -d "$PROJECT_ROOT/.codex" ]; then
+  "$ENGINE_ROOT/bin/onboard-codex" "$PROJECT_ROOT"
+fi
 echo "✓ upgrade fertig."
