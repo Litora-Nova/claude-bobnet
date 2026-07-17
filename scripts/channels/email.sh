@@ -74,6 +74,22 @@
 #                       NUR, wenn Subject-Tag UND Plus-Adresse nicht gezogen haben.
 #   SCUT_MAIL_SENDERS_DEFAULT_AGENT   Agent für einen Treffer ohne explizites "@Agent" in der
 #                       Mapping-Zeile. Default: $TEAM_LEAD (aus dev-team.env), sonst "Bob".
+#   SCUT_MAIL_THREAD_MAP   In-Reply-To-Thread-Routing (Issue #54): jede Mail, die GERICHTET
+#                       geroutet wird (Subject-Tag, Plus-Adresse oder Senders-Map — gleich welcher
+#                       Mechanismus), hinterlässt ihre eigene Message-ID + das aufgelöste Ziel
+#                       ("[uid]"/"@Agent"/beides) in dieser Map-Datei (Format je Zeile
+#                       "<message-id><TAB><ziel>"). Eine EINGEHENDE Mail ohne eigenen Tag/Plus-
+#                       Treffer, deren In-Reply-To ODER References-Header eine dieser Message-IDs
+#                       referenziert, erbt automatisch dasselbe Ziel — auch ohne Senders-Map-
+#                       Eintrag. Priorität: Subject-Tag > Plus-Adresse > Thread-Map > Senders-Map
+#                       (eine laufende Antwortkette ist ein konkreteres Signal als ein statischer
+#                       Senders-Map-Default). Default: $SECRETS/mail-threads.map (Kanal-Infra-
+#                       State, KEINE Instanz-Daten wie SCUT_MAIL_SENDERS_FILE — lebt neben
+#                       email_offset, gleiches Default-Muster, standardmäßig AN). Datei fehlt/ist
+#                       leer -> einfach noch keine bekannten Threads (kein Fehler); Tests
+#                       isolieren sich ueber einen expliziten Tmp-Pfad, wie bei email_offset ueblich.
+#   SCUT_MAIL_THREAD_MAP_MAXLINES   Rotation: die Map behält nur die letzten N Zeilen (Default
+#                       500) — verhindert unbegrenztes Wachstum bei Dauerbetrieb.
 #   SCUT_MAIL_EML_DIR   TESTMODUS: statt IMAP alle *.eml in diesem Ordner parsen (sortiert,
 #                       kein Offset-Write) — macht Parsing/Triage ohne Server spec-bar.
 #   SCUT_MAIL_EML_OFFSET_TEST   TESTMODUS-Zusatz (nur mit SCUT_MAIL_EML_DIR): 1 = pro Datei
@@ -123,6 +139,10 @@ SENDERS_FILE="${SCUT_MAIL_SENDERS_FILE:-}"
 [ -z "$SENDERS_FILE" ] && [ -n "${PROJECT_ROOT:-}" ] \
   && SENDERS_FILE="$PROJECT_ROOT/_dev_team/team-rules/scut-mail.senders"
 SENDERS_DEFAULT_AGENT="${SCUT_MAIL_SENDERS_DEFAULT_AGENT:-${TEAM_LEAD:-Bob}}"
+
+# #54: In-Reply-To-Thread-Map — Kanal-Infra-State (wie email_offset), keine Instanz-Daten.
+THREAD_MAP="${SCUT_MAIL_THREAD_MAP:-$SECRETS/mail-threads.map}"
+THREAD_MAP_MAXLINES="${SCUT_MAIL_THREAD_MAP_MAXLINES:-500}"
 
 if [ -z "$EML_DIR" ] && { [ -z "$HOST" ] || [ -z "$USER_" ] || [ -z "$PASS" ]; }; then
   echo "email-channel: SCUT_MAIL_HOST/USER/PASS fehlen (Env oder $SECRETS/email_*)" >&2
@@ -187,6 +207,7 @@ poll_once() {
             MAIL_ATTACH_MAX_COUNT="${SCUT_MAIL_ATTACH_MAX_COUNT:-10}" \
             MAIL_ATTACH_MAX_TOTAL="${SCUT_MAIL_ATTACH_MAX_TOTAL:-52428800}" \
             MAIL_SENDERS_FILE="$SENDERS_FILE" MAIL_SENDERS_DEFAULT_AGENT="$SENDERS_DEFAULT_AGENT" \
+            MAIL_THREAD_MAP="$THREAD_MAP" MAIL_THREAD_MAP_MAXLINES="$THREAD_MAP_MAXLINES" \
             python3 - <<'PY'
 import email, email.header, email.utils, glob, imaplib, os, re, sys, time, unicodedata
 
@@ -337,6 +358,79 @@ def plus_tag(msg):
 SENDERS_FILE = os.environ.get("MAIL_SENDERS_FILE", "")
 SENDERS_DEFAULT_AGENT = os.environ.get("MAIL_SENDERS_DEFAULT_AGENT") or "Bob"
 
+MSGID_RE = re.compile(r"<[^<>]+>")
+
+def load_thread_map(path):
+    # #54: "<message-id><TAB><ziel>" pro Zeile; kaputte/fremde Zeilen (kein Tab) werden
+    # übersprungen statt den ganzen Poll zu crashen (Instanz-State, nicht vertrauenswürdiger
+    # als jede andere Datei, die von außen wachsen kann).
+    m = {}
+    if not path:
+        return m
+    try:
+        with open(path, encoding="utf-8") as fh:
+            for raw in fh:
+                s = raw.rstrip("\n")
+                if not s or "\t" not in s:
+                    continue
+                mid, _, tgt = s.partition("\t")
+                if mid and tgt:
+                    m[mid] = tgt
+    except OSError:
+        pass
+    return m
+
+THREAD_MAP_FILE = os.environ.get("MAIL_THREAD_MAP", "")
+THREAD_MAP_MAXLINES = int(os.environ.get("MAIL_THREAD_MAP_MAXLINES") or 500)
+THREAD_MAP = load_thread_map(THREAD_MAP_FILE)
+
+def thread_map_lookup(msg):
+    # #54: In-Reply-To zuerst (der direkte Elternteil), dann References rückwärts (jüngster
+    # zuerst) — beides sind laut RFC 2822 <message-id>-Listen. Erster Treffer in der Map gewinnt.
+    if not THREAD_MAP:
+        return ""
+    ids = MSGID_RE.findall(msg.get("In-Reply-To", "") or "")
+    ids += list(reversed(MSGID_RE.findall(msg.get("References", "") or "")))
+    for mid in ids:
+        tgt = THREAD_MAP.get(mid)
+        if tgt:
+            return tgt
+    return ""
+
+def thread_map_record(message_id, tag):
+    # Nur bei einer ECHTEN Message-ID sinnvoll (die synthetischen Fallback-Keys im EML-Testmodus
+    # ohne eigene Message-ID würden nie von einem In-Reply-To/References-Header referenziert).
+    if not THREAD_MAP_FILE or not message_id or not tag:
+        return
+    try:
+        d = os.path.dirname(THREAD_MAP_FILE)
+        if d:
+            os.makedirs(d, exist_ok=True)
+        lines = []
+        if os.path.exists(THREAD_MAP_FILE):
+            with open(THREAD_MAP_FILE, encoding="utf-8") as fh:
+                lines = fh.read().splitlines()
+        lines.append("%s\t%s" % (message_id, tag))
+        if len(lines) > THREAD_MAP_MAXLINES:
+            lines = lines[-THREAD_MAP_MAXLINES:]
+        with open(THREAD_MAP_FILE, "w", encoding="utf-8") as fh:
+            fh.write("\n".join(lines) + "\n")
+        THREAD_MAP[message_id] = tag  # im selben Poll-Lauf sofort sichtbar (Batch mit mehreren Mails)
+    except OSError as e:
+        print("email-channel: Thread-Map-Write fehlgeschlagen (%s) — Routing dieser Mail bleibt unberührt" % e,
+              file=sys.stderr)
+
+def extract_leading_tag(text):
+    # Führendes "[uid]" und/oder "@Agent" am Textanfang extrahieren (gleiche Grammatik wie
+    # emit_event() auf der Bash-Seite) — für die Thread-Map-Aufzeichnung brauchen wir das
+    # AUFGELÖSTE Ziel, unabhängig davon, ob es aus dem Subject kam oder hier injiziert wurde.
+    m = re.match(r"^\[[A-Za-z0-9_-]+\]", text)
+    uid_tag = m.group(0) if m else ""
+    rest = text[len(uid_tag):] if uid_tag else text
+    m2 = re.match(r"^@[A-Za-z0-9_-]+", rest)
+    agent_tag = m2.group(0) if m2 else ""
+    return uid_tag + agent_tag
+
 def known_sender_tag(addr):
     # #53: bekannte Absender-Adresse (Feld-Hauptfall: Kundenmail ohne [uid]@Agent-Tag) →
     # gerichtetes "@<Agent>" statt ungerichtet in die Review-Queue. NUR Fallback — line_for()
@@ -368,7 +462,8 @@ def line_for(key, msg, prefix):
     frm = dec_header(msg.get("From", "")) or "email"
     name, addr = email.utils.parseaddr(frm)
     sender = norm(name or addr or "email")
-    ext = norm(msg.get("Message-ID", "")) or key
+    own_mid = norm(msg.get("Message-ID", ""))   # #54: nur eine ECHTE Message-ID taugt als Thread-Anker
+    ext = own_mid or key
     try:
         ts = int(email.utils.parsedate_to_datetime(msg.get("Date", "")).timestamp())
     except Exception:
@@ -394,10 +489,16 @@ def line_for(key, msg, prefix):
             pfail = "1"
     elif atts:
         text += " [%d Anhang/Anhänge im Postfach]" % len(atts)
-    if not subject.startswith(("[", "@")):
-        tag = plus_tag(msg) or known_sender_tag(addr)
-        if tag:
-            text = tag + " " + text
+    if subject.startswith(("[", "@")):
+        final_tag = extract_leading_tag(subject)
+    else:
+        # #54: Plus-Adresse > Thread-Map (laufende Antwortkette) > Senders-Map (statischer
+        # Default) — eine erkannte Antwortkette ist ein konkreteres Signal als ein einmal
+        # hinterlegter Absender-Default, darf ihn also überstimmen.
+        final_tag = plus_tag(msg) or thread_map_lookup(msg) or known_sender_tag(addr)
+        if final_tag:
+            text = final_tag + " " + text
+    thread_map_record(own_mid, final_tag)
     row = [key, ext, str(ts), sender, pfail, text]
     print("\t".join(f.replace("\t", " ") for f in row))
 
