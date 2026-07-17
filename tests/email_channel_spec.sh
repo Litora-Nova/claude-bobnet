@@ -11,6 +11,11 @@ ok(){ local d="$1"; shift; if "$@" >/dev/null 2>&1; then pass=$((pass+1)); else 
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 ok "bash -n sauber" bash -n "$BIN"
 
+# #54: die Thread-Map defaultet auf $SECRETS/mail-threads.map (Kanal-Infra-State, immer AN,
+# wie email_offset) — OHNE expliziten Tmp-Pfad würde JEDE Zeile unten die echte .secrets/
+# des Engine-Repos beschreiben. Einmal hier exportieren, gilt für alle Aufrufe unten (Env-Vererbung).
+export SCUT_MAIL_THREAD_MAP="$tmp/mail-threads.map"
+
 # --demo: 2 wohlgeformte Events (6 TSV-Felder, channel=email)
 demo="$(bash "$BIN" --demo)"
 t "--demo: 2 Events" "2" "$(printf '%s\n' "$demo" | wc -l | tr -d ' ')"
@@ -410,6 +415,138 @@ t "Known-Sender Ende-zu-Ende: gerichtete Inbox-Zeile @Support, Kanon 'via email,
 t "Known-Sender Ende-zu-Ende: unbekannter Absender → Review-Queue (unverändert)" "1" \
   "$(grep -c 'UNGERICHTET (via email, von Unbekannt) | Andere Frage' "$ksreg/acme/_dev_team/standup/_review-queue.md")"
 
+# ── #54: In-Reply-To/References-Thread-Routing ─────────────────────────────────────────────
+# Trust boundary (delta-gate review, documented not fixed here — structural hardening is #57):
+# In-Reply-To/References are unauthenticated headers, so anyone who has seen a message-id can
+# ride along on its routing target; same trust class as SCUT_MAIL_SENDERS_FILE, no auto-exec.
+eml_tm="$tmp/eml_tm"; mkdir -p "$eml_tm"
+cat > "$eml_tm/01-original.eml" <<'EOF'
+From: Kunde Y <kunde-y@example.com>
+To: team+acme-bill@example.com
+Subject: Vertragsfrage
+Message-ID: <tm1@example.com>
+Date: Fri, 05 Jul 2026 10:00:00 +0200
+
+Erste Frage.
+EOF
+cat > "$eml_tm/02-reply-inreplyto.eml" <<'EOF'
+From: Kunde Y <kunde-y@example.com>
+To: team@example.com
+Subject: Re: Vertragsfrage
+Message-ID: <tm2@example.com>
+In-Reply-To: <tm1@example.com>
+Date: Fri, 05 Jul 2026 10:05:00 +0200
+
+Antwort ohne eigenen Tag, In-Reply-To zeigt auf tm1.
+EOF
+cat > "$eml_tm/03-reply-references-only.eml" <<'EOF'
+From: Kunde Y <kunde-y@example.com>
+To: team@example.com
+Subject: Re: Vertragsfrage
+Message-ID: <tm3@example.com>
+References: <tm0-unbekannt@example.com> <tm1@example.com>
+Date: Fri, 05 Jul 2026 10:06:00 +0200
+
+Antwort nur mit References (kein In-Reply-To), letzter Eintrag ist tm1.
+EOF
+cat > "$eml_tm/04-reply-own-plus-tag.eml" <<'EOF'
+From: Kunde Y <kunde-y@example.com>
+To: team+acme-cid@example.com
+Subject: Re: Vertragsfrage
+Message-ID: <tm4@example.com>
+In-Reply-To: <tm1@example.com>
+Date: Fri, 05 Jul 2026 10:07:00 +0200
+
+Antwort MIT eigener Plus-Adresse — darf die Thread-Map nicht ignorieren, aber die
+eigene Adresse hat Vorrang vor dem geerbten Ziel.
+EOF
+cat > "$eml_tm/05-unrelated.eml" <<'EOF'
+From: Anderer <anderer@example.com>
+To: team@example.com
+Subject: Voellig anderes Thema
+Message-ID: <tm5@example.com>
+Date: Fri, 05 Jul 2026 10:08:00 +0200
+
+Kein Bezug zu irgendeinem Thread.
+EOF
+
+tmap54="$tmp/mail-threads-54.map"
+tmout="$(SCUT_MAIL_EML_DIR="$eml_tm" SCUT_MAIL_THREAD_MAP="$tmap54" bash "$BIN")"
+tm1="$(printf '%s\n' "$tmout" | sed -n 1p)"; tm2="$(printf '%s\n' "$tmout" | sed -n 2p)"
+tm3="$(printf '%s\n' "$tmout" | sed -n 3p)"; tm4="$(printf '%s\n' "$tmout" | sed -n 4p)"
+tm5="$(printf '%s\n' "$tmout" | sed -n 5p)"
+
+t "#54 Original (Plus-Adresse): target [acme]@Bill" "[acme]@Bill" "$(printf '%s' "$tm1" | cut -f5)"
+t "#54 In-Reply-To-Treffer: Reply ohne Tag erbt [acme]@Bill" "[acme]@Bill" "$(printf '%s' "$tm2" | cut -f5)"
+t "#54 References-only-Treffer: Reply ohne Tag erbt [acme]@Bill" "[acme]@Bill" "$(printf '%s' "$tm3" | cut -f5)"
+t "#54 eigene Plus-Adresse hat Vorrang vor geerbtem Thread-Ziel" "[acme]@Cid" "$(printf '%s' "$tm4" | cut -f5)"
+t "#54 kein Thread-Treffer, keine andere Adressierung → ungerichtet" "" "$(printf '%s' "$tm5" | cut -f5)"
+
+ok "#54 Map-Datei enthält tm1 → [acme]@Bill" grep -qF "$(printf '<tm1@example.com>\t[acme]@Bill')" "$tmap54"
+ok "#54 Map-Datei aktualisiert tm4 auf die EIGENE Adresse, nicht das geerbte Ziel" \
+  grep -qF "$(printf '<tm4@example.com>\t[acme]@Cid')" "$tmap54"
+
+# Thread-Map schlägt Senders-Map (konkreteres Signal als ein statischer Default) —
+# derselbe Absender ist im Senders-File auf @Support gemappt, antwortet aber auf einen Thread,
+# der laut Map an @Bill hing.
+eml_tm2="$tmp/eml_tm2"; mkdir -p "$eml_tm2"
+cp "$eml_tm/01-original.eml" "$eml_tm2/01.eml"
+cat > "$eml_tm2/02-reply-known-sender.eml" <<'EOF'
+From: Kunde Y <kunde-y@example.com>
+To: team@example.com
+Subject: Re: Vertragsfrage
+Message-ID: <tm2b@example.com>
+In-Reply-To: <tm1@example.com>
+Date: Fri, 05 Jul 2026 10:09:00 +0200
+
+Kunde Y ist im Senders-File auf @Support gemappt, der Thread zeigt aber auf @Bill.
+EOF
+senders_prio="$tmp/senders-prio.senders"
+printf 'kunde-y@example.com @Support\n' > "$senders_prio"
+tmap54b="$tmp/mail-threads-54b.map"
+tmprio="$(SCUT_MAIL_EML_DIR="$eml_tm2" SCUT_MAIL_THREAD_MAP="$tmap54b" SCUT_MAIL_SENDERS_FILE="$senders_prio" bash "$BIN")"
+t "#54 Thread-Map schlägt Senders-Map (Priorität)" "[acme]@Bill" \
+  "$(printf '%s\n' "$tmprio" | sed -n 2p | cut -f5)"
+
+# Rotation: nur die letzten N Zeilen bleiben erhalten (kein unbegrenztes Wachstum, Dauerbetrieb).
+rot_map="$tmp/mail-threads-rot.map"
+python3 -c "
+with open('$rot_map', 'w') as f:
+    for i in range(10):
+        f.write('<old%d@example.com>\tsomething\n' % i)
+"
+eml_rot="$tmp/eml_rot"; mkdir -p "$eml_rot"
+cat > "$eml_rot/01.eml" <<'EOF'
+From: X <x@example.com>
+To: team+acme-zed@example.com
+Subject: Neu
+Message-ID: <rotnew@example.com>
+Date: Fri, 05 Jul 2026 10:10:00 +0200
+
+Text.
+EOF
+SCUT_MAIL_EML_DIR="$eml_rot" SCUT_MAIL_THREAD_MAP="$rot_map" SCUT_MAIL_THREAD_MAP_MAXLINES=5 bash "$BIN" >/dev/null
+t "#54 Rotation: Map bleibt auf MAXLINES gedeckelt" "5" "$(wc -l < "$rot_map" | tr -d ' ')"
+ok "#54 Rotation: neuester Eintrag ist da" grep -qF "$(printf '<rotnew@example.com>\t[acme]@Zed')" "$rot_map"
+ok "#54 Rotation: älteste Einträge sind raus (old0 rotiert)" bash -c "! grep -qF 'old0@example.com' '$rot_map'"
+
+# Ende-zu-Ende über den Router: eine geerbte Thread-Adressierung landet in der richtigen
+# Projekt-Inbox mit dem Kanon-Zeilenformat, exakt wie ein direkt getaggtes Reply.
+tmreg="$tmp/tm-reg"; mkdir -p "$tmreg/acme/_dev_team/standup"
+cat > "$tmreg/registry.json" <<JSON
+{ "version":1, "projects":[
+  {"uid":"acme","name":"acme","path":"$tmreg/acme","standup":"$tmreg/acme/_dev_team/standup","status":"active"}
+]}
+JSON
+tmap54e2e="$tmp/mail-threads-54-e2e.map"
+SCUT_MAIL_EML_DIR="$eml_tm" SCUT_MAIL_THREAD_MAP="$tmap54e2e" bash "$BIN" \
+  | DEV_TEAM_REGISTRY="$tmreg/registry.json" CONTEXT_UID="acme" bash "$ROUTER" >/dev/null 2>&1
+t "#54 Ende-zu-Ende: BEIDE Thread-Antworten (In-Reply-To + References) landen @Bill" "2" \
+  "$(grep -c '@Bill | SCUT (via email, von Kunde Y): Re: Vertragsfrage' "$tmreg/acme/_dev_team/standup/_inbox.md")"
+t "#54 Ende-zu-Ende: In-Reply-To-Variante mit korrektem Digest" "1" \
+  "$(grep -c 'In-Reply-To zeigt auf tm1' "$tmreg/acme/_dev_team/standup/_inbox.md")"
+t "#54 Ende-zu-Ende: References-only-Variante mit korrektem Digest" "1" \
+  "$(grep -c 'References (kein In-Reply-To)' "$tmreg/acme/_dev_team/standup/_inbox.md")"
 
 # Default (ohne ATTACH_DIR) bleibt v1: nur zählen — Regression siehe Checks oben (Zeile 4)
 

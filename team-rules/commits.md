@@ -95,6 +95,14 @@ Projekt-Wrapper-Hook, der bei SessionStart `eval "$(scripts/git-identity.sh expo
 Die scharfe settings.json-Verdrahtung ({HUMAN}-OK) bleibt **Stufe C** — onboard schreibt nur den
 Wrapper, hängt ihn NICHT selbst in settings.json.
 
+## Sprache (PO 2026-07-17)
+
+**Alles Öffentliche ist Englisch:** Commit-Messages, Issues, PRs und Release-Notes — alles, was
+in public Repos oder öffentlichen Trackern landet — wird auf Englisch verfasst, unabhängig von
+der Team-Sprache. Interne Artefakte (Inbox, Heartbeats, Audits, Continuity-/Standup-Notizen,
+private Repos) bleiben in der Team-Sprache. (Passend dazu nutzt die `positionLabel`-i18n-Auflösung
+oben bereits die `en`-Variante.)
+
 ## Harte Regeln
 
 - **Daten vor Code:** Name/Rolle/Display/Email kommen aus `theme.json`/`dev-team.env`, NIE aus dem
