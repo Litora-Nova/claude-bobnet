@@ -4,6 +4,34 @@ All notable engine changes are documented here. Versioning follows SemVer (`VERS
 human-facing); machine compatibility is anchored separately by `SCHEMA_VERSION` (integer) —
 see `.claude/rules/contract.md`. `skills/update-bobs` points teams here after an update.
 
+## [0.18.1] — 2026-07-17
+
+Canon-drift fixes: the 9 code/canon contradictions surfaced by the README sync (built by Bob One / GPT) resolved, gated by the Claude team.
+
+### Security
+- **deploy-guard: the production-infra block list is now a real, unconditional floor**
+  (`hooks/deploy-guard.sh`). Previously a project override could *replace* the engine
+  block/ask lists (only the 5 credential-secret globs were truly immutable); a project
+  BLOCK-list override could thus drop broader engine defaults for production
+  infrastructure / shared deploy recipes. Now the engine list is always loaded as the
+  floor and project overrides only *add* to it (additive, never replacing). `tiers.md`
+  wording reconciled with the enforced behavior.
+
+### Fixed
+- `bin/onboard-codex` writes registry property `surface`, which `registry.schema.json`
+  rejected as an additional property — schema now allows it (additive-optional, no
+  SCHEMA_VERSION bump; existing registries stay valid).
+- `bin/upgrade` is now Codex-surface-aware (routes to `bin/onboard-codex` instead of
+  always calling classic `bin/onboard`).
+- Lead archetype `canSpawn[]` now includes `advisor` (the on-demand advisor was
+  specified but not spawnable — permission-contract gap closed).
+- `.codex-plugin/plugin.json` version drift (`0.13.0` → current) + schema/data
+  description mismatches (`theme.schema` defaultAvatar, `schemas/README`) aligned to
+  the enforceable behavior.
+- `tiers.md` / `circle-of-trust.md` staging wording: the short summaries promised
+  autonomy while the detailed action policy requires per-action human permission —
+  the stricter action rule is now the single source of truth.
+
 ## [0.18.0] — 2026-07-17
 
 Both features built by **Bob One** (Codex/GPT runtime, cross-model pilot #61); gated by the Claude team.
