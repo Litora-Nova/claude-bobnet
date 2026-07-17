@@ -5,14 +5,16 @@
 Spin up a whole team of background agents for any project: one **Team-Lead** in your main
 window orchestrates, reviews and merges; specialist agents own bounded slices of the repo and
 report back. The structure (roles, gates, comms, process) lives in a **shared engine** so every
-project — and every machine — inherits the same battle-tested setup. An engine update reaches
-every team at once.
+project — and every machine — can inherit the same battle-tested setup. Symlinked skills follow an
+upgraded engine checkout; re-onboarding refreshes generated rules and wrappers, while copied
+instance state remains local.
 
-> ⚠️ **Work in progress.** The engine (3-layer architecture, Circle-of-Trust, `init-bobs`,
-> install/upgrade, SCUT comms, Colonel/GUPPI governance, BobNet dashboard) is built and in daily
-> use — but young and evolving fast. **Expect rough edges, gaps, and breaking changes.** Default
-> release theme is `minimal`; the in-house `bobiverse` flavor is a Dennis-E.-Taylor homage
-> (see [Homage](#homage--origin)).
+> ⚠️ **Work in progress.** The core engine (3-layer architecture, Circle-of-Trust, `init-bobs`,
+> Claude Code and Codex onboarding, SCUT comms, Colonel/GUPPI checks, recycle tooling and BobNet
+> dashboard) is built and in daily use — but young and evolving fast. **Expect rough edges, gaps,
+> and breaking changes.** Public release policy intends `minimal` as the neutral default; current
+> onboarding and dashboard fallbacks still select `bobiverse` pending alignment (see
+> [Homage](#homage--origin)).
 
 This README is meant to be read front-to-back by a newcomer. The three deep sections —
 [Layers](#1-layers--the-three-schichten), [Bobs](#2-bobs--the-whole-cast) and
@@ -25,20 +27,20 @@ real JSON, real rules and worked-through walk-throughs. Examples use the placeho
 ## The concept: a Bobiverse (3 levels)
 
 ```
-Bobiverse        the whole installation (root is configurable, stored in ~/.claude/bobiverse.json)
+Bobiverse        the whole installation (root stored in the active surface's Bobiverse config)
 │
 ├─ BobNet        Singleton · OPTIONAL · the render-hub / dashboard for ALL your teams (one instance)
-├─ Colonel       Singleton · the discipline watcher (processes / sync / lead-orchestrates)
+├─ Colonel       Singleton · the discipline watcher (availability / processes / sync / lead heuristics)
 │
 └─ Project-Bobiverse  (per repo)  →  Bob#1 (Team-Lead) + SCUT + GUPPI + team agents + helpers
 ```
 
 - **Bob#1** — the main window. Spawns and manages the team, owns the integration merge.
 - **SCUT** — the comms layer (human ↔ BobNet ↔ services like Telegram). One per project.
-- **GUPPI** — the per-project helper service: watches processes/schedules, routes incoming
-  messages, checks whether a BobNet has appeared yet.
-- **Helpers** (per agent, not team-members — dashboard icon only): **ROAMER** (simple edits),
-  **Sonde** (read-only searches), **Jeeves** (one per agent, the more-capable executor).
+- **GUPPI** — the per-project helper service: inventories processes/schedules, forwards normalized
+  SCUT input and checks or self-registers the project when a BobNet appears.
+- **Helpers** (ephemeral, not team-members): **ROAMER** (bounded edits), **Sonde** (read-only
+  reconnaissance) and **Advisor** (read-only strategic second opinion on the `fable` model).
 
 A **Project-Bobiverse runs fine without a BobNet** (SCUT for comms + GUPPI for process-watch are
 enough). The dashboard is optional but strongly recommended — it is the single biggest reason the
@@ -50,9 +52,11 @@ The setup ran **great on one machine and miserably on another** — not because 
 because the *structures* (Circle-of-Trust, the 4-tier gates, the processes) were not shared. They
 lived in one project's local files instead of in a reusable engine.
 
-The fix: **bake the functionality into the engine, have each project merely reference it.** Gates
-are pulled fresh at init; an engine update propagates to everyone. The target — and the design
-constraint — is **a full team standing up in under two hours on any system.**
+The fix: **bake the functionality into the engine and keep project state thin.** Projects link the
+engine-owned skills; onboarding materializes or generates the surface-specific pieces it needs.
+Upgrading the checkout plus re-onboarding refreshes those links, rules and wrappers while leaving
+copied agents and instance state untouched. The target — and the design constraint — is **a full
+team standing up in under two hours on any system.**
 
 ---
 
@@ -65,8 +69,8 @@ repo** (state). Three layers, one stable key — the archetype `id` — threadin
 | Layer | What it holds | Where it lives | Visibility |
 |---|---|---|---|
 | **① Archetype** | *What* a role does — universal, versioned, theme-independent. No name, no avatar, no bio. | `archetypes/*.json` | this engine (public) |
-| **② Theme** | The flavor: name, avatar, bio, i18n position labels — keyed by the stable archetype `id`. | `themes/<id>/theme.json` | engine ships `minimal` / `formal`; private flavors live in your BobNet instance |
-| **③ Instance** | One concrete team in one repo: agents, standup logs, `dev-team.env`, memories. | `<project>/_dev_team/` | per project |
+| **② Theme** | The flavor: name, avatar, bio, i18n position labels — keyed by the stable archetype `id`. | `themes/<id>/theme.json` | engine ships `minimal`, `formal` and `bobiverse`; current code falls back to `bobiverse`, while release policy intends `minimal` |
+| **③ Instance** | One concrete team in one repo: config, standup logs, memories and overrides. | `<project>/_dev_team/` | per project |
 
 ### ① Archetype — *what a role does*
 
@@ -83,8 +87,9 @@ An archetype is a small JSON document validated against `schemas/archetype.schem
   "gateTier": "2-3",
   "positionShort": "Backend",
   "positionLong": "Backend / JSON-API",
-  "modelTier": "Cruiser",
+  "modelTier": "HEAVEN",
   "model": "sonnet",
+  "effort": "xhigh",
   "tags": ["backend", "dev", "db", "api"],
   "defaultTools": "all",
   "canSpawn": ["roamer", "sonde"],
@@ -105,8 +110,9 @@ Every field, explained:
 | `ring` | Proximity to the sprint loop — `core` / `inner` / `gate` / `outer` / `on-demand` / `shared`. Org-chart, not authority (see [Circle of Trust](#circle-of-trust--rings)). |
 | `gateTier` | The Circle-of-Trust risk band this role is licensed to work in (`"1"`, `"2-3"`, `"2-4"`, …). The number that governs autonomy. See [tier system](#circle-of-trust--4-risk-tiers). |
 | `tags[]` | Area/duty markers. Shared instructions live **once per tag** in `team-rules/tags/<tag>.md` — no per-agent duplication. The `dev` tag, for instance, pulls in TDD + commenting duties. |
-| `model` | The concrete provider model (machine-resolution of `modelTier`): `opus` / `sonnet` / `haiku`. |
-| `modelTier` | The human-readable model band: **HEAVEN** → `opus`, **Cruiser** → `sonnet`, **Probe** → `haiku`. |
+| `model` | The concrete provider model: normally `opus` / `sonnet` / `haiku`; `fable` is the explicit Mythos-class Advisor exception, not a tier fallback. |
+| `modelTier` | The human-readable model band: **HEAVEN** → `opus`, **Cruiser** → `sonnet`, **Probe** → `haiku` unless an archetype explicitly selects another model. |
+| `effort` | Provider reasoning band (`low` / `medium` / `high` / `xhigh` / `max`), resolved separately from the concrete model. |
 | `defaultTools` | `"all"` for builders/reviewers; a restricted list for helpers (a Sonde gets read-only tools). |
 | `canSpawn[]` | Which helper/HiWi classes this role may spawn. Only the Team-Lead may spawn the HiWi + GUPPI. |
 | `areaType` | `repo-bound` (owns one app dir), `cross-cutting` (spans repos), `shared` (cross-project service), `on-demand`, `external`. |
@@ -128,11 +134,11 @@ The engine ships three flavors:
 
 | Theme | Character |
 |---|---|
-| `minimal` | Neutral role labels, all on the default avatar. **The release default** — what a fresh install gets. |
+| `minimal` | Neutral role labels, all on the default avatar. **Intended public release default; select explicitly until the executable fallbacks are aligned.** |
 | `formal` | Buttoned-up corporate labels. |
-| `bobiverse` | The Dennis-E.-Taylor homage — each member a lore replicant. The private in-house flavor. |
+| `bobiverse` | The Dennis-E.-Taylor homage — each member a lore replicant. **Current onboarding/dashboard fallback.** |
 
-Same archetype `id`, two flavors. From `themes/minimal/theme.json`:
+Same archetype `id`, different flavors. From `themes/minimal/theme.json`:
 
 ```json
 "BOB-backend": { "name": "Backend" }
@@ -154,11 +160,11 @@ model. **What the theme changes:** display name, avatar image, position label (i
 bio. **What it can never change:** anything structural. A theme has no `gateTier`, no `tags`, no
 `duties`. That separation is what makes a theme swap a cosmetic, zero-risk operation.
 
-A theme also carries a few engine-enforced settings:
+A theme also carries display settings and fallbacks:
 
-- **`defaultAvatar`** — every theme **must** ship one (`themes/<id>/avatars/default.png`). A persona
-  with no avatar falls back to it. (Team-members are **always** shown as an image, **never** an
-  emoji — a hard rule; if you want emoji faces, build your own theme.)
+- **`defaultAvatar`** — bundled themes provide one under `themes/<id>/avatars/`. If the field is
+  absent, runtime uses `default.png`; if the theme image still cannot be served, the dashboard
+  falls back to its static default image. Team-members are shown as an image, never an emoji.
 - **`settings.showAvatars`** — image on/off; when off, the name shows (never an emoji).
 - **`leadTitle`** + per-persona **`positionLabel`** are i18n `{de,en}` objects.
 
@@ -169,11 +175,14 @@ The instance is the only **stateful, per-project** layer. It lives under `<proje
 ```
 <project>/_dev_team/
 ├─ dev-team.env        the instance config — PROJECT_UID (immutable), display name, theme, paths
-├─ agents/             the spawned agents, materialized from the archetypes at onboard time
 ├─ standup/            heartbeat logs (one file per agent) + _inbox.md + qa/
-├─ memories/           project memory, symlinked to the engine where shared
+├─ memories/           project-local memory; the Claude memory index may link here
 └─ team-rules/         OPTIONAL project overrides (win over engine defaults — except the T4 floor)
 ```
+
+Surface files live beside that state: classic onboarding copy-once materializes archetypes under
+`.claude/agents/`, while Codex onboarding generates `.codex/agents/*.toml`; neither is an
+`_dev_team/agents/` directory.
 
 The instance config (`dev-team.env`, abbreviated from `scripts/dev-team.env.example`):
 
@@ -199,22 +208,24 @@ Rules resolve through a strict precedence:
 project _dev_team/team-rules/   >   BobNet house-rules   >   engine defaults
 ```
 
-The most-local file wins. A worked example — a project that wants to **tighten** the staging
-autonomy for migrations:
+The most-local file wins. A worked example — a project that wants to **tighten** the migration
+gate beyond the engine default:
 
-1. **Engine default** (`team-rules/tiers.md`): *T3 — Security / Migration / Dependencies. Gate:
-   full circle incl. Compliance, CI green. → Team-Lead autonomous up to staging after green.*
-2. The Acme team is mid-audit and wants migrations to also require an explicit human nod, even on
-   staging. They drop a file at `acme/_dev_team/team-rules/tiers.md` that re-states T3 with the
-   added clause *"…and a human ack in `#migrations` before merge."*
-3. At init / on every read, the resolver picks the project file for T3 because it is more local.
-   T1, T2 still come from the engine (no project file overriding them).
+1. **Engine default** (`team-rules/tiers.md`): T3 work needs the full circle including Compliance
+   and green project gates. A staging **deploy** still needs explicit human permission per action
+   unless the PO has documented a project-local autonomous-staging opt-in.
+2. The Acme team is mid-audit and wants migrations to require an additional human nod before
+   merge. They copy the complete tier file to `acme/_dev_team/team-rules/tiers.md`, preserve T1/T2
+   and T4, and add that stricter clause to T3.
+3. When the tier resolver runs with that project root, it picks the project file because it is more
+   local. T1 and T2 still come from that complete project override if restated there; overrides are
+   whole-file precedence, not a per-tier merge.
 4. **But:** the project file may only *widen* protection. It **cannot** weaken **T4** — see the
    non-overridable floor in [Structures](#circle-of-trust--4-risk-tiers). A project file that tried
-   to delete a T4 core glob is ignored for that glob; the engine merges it back in.
+   to delete an immutable guard-floor glob is ignored for that glob; the hook merges it back in.
 
-The same pattern applies to `heartbeat.md`, `commits.md`, `sync.md`: engine ships a default,
-project may override, T4 is the one thing nobody can override.
+The same whole-file precedence applies to `heartbeat.md`, `commits.md` and `sync.md`. T4 policy
+remains non-overridable; the guard machine-enforces the specific hard floors described below.
 
 ### Role resolution — how a JSON becomes a running agent
 
@@ -226,8 +237,9 @@ the `acme` project on the `bobiverse` theme:
 2. **Resolve the persona.** Take the archetype's `idPattern` (`BOB-backend`), look it up in the
    active theme (`themes/bobiverse/theme.json`) → name `Bill`, avatar `Bill.png`, label
    `Backend + Infra`.
-3. **Resolve the model.** `modelTier: Cruiser` → `model: sonnet`. (Instance/theme may override for
-   cost/quality tuning — that is a PO call.)
+3. **Resolve the model.** This archetype selects `model: sonnet` + `effort: xhigh` explicitly even
+   though its broad band is `modelTier: HEAVEN`; explicit archetype data wins the tier fallback.
+   Instance overrides remain a PO cost/quality decision.
 4. **Resolve the duties.** Load the archetype `duties[]`, then expand each tag in `tags[]`
    (`backend`, `dev`, `db`, `api`) by reading `team-rules/tags/<tag>.md`. The `dev` tag, for
    example, injects the TDD + commenting obligations — once, shared, not copy-pasted per agent.
@@ -248,11 +260,11 @@ to one repo, knowing exactly how far autonomy reaches.
 
 ### What "a Bob" is
 
-In this engine, **a "Bob" is any spawned, interacting instance** — a full team member with a
-persona, a revier, a tier and a heartbeat. The word is a flavor label (the `bobiverse` homage), not
-a literal name requirement; on the `minimal` theme the same instance is just "Backend." What makes
-something *a Bob* is that it participates in the loop: it heartbeats, reads the inbox, owns work,
-delivers branches.
+In this engine, **a "Bob" is a spawned full team-member instance** with a persona, a revier, a tier
+and a heartbeat. The word is a flavor label (the `bobiverse` homage), not a literal name
+requirement; on the `minimal` theme the same instance is just "Backend." A Bob participates in the
+roster loop: it heartbeats, reads the inbox, owns work and delivers findings or branches. Spawned
+helpers remain sub-units, not Bobs.
 
 **Bob#1 is special.** It is the **Team-Lead in your main window** — the one instance that
 orchestrates, plans sprints, triggers the QM gates, talks human-to-human with the PO, and owns the
@@ -262,53 +274,62 @@ counted against the team-size cap (it is your window, always there).
 Three things that are **not** Bobs (full team-members) but show up around the team:
 
 - **Services** — daemons that serve the team(s): SCUT, GUPPI, Colonel. Own session, no revier.
-- **Helpers** — ephemeral sub-units a Bob spawns for a slice of work: ROAMER, Sonde, Jeeves. No
+- **Helpers** — ephemeral sub-units a Bob spawns for a slice of work: ROAMER, Sonde or Advisor. No
   roster entry; they appear only as a badge on their parent.
 - **External coworkers + the human** — human-driven participants (a designer, a shared-layer
   maintainer, the PO). They contribute, but the engine does not spawn them.
 
-### The full role palette
+### The shipped archetype catalog
 
-Every role is a JSON file in `archetypes/`. Below is the complete cast (the bobiverse-theme persona
-names are shown only as an example of the flavor layer — on `minimal` they are neutral labels).
+Every role is a JSON file in `archetypes/`; [`archetypes/README.md`](./archetypes/README.md) is the
+compact catalog. The current spawned team-role archetypes are below. Bobiverse persona names are
+theme examples only; `—` means that theme has no dedicated persona binding for the role.
 
 | Role (archetype) | Owns | Ring | Tier | Tags | Model | Bobiverse persona |
 |---|---|---|---|---|---|---|
 | **techlead** | Orchestration: sprint planning, gate triggering, the integration merge, human-facing comms. Sole orchestration authority. | core | 1–3 | `docs` | opus (HEAVEN) | Bob |
-| **backend** | Backend app dir: models, auth, FSM, migrations, seeds, API, compliance endpoints. Delivers contracts to frontend. | inner | 2–3 | `backend, dev, db, api` | sonnet | Bill |
-| **frontend** | App frontend (SPA): components, pages, composables, API clients, i18n. Consumes the backend contracts. | inner | 1–2 | `frontend, js, dev, i18n` | sonnet | Luke |
-| **website** | Public marketing sites: content, SEO, OG, i18n. No CMS, no tracking. | inner | 1–2 | `website, js, dev, i18n, seo` | sonnet | Linus |
+| **backend** | Backend models, auth, migrations, APIs and contracts. | inner | 2–3 | `backend, dev, db, api` | sonnet (HEAVEN) | Bill |
+| **frontend** | App components, pages, clients and i18n. | inner | 1–2 | `frontend, js, dev, i18n` | sonnet (HEAVEN) | Luke |
+| **website** | Public sites, content delivery, SEO/OG and i18n. | inner | 1–2 | `website, js, dev, i18n, seo` | sonnet (HEAVEN) | Linus |
+| **design** | Component-first product and interface design. | inner | 1–2 | `design` | opus (HEAVEN) | — |
 | **review** | Code-review before every merge: house-rules, correctness, i18n parity, URL↔locale, dead-link check, SEO basics. 30s mini-tick even on hotfixes. | gate | 1–3 | `review` | sonnet | Riker |
-| **compliance** | New deps / lockfile touches / egress / PII / tokens-in-logs / asset provenance / data-minimization. Every lockfile touch auto-pings this role. | gate | 3 | `compliance` | sonnet | Dexter |
-| **tests** | Test coverage: unit + E2E, CI coverage floor, title-specs per page in both locales, composable unit tests. Pings *before* merge on missing specs. | gate | 2–3 | `tests` | sonnet | Marvin |
+| **compliance** | Dependencies, egress, privacy, provenance and data minimization. | gate | 3 | `compliance` | sonnet (HEAVEN) | Dexter |
+| **tests** | Unit/E2E coverage, project CI expectations and regression specs. | gate | 2–3 | `tests` | sonnet | Marvin |
 | **release** | Pre-flight (build dry-run, asset-size, migration dry-run, visual-verify in both locales) + the deploy to staging. **Sole deploy owner.** | gate | 2–4 | `release` | sonnet | Bender |
-| **dashboard** | The live stand-up dashboard (BobNet): roster, heartbeats, tasks, roadmap, badges. Cross-project service, own cadence. | outer | 1–2 | `dashboard, js, dev` | sonnet | Garfield |
+| **dashboard** | The BobNet roster, heartbeats, tasks, roadmap and badges. | outer | 1–2 | `dashboard, js, dev` | sonnet (HEAVEN) | Garfield |
 | **docs** | Periodic reports + tech docs + doc-drift detection. Keeps documentation current to the code. | outer | 1 | `docs` | sonnet | Homer |
 | **content** | Lesson/product content, both locales, showcase, question payloads without solution-leaks. A specialist, not part of the builder loop. | outer | 1 | `content, i18n, dev` | sonnet | Bridget |
-| **support** | First contact for real users: triage, reproduce, escalate to the right role, draft replies. Activates from first real users. | outer | 1 | `docs` | sonnet | Howard |
-| **marketing** | Campaigns, messaging, landing content, SEO/OG strategy, naming proposals. Own cadence. | outer | 1 | `content, i18n, seo` | sonnet | (planned) |
-| **hiwi** | Executes a Team-Lead-handed `PLAN_*.md` **strictly**, no improvisation. For cases where plan-drift would be expensive (layer/layout/deploy/stack-critical). Drift = STOP. | on-demand | 1–3 | `dev` | sonnet | Mario |
+| **explainer** | Read-only explanations of setup, dependencies and runtime behavior from real code. | outer | 1 | `docs` | sonnet | Howard |
+| **support** | User triage, reproduction, escalation and reply drafting. | outer | 1 | `docs` | sonnet | — |
+| **marketing** | Campaigns, messaging, landing content and SEO/OG strategy. | outer | 1 | `content, i18n, seo` | sonnet (HEAVEN) | — |
+| **hiwi** | Executes a Team-Lead-provided runbook or `PLAN_*.md` strictly; drift means stop. | on-demand | 1–3 | `dev` | haiku (Probe) | Mario |
 
-### Services (daemons)
+### Services and episodic gates
 
-These run as their own sessions and serve the team(s) — they are not roster team-members:
+These are not roster team-members. Some run as services; Plan Judge is invoked only for a bounded
+decision:
 
 | Service | Scope | What it does |
 |---|---|---|
-| **SCUT** | per project | The channel-pluggable comms layer (human ↔ BobNet ↔ external channels). Normalizes incoming events and routes them; carries cross-Bobiverse pings. Telegram live today, others stubbed. |
-| **GUPPI** | per project | Judgment-free routine executor (`archetypes/guppi.json`, model `haiku`): process/schedule watch, recurring non-dev chores, auto-sync of `_dev_team`, and the "has a BobNet appeared yet?" check. **On drift it escalates to the Team-Lead — it never guesses.** |
-| **Colonel** | one per Bobiverse (singleton) | The discipline watcher (`archetypes/process-auditor.json`, persona *Colonel Butterworth*): is the BobNet up and in sync, are there orphaned processes, is the lead *orchestrating* rather than doing busywork, did the QM gates actually run, were there forbidden pushes. Mechanical, judgment-light; reports `✓` / `⚠` / `✗` and escalates process drift. |
+| **SCUT** | per project | Normalizes and routes external events. Telegram and email adapters are functional; GitHub and Teams remain demo stubs. Cross-installation Bridge traffic uses a separate, audited trust path. |
+| **GUPPI** | per project | `guppi.sh` inventories mux/cron state, checks the registry and may re-run idempotent onboarding to self-register when BobNet appears, then passes normalized events to the existing SCUT router. It reports drift; it does not yet auto-sync or execute an open-ended chore queue. |
+| **Colonel** | one per Bobiverse (singleton) | `colonel.sh` checks BobNet availability, process inventory, git sync drift and a lead-commit-ratio heuristic. Worker-idle/task-coupling heuristics remain explicit placeholders; QM-gate and forbidden-push checks are not implemented. |
+| **Plan Judge** | episodic | `archetypes/plan-judge.json` provides an on-demand roadmap-alignment judgment at sprint-end, pre-merge or on drift. It never builds or merges. |
 
 ### Helpers (per-Bob, ephemeral)
 
-Any Bob can spawn helpers for a bounded slice of work. They carry **no roster entry** — the
-dashboard shows them only as a badge on the parent agent. All run on the cheap `haiku` model:
+Roles may spawn the helper classes listed in their archetype's `canSpawn[]` for a bounded slice of
+work. Helpers carry **no roster entry** — the dashboard shows them only as a badge on the parent.
+ROAMER and Sonde use `haiku`; Advisor is an intentionally expensive, read-only `fable` exception:
 
 | Helper | Tools | Use |
 |---|---|---|
 | **ROAMER** 🕷️ | read + write + bash | Active worker drone: short, bounded edits — clean up, fix, build, screenshot, asset-slim, file-migrate. Spawn-on-demand, does the job, vanishes. Small = subagent; large = workflow + worktree-isolation. |
 | **Sonde** 🛰️ | read-only | Read-only scout: find, read, inventory, report (where is X used, find all Y, check state). **Manipulates nothing.** For actual changes, spawn a ROAMER instead. Returns a conclusion, not file-dumps. |
-| **Jeeves** | full | The more-capable executor — **one per Bob** — for heavier delegated work than a ROAMER. |
+| **Advisor** 🦉 | read-only | Strategic second opinion for architecture, costly decisions and hard bugs. Recommends with reasoning; implementation stays with the team. |
+
+The Advisor's mission says a lead invokes it on demand, but the shipped `techlead.canSpawn[]`
+currently omits `advisor`; treat that as a catalog/permission-contract gap, not implicit authority.
 
 (The 🕷️/🛰️ icons are *helper-class dashboard badges*, not persona emoji — team-members are always
 shown as an image, never an emoji. See the avatar rule under [Theme](#-theme--what-a-role-is-called).)
@@ -332,10 +353,11 @@ The `PROJECT_UID` prefix is what makes `acme-backend-dev` unambiguous vs. `other
 the BobNet sees several projects at once. The dashboard hides the prefix for display (shows
 "Backend") and keeps the full UID internally (collision-free).
 
-**The Taylor homage** lives **only** in the optional `bobiverse` theme. The persona-to-role
+**The Taylor homage** lives **only** in the `bobiverse` theme. The persona-to-role
 mapping (e.g. `BOB-backend` → *Bill*, `BOB-techlead` → *Bob*, `BOB-tests` → *Marvin*) is purely a
-flavor choice in `themes/bobiverse/theme.json`; the default `minimal` theme is neutral and names
-the same roles "Backend", "Lead", "QA". Nothing structural depends on the homage.
+flavor choice in `themes/bobiverse/theme.json`. Current executables fall back to it even though
+public release policy intends `minimal`; choosing `minimal` explicitly gives the same roles neutral
+names such as "Backend", "Lead" and "QA". Nothing structural depends on the homage.
 
 ---
 
@@ -344,7 +366,7 @@ the same roles "Backend", "Lead", "QA". Nothing structural depends on the homage
 ### The 3-level hierarchy
 
 ```
-Bobiverse  ─ the whole installation on this machine (root in ~/.claude/bobiverse.json)
+Bobiverse  ─ the whole installation on this machine (root in the Claude or Codex surface config)
    │
    ├─ BobNet   ─ Singleton, OPTIONAL ─ the dashboard/render-hub for ALL teams (one instance)
    ├─ Colonel  ─ Singleton ─ the discipline watcher across the whole installation
@@ -354,10 +376,11 @@ Bobiverse  ─ the whole installation on this machine (root in ~/.claude/bobiver
          ├─ SCUT    ─ comms layer (one per project)
          ├─ GUPPI   ─ helper service (one per project)
          ├─ team agents ─ backend / frontend / review / tests / … (mapped to the repo's seams)
-         └─ helpers ─ ROAMER / Sonde / Jeeves (ephemeral, per agent)
+         └─ helpers ─ ROAMER / Sonde / Advisor (ephemeral, per agent)
 ```
 
-- **Bobiverse** — the umbrella. One per machine; its root is recorded in `~/.claude/bobiverse.json`.
+- **Bobiverse** — the umbrella. One per machine; its root is recorded in the active surface config
+  (`~/.claude/bobiverse.json` or `~/.codex/bobiverse.json`).
 - **Singletons** — **BobNet** (the dashboard, one for all your teams, optional) and **Colonel**
   (the discipline watcher, one for the whole installation). There is exactly one of each.
 - **Project-Bobiverse** — one per repo. Each has its **own** Bob#1, SCUT and GUPPI; teams are
@@ -376,47 +399,49 @@ cadence, not a chain of command:
 | **inner** | Product builders (backend / frontend / website) | Build features in their own revier. |
 | **gate** | QM (review / compliance / tests / release) | The quality gates before merge/deploy. |
 | **outer** | Own cadence (docs / dashboard / content / marketing / support) | Cross-repo, asynchronous. |
-| **on-demand** | Helper class (roamer / sonde / Jeeves) | Ephemeral, spawnable by any member, **no roster entry**. |
-| **shared** | Cross-project services (GUPPI / SCUT / Colonel) | Own session, serve several teams. |
+| **on-demand** | Helper class (roamer / sonde / advisor) | Ephemeral, spawnable by a permitted role, **no roster entry**. |
+| **shared** | Service archetypes such as GUPPI | Own session and serve a team or installation. SCUT is script-backed rather than an archetype; Colonel's current `process-auditor` JSON is in the `gate` ring. |
 
 ### Circle of Trust — 4 risk tiers
 
-Where `ring` is org-chart, `gateTier` is **risk and autonomy**. Every agent carries one. The tiers
-decide how far the Team-Lead may go autonomously (canonical text in
-[`team-rules/tiers.md`](./team-rules/tiers.md)):
+Where `ring` is org-chart, `gateTier` is **risk and autonomy**. Every agent carries one. The source
+policy is [`team-rules/tiers.md`](./team-rules/tiers.md), which currently contains an internal
+conflict: its short T1–T3 matrix says “autonomous to staging”, while its detailed action table
+requires human permission for each staging deployment unless the PO documented a project opt-in.
+The table below follows that stricter, action-specific rule; the source-policy conflict remains open.
 
-| Tier | Gates exactly | Autonomy boundary |
+| Tier | Required gate / control | Autonomy boundary |
 |---|---|---|
-| **T1 — Text / copy / brand / i18n** | Review 30s-tick + CI green | Team-Lead, autonomous up to staging |
-| **T2 — Feature (frontend / backend)** | Review + Tests + Release pre-flight, CI green | Team-Lead, autonomous up to staging |
-| **T3 — Security / migration / dependencies / egress** | Full circle **incl. Compliance**, CI green | Team-Lead, autonomous up to staging **after green** |
-| **T4 — Production / DNS / secrets** | Everything + **explicit human OK** | **Human only — hard boundary** |
+| **T1 — Text / copy / brand / i18n** | Review 30s-tick + local project gate; consuming-project CI when configured | Lead autonomous through implementation and the green integration gate; staging execution follows the policy below. |
+| **T2 — Feature (frontend / backend)** | Review + Tests + Release pre-flight; consuming-project CI when configured | Lead autonomous through implementation and the green integration gate; staging execution follows the policy below. |
+| **T3 — Security / migration / dependencies / egress** | Full circle **incl. Compliance**; consuming-project CI when configured | Lead autonomous only after the full green integration gate; staging execution follows the policy below. |
+| **T4 — Production / DNS / secrets / force-push / history rewrite / remote-branch delete** | Full gate plus explicit human control; agent actions remain denied | **Human only — hard boundary** |
 
-**T1–T3 are project-adjustable** via the override chain (a project can *tighten* them). **T4 is
-not.**
+By default, executing a staging deployment requires explicit human permission for that action. A
+project may opt into team-autonomous staging only through a documented PO decision and a full green
+circle. Projects may otherwise tighten T1–T3; **T4 can never be weakened.**
 
-#### The T4 floor — non-overridable, machine-enforced
+#### Machine enforcement — non-overridable BLOCK and ASK floors
 
-T4 is the one hard line. A project override may only **widen** protection, never remove the core
-globs. Those globs are declared in [`team-rules/deploy-guard.paths`](./team-rules/deploy-guard.paths)
-(data, not code — extend protection by appending a line, no code edit needed). The protected core:
+The [`deploy-guard`](./hooks/deploy-guard.sh) is a data-driven `PreToolUse` hook with two immutable
+path floors:
 
-```
-*/config/deploy.rb      */config/deploy/*      *Capfile      *configuration.yml
-*/.secrets/*            *credentials.yml.enc    *master.key   *.env.production
-*/nginx/*production*    *docker-compose.prod*   */k8s/production/*
-```
+- **BLOCK** — human-only T4 paths are rejected with exit code 2.
+- **ASK** — deploy-configuration edits return `permissionDecision: ask`, requiring explicit human
+  confirmation for each edit. A project may promote ASK to BLOCK, but never weaken either floor.
 
-The [`deploy-guard`](./hooks/deploy-guard.sh) hook is the **machine enforcement** of T4. It is a
-`PreToolUse` hook: when any `Edit` / `Write` / `MultiEdit` targets one of these globs, the hook
-**blocks with exit code 2** and prints why — no agent, not even Bob#1, can touch a production /
-deploy / secret path. Two properties make it trustworthy:
+A separate, opt-in command list can require ASK for matching deploy commands. The complete engine
+default BLOCK list is broader than the immutable floor; a project BLOCK-list override replaces
+those non-floor defaults. Projects cannot remove either hard floor and may promote ASK cases to
+BLOCK. The path contracts live in `team-rules/deploy-guard.paths` and
+`team-rules/deploy-guard.ask.paths`; command matching and its procedure live in the adjacent files.
 
-- **Armed from minute one.** The onboard step runs a `deploy-guard` self-test, so the floor is live
-  before the first task runs — not a thing you remember to switch on later.
-- **The floor re-merges even against a hostile override.** The hook merges the T4 core globs back
-  in (its `t4_floor` function) even if a project's override file tries to omit them. You can add
-  protection; you cannot subtract the core.
+- **Install is not activation.** Classic `bin/onboard` installs and self-tests the guard wrapper but
+  does not register the `PreToolUse` hook in project settings. The guard becomes active only after
+  surface-specific hook wiring is explicitly enabled. The git-native pre-push floor is different:
+  Git activates it immediately when Onboard installs its executable wrapper.
+- **Floors survive overrides.** `t4_floor` and `ask_floor` are always re-merged when a project
+  override omits them. Projects can add or tighten protection, not subtract it.
 
 `bin/tier <role>` prints just one role's tier scope, so an agent loads only the trust context it
 actually needs (a T1 docs role never carries T4 deploy context).
@@ -427,7 +452,7 @@ actually needs (a T1 docs role never carries T4 deploy context).
 `scripts/log.sh <Name> <state> "<what>"` (`state` ∈ `busy` / `idle` / `blocked` / `done`). The
 rules live in [`team-rules/heartbeat.md`](./team-rules/heartbeat.md); the key design choices:
 
-- **One file per agent** (`<STANDUP_DIR>/<Agent>.log`) → no write conflicts, ever.
+- **One file per agent** (`<STANDUP_DIR>/<Agent>.log`) → isolates routine heartbeats and minimizes cross-agent write conflicts.
 - **Token-cheap** — the only write is one short line per step; the dashboard polls and renders.
 - **Routing is data-driven.** The hook resolves `AGENT = HEARTBEAT_AGENT (if set) else TEAM_LEAD`
   and `TARGET = STANDUP_DIR` from `dev-team.env`. A normal project's lead just heartbeats as
@@ -436,22 +461,39 @@ rules live in [`team-rules/heartbeat.md`](./team-rules/heartbeat.md); the key de
 - **Fail-safe** — the hook never blocks a session; if `log.sh` is missing it silently `exit 0`s.
 
 **Inbox / relay.** At every heartbeat an agent reads `standup/_inbox.md`. Same-project comms stay on
-these fast local standup files. The **Team-Lead routes** — agents do not edit shared files directly;
-findings go back to the Team-Lead, who maintains the central files (this avoids an append-loop
-content-collapse that bit the team once and had to be git-recovered).
+these fast local files. Messages are append-only canonical lines in the recipient's inbox; findings
+return to the Team-Lead, who remains the sole editor for shared plans/backlogs. Agents never type
+into another agent's terminal session.
+
+**Watcher / delivery.** `scripts/inbox-watch.sh` is a one-shot, scheduler-friendly fleet watcher.
+It wakes only idle/done or stale-busy leads, treats a new heartbeat as delivery proof, re-nudges
+unverified events and then escalates by `info` / `mid` / `urgent`. An `.off-duty` flag suppresses
+wakes without discarding state; session-down events escalate once per outage. Lead-authored deltas
+finalize silently only when the canonical line ends exactly in `— (<lead UID or unambiguous
+persona>)`; put any persona emoji before that delimiter. Server-stamped SCUT and Bridge entries are
+always foreign. `tmux` is the fleet default for headless boot/nudge/recycle cycles; zellij remains
+supported for interactive use.
+
+**Measured recycle.** `bin/recycle <uid>` performs handover → kill → clean boot → fresh-heartbeat
+verification. It blocks a boot while a client remains attached, purges dead zellij resurrection
+state and can additionally require a fresh Claude/Codex process with the project working directory.
 
 **The QM gate sequence.** Every FE/BE/website sprint — *including* hotfixes — runs the gates
 sequentially before integration:
 
+The engine repository ships a local black-box gate (`bash tests/run.sh`) but no hosted CI workflow.
+“CI green” therefore applies only when the consuming project has CI configured.
+
 ```
 Review (correctness, house-rules, i18n, dead-links)
    → Compliance (deps / egress / PII / provenance — T3+)
-      → Tests (coverage floor, specs for every new path, both locales)
+      → Tests (local behavior specs; consuming-project CI when present)
          → Pre-Flight (build dry-run, asset-size, migration dry-run, visual-verify both locales)
             → Merge (Team-Lead integrates)
 ```
 
-The exact set depends on the tier (T1 may need only Review + CI; T3 pulls in Compliance). The
+The exact set depends on the tier (T1 may need only Review plus the applicable local/project gate;
+T3 pulls in Compliance). The
 Team-Lead **actively pings** the gate roles — it does not passively wait.
 
 **Single-merge-owner.** Only **Bob#1 merges** into the integration branch. Specialist agents
@@ -459,28 +501,36 @@ deliver feature branches and never touch the integration branch themselves. When
 on deeply-coupled code, each gets its own git worktree (`isolation: "worktree"`); broadly-separated
 reviers may share the tree. This one rule is the biggest churn-preventer in the whole workflow.
 
-### Lifecycle — install · onboard · upgrade
+### Lifecycle — install · onboard · watch · recycle · upgrade
 
 | Command | What it does |
 |---|---|
-| `bin/install` | Machine bootstrap (idempotent). Symlinks each skill into `~/.claude/skills`, writes `~/.claude/bobiverse.json`, runs a preflight. |
-| `bin/onboard <project-root>` | Per-project, idempotent + **non-destructive**: memory + skills symlinks, agents materialized from archetypes (only if absent), hook wrappers (deploy-guard + git-identity), `dev-team.env` (asks for the immutable `PROJECT_UID`), registry upsert, deploy-guard self-test. |
-| `bin/upgrade` | `git pull` the engine → `bin/check-compat` → idempotent re-onboard. |
+| `bin/install` | Claude Code machine bootstrap: links skills into the Claude user skill directory, writes the Claude-side Bobiverse config and runs a preflight. |
+| `bin/install-codex` | Codex machine bootstrap: links skills into `~/.agents/skills`, writes `~/.codex/bobiverse.json` and runs a preflight. |
+| `bin/onboard <project-root>` | Claude Code project onboarding, idempotent and non-destructive: links memory/skills, materializes absent agents, writes lifecycle/identity wrappers, attempts to install the git-native pre-push identity/content floor when the target is a Git repo and no unrelated hook exists, creates `dev-team.env`, upserts the registry and self-tests deploy-guard. |
+| `bin/onboard-codex <project-root>` | Codex project onboarding: creates `_dev_team/`, `.agents/skills`, `.codex/agents`, native hook configuration and `AGENTS.md` when absent, then registers the project. |
+| `scripts/inbox-watch.sh` | One watcher pass across registered projects: heartbeat-verified delivery, retry/severity handling, off-duty suppression and session-down escalation. |
+| `bin/recycle <uid>` | Orderly handoff → kill → boot → verify; waits for attached clients, clears stale zellij resurrection state and can require both a heartbeat and a project-rooted agent process. |
+| `bin/upgrade` | `git pull` the engine → `bin/check-compat` → classic `bin/onboard`. Codex projects currently need a separate `bin/onboard-codex` refresh after compatibility review. |
 | `bin/start <uid>` | Launches the BobNet dashboard against a project. |
 | `bin/tier <role>` | Prints a single role's Circle-of-Trust scope. |
 | `bin/sync` | Git sync helper (`fetch` + `pull` + `push` against `origin`). |
 
-**Onboarding is bidirectional.** After `bin/onboard`, the project *references* the Bobiverse
-(symlinks + `bobiverse.json` + `dev-team.env`) **and** the BobNet *registers* the project (registry
-upsert) — so comms work both ways. Non-TTY (background-agent) onboards pass `PROJECT_UID=<uid>` as
-env rather than guessing a default (the script exits 3 rather than silently inventing one).
+The pre-push hook is a deliberately narrow, loudly bypassable early floor; it does not replace
+Compliance or a general secret scanner. For unattended leads, `tmux` is the fleet default. Zellij
+remains supported interactively but is deprecated for headless nudge/recycle cycles.
 
-**Upgrade — referenced parts propagate, instance state is untouched.** The engine's *referenced*
-parts (skills, memory, team-rules — all symlinked) update **instantly** on `bin/upgrade`. The
-*copied* parts (the materialized agents) and all instance state (standup logs, `dev-team.env`,
-memories) are **left alone**. Compatibility is guarded by `VERSION` (SemVer) + `SCHEMA_VERSION`
-(int); `bin/check-compat` catches a breaking skew before it bites. That is how one engine update
-reaches every team without disturbing any team's running state.
+**Onboarding is bidirectional.** After the matching Claude/Codex onboard command, the project
+references the engine and its instance config **and** registers with BobNet. Non-TTY onboards pass
+`PROJECT_UID=<uid>` as env rather than guessing a default (the scripts exit 3 rather than silently
+inventing one).
+
+**Upgrade — referenced parts follow, instance state stays local.** Engine-owned skill links and
+hook targets follow the upgraded checkout. On the classic path, re-onboarding refreshes generated
+wrappers and path-scoped rules; Codex uses its separate re-onboard path noted above. Materialized
+agents and project-local state (standup logs, `dev-team.env`, memories) remain untouched.
+Compatibility is guarded by `VERSION` (SemVer) + `SCHEMA_VERSION` (int); `bin/check-compat` stops an
+incompatible re-onboard.
 
 ### SCUT routing
 
@@ -491,44 +541,62 @@ them:
 - **Directed** (`@X` or `[uid]`) → straight to that agent's / project's inbox.
 - **Undirected** → a "someone must check" queue, so nothing silently drops.
 
-The routing table is data-driven from `projects.registry.json` + each team's `team.config`. This is
+Routing is data-driven from `projects.registry.json`; project-level defaults such as `TEAM_LEAD`
+come from that project's `dev-team.env`. This is
 also how two Project-Bobiverses talk: there is **no "join" skill** — joining another team's loop is
-just inter-Bobiverse comms over SCUT. Register both projects (each runs `init-bobs` / `onboard`) and
-SCUT carries the cross-team pings; same-project internal comms stay on the fast local standup files.
+just inter-Bobiverse comms over SCUT. Register both projects with the matching onboard path and
+SCUT carries cross-team pings; same-project internal comms stay on the fast local standup files.
 
 ---
 
 ## Quick start
+
+Choose the installer for your agent surface; do not run both paths as one sequence.
+
+### Claude Code
 
 ```bash
 # First contact on a bare machine — clone anywhere; the engine resolves its
 # own location (nothing is hard-wired to a fixed path):
 git clone git@github.com:Litora-Nova/claude-bobnet.git
 cd claude-bobnet
-./bin/install                              # machine-global, idempotent
-
-# Then, in any project, from your Team-Lead window:
-#   run the `init-bobs` skill — it detects/installs the Bobiverse, onboards the
-#   project bidirectionally, interviews you, writes a TEAM.md plan, and on your
-#   explicit "go" spawns Bob#1 + SCUT + GUPPI + the team mapped to the repo's seams.
+./bin/install
+PROJECT_UID=acme ./bin/onboard /path/to/acme
 ```
 
-`init-bobs` ([`skills/init-bobs/SKILL.md`](./skills/init-bobs/SKILL.md)) maps agents to *your*
-repo's real boundaries (it reads the repo first — no generic roster imposed), stops at a `TEAM.md`
-plan for approval, and only then stands up the team.
+Invoke the installed `init-bobs` skill from the target project. It maps the repo, writes a
+`TEAM.md` proposal and waits for an explicit `go` before spawning the team.
+
+### Codex
+
+```bash
+git clone git@github.com:Litora-Nova/claude-bobnet.git
+cd claude-bobnet
+./bin/install-codex
+PROJECT_UID=acme ./bin/onboard-codex /path/to/acme
+```
+
+In Codex, invoke the skill through `/skills`, `$init-bobs` or an explicit `init-bobs` request. The
+same approval boundary applies: structural onboarding does not spawn agents, and `init-bobs` stops
+at `TEAM.md` until the user says `go`. See [`docs/CODEX.md`](./docs/CODEX.md) for the surface map.
+
+On both surfaces, [`skills/init-bobs/SKILL.md`](./skills/init-bobs/SKILL.md) maps agents to the
+repo's real boundaries rather than imposing a generic roster.
 
 ## The 2-hour acceptance test
 
 On a fresh throwaway system:
 
-1. `git clone` the engine → `bin/install`.
-2. Run `init-bobs` in an empty folder — Bobiverse-detect installs an optional BobNet, asks for
-   `PROJECT_UID`, runs the interview.
+1. Clone the engine and run the surface-specific installer (`bin/install` or `bin/install-codex`).
+2. Run the matching project onboard command with a stable `PROJECT_UID`, then invoke `init-bobs`.
+   It maps the project and stops at its approval boundary; approve the `TEAM.md` with `go`.
 3. **Bob#1 + SCUT + GUPPI are running**, the BobNet at the dashboard port shows the project
-   (image-only), `deploy-guard` is armed from minute one, `bin/tier <role>` returns each role's
-   scope.
+   without emoji fallbacks, the configured guard wiring is active and `bin/tier <role>` returns
+   each role's scope.
 4. A second project gets its own Project-Bobiverse and talks to the first over SCUT.
-5. `bin/upgrade` pulls an engine update that propagates while instance state stays untouched.
+5. On Claude Code, `bin/upgrade` pulls and re-onboards while instance state stays untouched. On
+   Codex, compatibility-check the update and re-run `bin/onboard-codex`; the upgrade command's
+   automatic re-onboard is not surface-aware yet.
 
 That is the bar: **a working team in under two hours on any system.**
 
@@ -536,9 +604,9 @@ That is the bar: **a working team in under two hours on any system.**
 
 The concept is an affectionate **homage to Dennis E. Taylor's *Bobiverse* novels** — the in-house
 `bobiverse` theme names its agents after the replicant crew, and the engine borrows the books'
-ideas of a self-replicating, self-coordinating fleet (one BobNet, one Colonel, GUPPI and Jeeves
-as each Bob's helpers). The homage is deliberate and lives only in the optional `bobiverse` theme;
-the default release theme (`minimal`) is neutral.
+ideas of a self-replicating, self-coordinating fleet (one BobNet, one Colonel, GUPPI and ephemeral
+helpers). The homage is deliberate and lives only in `bobiverse`. Public release policy intends the
+neutral `minimal` theme; current executable fallbacks still select `bobiverse` pending alignment.
 
 **Read the books — seriously.** If you don't know the *Bobiverse* yet, fix that. It is the most
 fun a software-minded person can have with a sci-fi series:
@@ -554,7 +622,7 @@ fun a software-minded person can have with a sci-fi series:
 [ab-de]: https://amzn.to/43gfHcv
 
 **Origin.** It started on **2026-05-21**, when the author first installed Claude Code after a talk
-by Boris (the Claude Code lead) — skeptical, terminal-shy, expecting little. The background
+by one of its leads — skeptical, terminal-shy, expecting little. The background
 "team agents" turned out to work *several times better* than going solo. A first experiment
 borrowed the Bobiverse naming; the structures that made it click (Circle-of-Trust, the gates, the
 processes) were then baked into this shared engine, so the good parts travel to every project
@@ -565,15 +633,17 @@ request → **[anthropics/claude-code#63415](https://github.com/anthropics/claud
 
 | Path | Contents |
 |---|---|
-| `archetypes/` | Role definitions (layer ①) + JSON schema |
-| `themes/` | Flavor layer (②): `minimal` (release default), `formal`, `bobiverse` (homage) |
-| `schemas/` | `archetype` + `theme` schemas, frontmatter specs |
-| `bin/` | `install` · `onboard` · `upgrade` · `check-compat` · `start` · `tier` · `sync` |
-| `scripts/` | `log.sh`, `scut*.sh`, `colonel.sh`, `guppi.sh`, `git-identity.sh`, channel adapters |
-| `hooks/` | `deploy-guard.sh` (T4 enforcement), session heartbeat + sync-reminder |
+| `archetypes/` | Machine-readable team roles, services, helpers, coworkers and the human role (layer ①) |
+| `themes/` | Flavor layer (②): `minimal`, `formal` and the `bobiverse` homage |
+| `schemas/` | Draft-07 schemas for archetypes, themes and the projects registry; a runtime `team.config` schema remains planned |
+| `bin/` | Claude/Codex install and onboard, upgrade/compatibility, start, recycle, tier, sync/share and ownership queries |
+| `scripts/` | Heartbeats, inbox watcher, SCUT channels/router, Bridge transport, mux/boot libraries and Colonel/GUPPI services |
+| `hooks/` | Two-stage deploy guard, pre-push identity/content floor, session heartbeat, sync reminder and context trimming |
 | `team-rules/` | Circle-of-Trust, tiers, tags, heartbeat, commits, sync (declarative house-rules) |
 | `dashboard/` | The BobNet dashboard (Nuxt 3) |
-| `skills/init-bobs/` | The one skill that stands up a Project-Bobiverse |
+| `skills/` | `init-bobs` for team setup and `update-bobs` for controlled engine updates |
+| `.codex-plugin/` | Codex plugin manifest and distribution metadata |
+| `docs/` | Codex surface mapping, compatibility runbooks and engine knowledge |
 | `tests/` | Black-box behavior specs for the engine scripts |
 
 Hard rules for the whole team OS are in [`CONVENTIONS.md`](./CONVENTIONS.md).
