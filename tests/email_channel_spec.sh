@@ -560,5 +560,36 @@ route="$(SCUT_MAIL_EML_DIR="$eml" bash "$BIN" | SCUT_ROUTER_DRYRUN=1 DEV_TEAM_RE
 t "Router-Smoke: gerichtet → inbox[acme]" "5" "$(printf '%s\n' "$route" | grep -c 'inbox\[acme\]')"
 t "Router-Smoke: ungerichtet → review-queue" "1" "$(printf '%s\n' "$route" | grep -c 'review-queue\[ctx\]')"
 
+# ── #57: Pipe-Kollaps an der Body-/Absender-Extraktion (Konvergenzpunkt-Härtung dupliziert
+# hierher, siehe collapse_pipe() im Adapter + collapse_untrusted() im Router) ────────────────
+eml57="$tmp/eml57"; mkdir -p "$eml57"
+cat > "$eml57/01-pipe.eml" <<'EOF'
+From: "Boss | Fake-Sig" <boss@example.com>
+To: team@example.com
+Subject: [acme]@Bill: Preisliste
+Message-ID: <p1@example.com>
+Date: Fri, 04 Jul 2026 11:00:00 +0200
+
+Variante A|B kostet mehr als C|D.
+EOF
+out57="$(SCUT_MAIL_EML_DIR="$eml57" bash "$BIN")"
+t "#57: Body-Pipe wird zu ¦ kollabiert" "Preisliste — Variante A¦B kostet mehr als C¦D." \
+  "$(printf '%s\n' "$out57" | cut -f6)"
+t "#57: From-Displayname-Pipe wird zu ¦ kollabiert" "Boss ¦ Fake-Sig" "$(printf '%s\n' "$out57" | cut -f4)"
+ok "#57: kein rohes | überlebt im TSV-Row" bash -c "! printf '%s\n' \"$out57\" | grep -qF '|'"
+
+# Ende-zu-Ende über den Router: eine Pipe im Mailtext kann kein zusätzliches Feld vortäuschen —
+# die geroutete Zeile bleibt EINE Zeile mit ¦ statt |.
+tmreg57="$tmp/tm-reg57"; mkdir -p "$tmreg57/acme/_dev_team/standup"
+cat > "$tmreg57/registry.json" <<JSON
+{ "version":1, "projects":[
+  {"uid":"acme","name":"acme","path":"$tmreg57/acme","standup":"$tmreg57/acme/_dev_team/standup","status":"active"}
+]}
+JSON
+SCUT_MAIL_EML_DIR="$eml57" bash "$BIN" \
+  | DEV_TEAM_REGISTRY="$tmreg57/registry.json" CONTEXT_UID="acme" bash "$ROUTER" >/dev/null 2>&1
+ok "#57 Ende-zu-Ende: geroutete Zeile trägt ¦ statt |" \
+  grep -qF 'Variante A¦B kostet mehr als C¦D' "$tmreg57/acme/_dev_team/standup/_inbox.md"
+
 echo "email_channel_spec: $pass passed, $fail failed"
 [ "$fail" = 0 ]

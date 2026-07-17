@@ -30,6 +30,15 @@
 #   - Exit 0 = zugestellt · 2 = REJECT (Sender darf NICHT blind retryn) ·
 #     3 = Infra-Fehler: Audit-Log-Preflight fehlgeschlagen, NICHT zugestellt (fail-closed, kein
 #     Zustellversuch ohne funktionierenden Audit-Kanal)
+#   - #57: Payload-Pipe wird zu `¦` (broken bar) kollabiert — sowohl die Kanon-Zeile als auch
+#     das eigene " | "-getrennte Audit-Log (audit()) sind sonst Feld-Fälschung ausgesetzt. CR/LF
+#     sind bereits durch den Ein-Zeile-Kontrakt ausgeschlossen (mehrzeilig → REJECT).
+#
+# Kanon (#58, `team-rules/verb-gateway.md`): dieses Script IST die Referenz-Implementierung des
+# Forced-Command-Gateway-Musters (Verb-Allowlist + Audit-Log + Byte-/Zeilen-Limit) — die
+# `authorized_keys`-Zeile MUSS dem `bridge:<peer>`-Kommentar-Kanon folgen, damit ein Aufräumen
+# sie nicht fälschlich als Altlast entfernt, während ein voller Shell-Key desselben Peers
+# überlebt (genau umgekehrt zur Härtungsabsicht — Feld-Regression, s. verb-gateway.md).
 #
 # Env:
 #   DEV_TEAM_REGISTRY  zentrale projects.registry.json (Default wie scut-router.sh)
@@ -84,6 +93,12 @@ tgt="$(printf '%s' "$text" | grep -oE '^\[[a-z0-9_-]{1,32}\](@[A-Za-z0-9_-]{1,32
 rest="${text#"$tgt"}"; rest="${rest#:}"; rest="${rest## }"; rest="${rest%% }"
 rest="$(printf '%s' "$rest" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
 [ -n "$rest" ] || reject "leerer Text nach Target" "$tgt" "$bytes"
+# #57: Payload-Pipe → ¦ (broken bar) — dieselbe Konvergenzpunkt-Härtung wie scut-router.sh
+# collapse_untrusted(). CR/LF sind hier bereits durch den Ein-Zeile-Kontrakt oben ausgeschlossen
+# (mehrzeilig → REJECT, s. o.); ein rohes "|" im Payload würde aber sowohl die " | "-getrennte
+# Kanon-Zeile (unten) ALS AUCH das eigene " | "-getrennte Audit-Log (audit(), unten) fälschen
+# können — deshalb VOR beiden Verwendungen kollabieren, nicht erst an einer Stelle.
+rest="${rest//|/¦}"
 uid="${tgt#[}"; uid="${uid%%]*}"
 agent="${tgt#*]}"; agent="${agent#@}"
 
@@ -114,8 +129,14 @@ if [ -z "$agent" ]; then
     agent="$(sed -n 's/^export TEAM_LEAD="\{0,1\}\([^"]*\)"\{0,1\}.*/\1/p' "$envf" | head -n1)"
     # Aus einer Konfig-Datei gelesen, nicht aus dem client-validierten [uid]@Agent-Regex —
     # Steuerzeichen/Newline strippen + Länge cappen, damit dev-team.env keine gefälschten
-    # Log-/Inbox-Zeilen einschleusen kann (L7/#51).
+    # Log-/Inbox-Zeilen einschleusen kann (L7/#51). #57 erweitert dieselbe Sanitize-Logik um
+    # den Pipe-Kollaps (¦) — ein TEAM_LEAD mit "|" könnte sonst dieselbe Feld-Fälschung wie im
+    # Payload erreichen, nur über die Config statt über den Client. Bewusst `${..//|/¦}` statt
+    # `tr '|' '¦'`: tr übersetzt byteweise und zerlegt das 2-Byte-UTF-8-Zeichen ¦ (U+00A6) dabei
+    # in kaputte Einzelbytes (sichtbar als „�") — Bash-Parameterexpansion ist string-/
+    # zeichenbasiert und bleibt korrekt.
     agent="$(printf '%s' "$agent" | tr -d '\000-\037\177')"
+    agent="${agent//|/¦}"
     agent="${agent:0:64}"
   fi
   agent="${agent:-Bob}"
@@ -141,8 +162,10 @@ except Exception:
 PY
 )"
 # peers.json ist Config, kein client-validierter Wert — dieselbe Sanitize-Regel wie beim
-# TEAM_LEAD-Fallback oben (L7/#51): Steuerzeichen/Newline weg, Länge gecappt.
+# TEAM_LEAD-Fallback oben (L7/#51 + #57): Steuerzeichen/Newline weg, Pipe kollabiert (Bash-
+# Parameterexpansion statt `tr` — s. Begründung beim Agent-Fallback oben), Länge gecappt.
 lead="$(printf '%s' "$lead" | tr -d '\000-\037\177')"
+lead="${lead//|/¦}"
 lead="${lead:0:64}"
 
 # ── Serverseitig stempeln + flock-Append ────────────────────────────────────────────────────
