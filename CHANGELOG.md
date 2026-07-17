@@ -4,6 +4,46 @@ All notable engine changes are documented here. Versioning follows SemVer (`VERS
 human-facing); machine compatibility is anchored separately by `SCHEMA_VERSION` (integer) —
 see `.claude/rules/contract.md`. `skills/update-bobs` points teams here after an update.
 
+## [0.16.0] — 2026-07-17
+
+### Added
+- **inbox-watch severity classification + `ALERT_CMD` contract v2**: the escalation
+  hook is now called as `$ALERT_CMD <uid> <lead> <standup> <severity>` (severity ∈
+  `info|mid|urgent`, additive 4th arg — v1 commands stay compatible) plus env
+  `INBOX_WATCH_REASON` / `INBOX_WATCH_SOURCE` (`inbox|review-queue|session-down`).
+  Classification: review-queue growth, customer/human-channel lines (`SCUT (via `)
+  and session-down → `urgent`; other foreign entries → `mid`; the rest → `info`.
+  New `INBOX_WATCH_ALERT_MIN_SEVERITY` (default `mid`) gates weak events instead of
+  alerting them (own summary counter). Field driver: 23 escalation pings in 5 days,
+  most of them team FYIs treated like customer emergencies.
+- **Off-duty flag** `<standup>/.off-duty`: while present, nudges and alerts are
+  suppressed entirely (state stays open — the morning stand-up reads the inbox
+  anyway); auto-cleared as soon as the lead heartbeats after the flag's mtime.
+- **Session-down escalation (#55)**: a configured `MUX_SESSION` that is down (and no
+  boot path) now escalates exactly once per down episode (`urgent`,
+  `source=session-down`) instead of silently logging every tick; resets when the
+  session returns.
+- **email-channel In-Reply-To/References thread routing (#54)**: directed routings
+  record message-id → target in a thread map (`SCUT_MAIL_THREAD_MAP`, default
+  `$SECRETS/mail-threads.map`, 500-line rotation); replies inherit the thread's
+  target even without a senders-map entry. Priority: subject tag > plus address >
+  thread map > senders map.
+
+### Fixed
+- **inbox-watch self-write nudge cycles (#56)**: lead-authored inbox appends no
+  longer start nudge cycles — the state remembers an `ilines` baseline and deltas
+  consisting only of lead-signed lines finalize silently. Old state formats stay
+  readable (conservative: no self-write detection until the state is first
+  rewritten). Field repro: >12 empty nudges on an unchanged inbox, nudges on
+  entries already delivered through other channels.
+
+### Changed
+- Shared lead-state helpers extracted to `scripts/lib/standup.sh` (inbox-watch and
+  `bin/recycle` both source it; behavior unchanged).
+- New canon in `team-rules/commits.md`: **public artifacts (commit messages,
+  issues, PRs, release notes) are written in English** (PO decision 2026-07-17);
+  internal team artifacts keep the team language.
+
 ## [0.15.0] — 2026-07-15
 
 ### Added
