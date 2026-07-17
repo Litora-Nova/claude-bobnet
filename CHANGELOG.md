@@ -32,6 +32,17 @@ Canon-drift fixes: the 9 code/canon contradictions surfaced by the README sync (
   autonomy while the detailed action policy requires per-action human permission —
   the stricter action rule is now the single source of truth.
 
+### Notes (deliberately out of scope / follow-up)
+- Two of the 9 report findings are **not** in this release, by decision: `bin/onboard`
+  guard *activation* (a stage-C / human-only settings step by design — the README now
+  states this honestly rather than implying onboard arms the guard) and the
+  colonel/guppi role-over-executable gap (backlog; the README reports the executable
+  subset). The docs no longer read as "all 9 done".
+- Follow-up (test-coverage, not a security gap): the additive floor-merge logic in
+  `deploy-guard` is currently not *isolated*-testable because `t4_floor()` redundantly
+  covers the same production-infra globs (defense-in-depth holds, but a dedicated test
+  should prove the merge logic independently). Tracked for a later cycle.
+
 ## [0.18.0] — 2026-07-17
 
 Both features built by **Bob One** (Codex/GPT runtime, cross-model pilot #61); gated by the Claude team.
