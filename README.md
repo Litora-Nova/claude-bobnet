@@ -405,10 +405,10 @@ cadence, not a chain of command:
 ### Circle of Trust — 4 risk tiers
 
 Where `ring` is org-chart, `gateTier` is **risk and autonomy**. Every agent carries one. The source
-policy is [`team-rules/tiers.md`](./team-rules/tiers.md), which currently contains an internal
-conflict: its short T1–T3 matrix says “autonomous to staging”, while its detailed action table
-requires human permission for each staging deployment unless the PO documented a project opt-in.
-The table below follows that stricter, action-specific rule; the source-policy conflict remains open.
+policy is [`team-rules/tiers.md`](./team-rules/tiers.md). Its short T1–T3 matrix used to say
+“autonomous to staging” while its detailed action table required human permission for each staging
+deployment unless the PO documented a project opt-in — that internal conflict is now fixed at the
+source: the matrix follows the same stricter, action-specific rule described below.
 
 | Tier | Required gate / control | Autonomy boundary |
 |---|---|---|
