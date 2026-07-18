@@ -90,6 +90,32 @@ it "t4_floor: Override ohne Secrets blockt .secrets trotzdem (Exit 2)"; eq "$GUA
 run_guard "/proj/nur-eigene-glob/datei.txt" "$TMP/proj"
 it "Override-Glob erweitert den Block (Exit 2)"; eq "$GUARD_RC" "2"
 
+# --- Additiver Merge-Nachweis unabhängig von t4_floor(): synthetische, T4-neutrale Globs ---
+# Die Hook-Kopie leitet ENGINE_ROOT aus ihrem eigenen Speicherort ab; ein Environment-Override
+# würde die echte Engine-Datei weiterverwenden und die getestete Datenquelle nicht isolieren.
+FAKE_ENGINE_MERGE="$TMP/fake-engine-merge"
+FAKE_PROJECT_MERGE="$TMP/fake-project-merge"
+mkdir -p "$FAKE_ENGINE_MERGE/hooks" "$FAKE_ENGINE_MERGE/team-rules" \
+  "$FAKE_PROJECT_MERGE/_dev_team/team-rules"
+cp "$HOOK" "$FAKE_ENGINE_MERGE/hooks/deploy-guard.sh"
+printf '*/engine-floor-sentinel/*\n' > "$FAKE_ENGINE_MERGE/team-rules/deploy-guard.paths"
+printf '*/project-addon-sentinel/*\n' > "$FAKE_PROJECT_MERGE/_dev_team/team-rules/deploy-guard.paths"
+
+run_merge_guard() { # $1 = file_path → setzt GUARD_OUT + GUARD_RC
+  GUARD_OUT="$(printf '{"tool_input":{"file_path":"%s"}}' "$1" \
+    | DEV_TEAM_ENV="$EMPTY_ENV" PROJECT_ROOT="$FAKE_PROJECT_MERGE" \
+      bash "$FAKE_ENGINE_MERGE/hooks/deploy-guard.sh" 2>/dev/null)"
+  GUARD_RC=$?
+}
+
+run_merge_guard "/proj/engine-floor-sentinel/datei.txt"
+it "additiver Merge: Engine-Glob bleibt mit Projekt-Override aktiv"; eq "$GUARD_RC" "2"
+run_merge_guard "/proj/project-addon-sentinel/datei.txt"
+it "additiver Merge: Projekt-Glob erweitert die Engine-Liste";        eq "$GUARD_RC" "2"
+run_merge_guard "/proj/neutral-sentinel/datei.txt"
+it "additiver Merge: neutraler Pfad → Exit 0";                         eq "$GUARD_RC" "0"
+it "additiver Merge: neutraler Pfad → kein Output";                    eq "$GUARD_OUT" ""
+
 # --- Kanon-Drift #1 (README-Sync 2026-07-17): ein Projekt-Override, der die Engine-Liste
 #     NICHT erwähnt, darf die "breiteren" Production-Infra-Globs (recipes2go, nginx/*production*,
 #     docker-compose.prod, k8s/production) nicht verlieren — vorher waren NUR die 5 Secret-Globs
