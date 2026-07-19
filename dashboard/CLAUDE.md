@@ -28,23 +28,39 @@ two consistent.
   (`teamOf(tenant)`), `server/utils/theme.ts` (`themeOf(tenant, team)`),
   `server/utils/activity.mjs` (the project activity rollup). See **Multi-tenant** below.
 
-## Three display classes (HARD: avatars are always an image)
+## Three display classes (HARD: never an emoji)
 
 The dashboard renders an entity in one of three places, driven by its archetype
 `category` (overridable per instance — never hardcoded):
 
 | Class | Who | Rendering |
 |---|---|---|
-| **Roster** | Team members (`category: bob`) | Card with **image avatar**, name, role, status pill (`components/RosterCard.vue`). |
+| **Roster** | Team members (`category: bob`) | Card with name, role, optional model line, status pill (`components/RosterCard.vue`). **Image avatar only for the lead** (`order === 1`); every other member shows **initials** instead — see below. |
 | **Service** | Cross-project daemons (`category: service`) | Compact pill showing **alive / dead** instead of the full status scale — a daemon either runs or is down (`components/ServiceStatus.vue`). "alive" = a fresh heartbeat within the alive window. |
 | **Helper** | Ephemeral helpers (`category: helper`) | Icon-only **badge** on the parent agent's card — helpers are not roster entries (`components/HelperBadge.vue`). The status colors the badge dot. |
 
 Status colors for roster/helpers: `busy` · `idle` · `blocked` · `done`.
 
+### Lead-only avatar image (PO 2026-07-19)
+
+Team-Grid (`pages/index.vue`) and the member detail page (`pages/team/[name].vue`,
+via `RosterCard.vue`) show the **image avatar only for the team lead** (`order === 1`
+— checked against every live `team.config.json` in the fleet at the time, always the
+Tech-/Team-Lead). Every other roster member renders **initials** (1–2 letters,
+typography, same box size as the avatar it replaces) so the card's status dot and
+layout geometry stay intact. This is a **caller-driven opt-in**: `RosterCard`'s new
+`avatarMode?: 'image' | 'initials'` prop only switches to initials when a caller
+explicitly passes `avatarMode="initials"`; callers that don't pass it (e.g. the PO's
+own card in the Inbox hub) keep the original always-image behavior unchanged. It is
+deliberately a **string** prop, not a boolean — Vue's "Boolean casting" makes an
+*absent* boolean prop resolve to `false` at runtime, which would have forced
+initials onto every unmigrated caller instead of leaving them untouched.
+
 ### NO-EMOJI — hard rule (team members are NEVER an emoji)
 
-**Team-member avatars are ALWAYS an image, NEVER an emoji** — not even as a fallback
-or an option. This is enforced in code, not by convention:
+**Team-member avatars are NEVER an emoji** — not even as a fallback or an option
+(initials are typography, not a glyph, and do not violate this). This is enforced in
+code, not by convention:
 
 - `server/utils/theme.ts` has **no `emoji` field** at all (the `Persona` type is
   `name` / `avatar` / `bio` / `positionLabel`). `avatarFileOf()` **always** returns a
@@ -54,14 +70,15 @@ or an option. This is enforced in code, not by convention:
   theme `defaultAvatar` → 404; on 404 the client `<img @error>` falls back to the
   static `public/avatars/default.png`. At no point is an emoji rendered.
 - `RosterCard.vue` / `ServiceStatus.vue` both load `/theme-avatar/<name>` and fall
-  back to the static default image on error — image-only end to end.
+  back to the static default image on error — image-only end to end, for whichever
+  members render an image at all (see lead-only rule above).
 - **Helper badges are the only glyphs**, and they are **mdi icons keyed to the helper
   *type*** (`mdi:spider`, `mdi:satellite-variant`, generic `mdi:robot-outline`) — UI
   iconography like the rest of the dashboard's mdi icons, **not** a member rendered as
   an emoji. Do not confuse the two: type-icons are fine, member-as-emoji is forbidden.
 
-When touching any rendering path, keep this invariant. Image or static default —
-never a glyph for a member.
+When touching any rendering path, keep this invariant. Image, initials, or static
+default — never a glyph for a member.
 
 ## Config-driven (engine stays generic)
 
@@ -70,9 +87,14 @@ instance:
 
 - **`team.config.json`** — title, Product-Owner, and the member list (each member
   keyed by a stable archetype `id`, with `role`, `order`, `groups`, optional
-  `category`/`parent` overrides). Located via `NUXT_TEAM_CONFIG`, or as
+  `category`/`parent`/**`model`** overrides). Located via `NUXT_TEAM_CONFIG`, or as
   `team.config.json` inside the stand-up directory. See
-  [`team.config.example.json`](./team.config.example.json).
+  [`team.config.example.json`](./team.config.example.json). `model` is an optional,
+  free-text per-member field for the model(s) actually used at spawn time (e.g.
+  `"sonnet5"` or `"sonnet5 + codex sol-max"`) — hand-maintained by whoever spawns the
+  agent, **never derived from the archetype catalog** (the catalog only knows its own
+  default, not what actually got spawned). Missing the field renders nothing, never a
+  guess.
 - **`archetypes/*.json`** — supply each `id`'s default display `category` (read from
   the engine's archetype layer; `NUXT_ARCHETYPES_DIR` to relocate).
 - **Themes** — name / avatar / bio per persona, keyed by the same stable `id`. Active

@@ -23,7 +23,7 @@ The dashboard renders an entity in one of three places, driven by its archetype
 
 | Class | Who | Rendering |
 |---|---|---|
-| **Roster** | Team members (`category: bob`) | Card with **image avatar**, name, role, status pill. Avatars are **always an image, never an emoji** — if the theme avatar fails to load, a static default image (anonymous mask) is shown. |
+| **Roster** | Team members (`category: bob`) | Card with name, role, optional model line, status pill. **Image avatar only for the team lead** (`order === 1`); other members show initials instead. Where an image is shown, it's **always an image, never an emoji** — if the theme avatar fails to load, a static default image (anonymous mask) is shown. |
 | **Service** | Cross-project daemons — SCUT / GUPPI / Colonel (`category: service`) | Compact pill showing **alive / dead** (a service either runs or is down) rather than the full status scale. "alive" = a fresh heartbeat within the alive window. |
 | **Helper** | Ephemeral helpers — ROAMER / Sonde / Jeeves (`category: helper`) | Icon-only **badge** rendered on the parent agent's card (helpers are not roster entries). The status colors the badge dot. |
 

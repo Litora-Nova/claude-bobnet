@@ -181,11 +181,18 @@ h1 { font-size: 21px; margin: 0; color: #e6edf3; display: inline-flex; align-ite
 .role-beat b { font-weight: 600; }
 .ava { position: relative; flex: 0 0 auto; width: 68px; height: 68px; }
 .ava img { width: 68px; height: 68px; border-radius: 10px; object-fit: cover; background: #0d1117; }
+/* Initialen-Fallback statt Foto (Team-Grid, alle ausser Lead — PO 2026-07-19):
+   gleiche Box-Groesse wie das Bild, kein Umbruch-Risiko, Status-Dot bleibt. */
+.ava .initials { display: flex; align-items: center; justify-content: center; width: 68px; height: 68px; border-radius: 10px; background: #21262d; border: 1px solid #30363d; color: #c9d1d9; font-weight: 700; font-size: 22px; letter-spacing: .02em; }
 .ava .sdot { position: absolute; right: -3px; bottom: -3px; width: 14px; height: 14px; border-radius: 50%; border: 2px solid #161b22; }
 .who { flex: 0 0 170px; }
 .who .nm { font-size: 19px; font-weight: 700; color: #e6edf3; line-height: 1.1; display: inline-flex; align-items: center; gap: 6px; }
 .ext-badge { font-size: 9px; font-weight: 700; letter-spacing: .04em; color: #8b949e; background: #21262d; border: 1px solid #30363d; border-radius: 4px; padding: 1px 5px; text-transform: uppercase; vertical-align: middle; }
 .who .role { font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: .03em; margin-top: 3px; }
+/* Modell-Zeile (optional, aus team.config member.model — nie geraten). Hart auf
+   1 Zeile + Ellipsis begrenzt (PO-Warnung: langer Text brach die Karte frueher
+   zweizeilig um). */
+.who .model { font-size: 11px; color: #6e7681; margin-top: 2px; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .beats { flex: 1; min-width: 0; }
 .now { font-size: 15px; color: #c9d1d9; }            /* 25% größer als die Heartbeats (12px), sonst gleich formatiert */
 .now b { font-weight: 600; }

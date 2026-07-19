@@ -54,6 +54,9 @@ Es gibt **zwei komplementäre Identitäts-Ebenen**, die NICHT verwechselt werden
   erst die Anonymous-/Hacker-Maske, austauschbar). Fehlt einer Persona ein Avatar → defaultAvatar.
 - **Theme-Settings** (`theme.json` → `settings`, erweiterbar): z. B. `showAvatars` (Bild ja/nein;
   bei `false` nur der Name — nie ein Emoji).
+- **Team-Grid + Team-Ansicht zeigen das Bild nur dem Team-Lead** (`order === 1`, PO 2026-07-19) —
+  alle anderen Mitglieder zeigen Initialen statt Foto. Initialen = Typografie, kein Emoji, die
+  Regel oben bleibt unberührt. Details: `dashboard/CLAUDE.md`.
 
 ## 3. Style / Look-&-Feel
 
