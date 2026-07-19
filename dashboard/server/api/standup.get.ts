@@ -8,7 +8,9 @@ import { parseTail, teamTz } from '../utils/beats.mjs'
 import { render } from '../utils/md'
 
 type Beat = { ts: string; status: string; msg: string; epoch: number }
-type Agent = { name: string; id?: string; displayName?: string; bio?: string; external?: boolean; category?: Category; parent?: string | null; role: string; order: number; latest: Beat | null; history: Beat[] }
+// model: optionaler, freier Anzeige-Text aus team.config member.model (durchgereicht,
+// nie abgeleitet) — siehe TeamMember in server/utils/team.ts.
+type Agent = { name: string; id?: string; displayName?: string; bio?: string; external?: boolean; category?: Category; parent?: string | null; role: string; order: number; model?: string; latest: Beat | null; history: Beat[] }
 
 // Zeilen-Parsing zentral in server/utils/beats.mjs (geteilt mit heartbeats/
 // projects): ISO-Stamps über die Team-Zeitzone (DEV_TEAM_TZ), datumslose
@@ -39,7 +41,7 @@ export default defineEventHandler(async (event) => {
       .reverse().map(p => ({ ts: p.time, status: p.status, msg: p.msg, epoch: p.epoch }))
     // name = Log-Dateiname = uid ODER Persona-Name → Member per beidem auflösen.
     const meta = team.memberOf(name) || { role: '', order: 99 }
-    agents.push({ name, role: meta.role, order: meta.order, latest: last3[0] || null, history: last3 })
+    agents.push({ name, role: meta.role, order: meta.order, model: meta.model, latest: last3[0] || null, history: last3 })
   }
   // Roster-Mitglieder ohne Log trotzdem zeigen — mit zwei Sonderfällen:
   //   - Externe (Tim/Henry, eigener Claude-Kontext, kein Heartbeat-Log):
@@ -65,10 +67,10 @@ export default defineEventHandler(async (event) => {
         ? `vor ${Math.round(age / 60_000)} min`
         : `vor ${Math.round(age / 3600_000)} h`
       const beat: Beat = { ts: hm, status: 'idle', msg: `extern · Channel ${ago} aktualisiert`, epoch: st.mtimeMs }
-      agents.push({ name, role: meta.role, order: meta.order, latest: beat, history: [beat] })
+      agents.push({ name, role: meta.role, order: meta.order, model: meta.model, latest: beat, history: [beat] })
       continue
     }
-    agents.push({ name, role: meta.role, order: meta.order, latest: null, history: [] })
+    agents.push({ name, role: meta.role, order: meta.order, model: meta.model, latest: null, history: [] })
   }
   // Theme-Enrichment (Schicht ②): Anzeigename/Emoji/Bio aus dem aktiven Theme,
   // gekeyt auf den stabilen Roster-Namen. `name` bleibt der Routing-/Log-Key.
