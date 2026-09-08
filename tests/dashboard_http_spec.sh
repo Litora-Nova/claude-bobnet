@@ -104,6 +104,20 @@ neq "$ACT" ""
 it "api/projects: kein roher Server-Crash (kein 500-Statuscode)"
 neq "$(status /api/projects)" "500"
 
+# ── /api/projection — visibility projection panel (D-1/D2) ───────────────────
+# A tenant with no projection file is UNKNOWN, never an error (contract §4): the
+# route must answer 200 with present:false, never a 500 — pinned here because
+# only the real Nitro/H3 route (not the pure projection.mjs unit) can prove the
+# HTTP status contract.
+it "api/projection: HTTP 200 even with no projection file for this tenant (never 500 for 'unknown')"
+eq "$(status /api/projection)" "200"
+
+PROJ_PROJ_B="$(body /api/projection)"
+
+it "api/projection: JSON body carries a boolean 'present' field"
+PRES="$(printf '%s' "$PROJ_PROJ_B" | grep -oE '"present":(true|false)' | head -1)"
+neq "$PRES" ""
+
 # ── 404-Semantik (tenant.ts) — unbekannte uid → kein stiller Fallback ─────────
 it "tenant 404: unbekanntes ?project=<uid> → HTTP 404 (kein Fallback auf fremdes Team)"
 eq "$(status '/api/standup?project=zzz-gibtsnicht-zzz')" "404"
