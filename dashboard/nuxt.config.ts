@@ -68,6 +68,9 @@ export default defineNuxtConfig({
         'mdi:orbit',
         // Plan-View (#30): Nav + Goal/Roadmap-Sektionen.
         'mdi:flag-checkered', 'mdi:target', 'mdi:map-marker-path',
+        // Read-only broker projection.
+        'mdi:broadcast', 'mdi:gauge', 'mdi:alert-circle-outline',
+        'mdi:clock-alert-outline', 'mdi:sync-alert', 'mdi:file-alert-outline',
       ],
     },
   },

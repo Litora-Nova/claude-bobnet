@@ -60,7 +60,7 @@ it "api/health: HTTP 200 (Liveness für Supervisor/systemd)"
 eq "$(status /api/health)" "200"
 
 it "api/health: JSON ok:true (Prozess gesund)"
-contains "$(body /api/health)" '"ok":true'
+eq "$(body /api/health | node -e 'console.log(JSON.parse(require("node:fs").readFileSync(0, "utf8")).ok === true)')" "true"
 
 it "api/health: Cache-Control no-store (Probe nie gecacht)"
 contains "$(printf '%s' "$(headers /api/health)" | tr 'A-Z' 'a-z')" "cache-control: no-store"
@@ -103,6 +103,25 @@ neq "$ACT" ""
 
 it "api/projects: kein roher Server-Crash (kein 500-Statuscode)"
 neq "$(status /api/projects)" "500"
+
+# ── /api/projection — visibility projection panel (D-1/D2) ───────────────────
+# A tenant with no projection file is UNKNOWN, never an error (contract §4): the
+# route must answer 200 with present:false, never a 500 — pinned here because
+# only the real Nitro/H3 route (not the pure projection.mjs unit) can prove the
+# HTTP status contract.
+it "api/projection: HTTP 200 even with no projection file for this tenant (never 500 for 'unknown')"
+eq "$(status /api/projection)" "200"
+
+PROJ_PROJ_B="$(body /api/projection)"
+
+it "api/projection: JSON body carries a boolean 'present' field"
+eq "$(printf '%s' "$PROJ_PROJ_B" | node -e 'console.log(typeof JSON.parse(require("node:fs").readFileSync(0, "utf8")).present === "boolean")')" "true"
+
+it "api/projection: Cache-Control no-store"
+contains "$(headers /api/projection | tr 'A-Z' 'a-z')" "cache-control: no-store"
+
+it "api/projection: unknown tenant remains 404"
+eq "$(status '/api/projection?project=zzz-gibtsnicht-zzz')" "404"
 
 # ── 404-Semantik (tenant.ts) — unbekannte uid → kein stiller Fallback ─────────
 it "tenant 404: unbekanntes ?project=<uid> → HTTP 404 (kein Fallback auf fremdes Team)"

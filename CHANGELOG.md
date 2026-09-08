@@ -4,6 +4,18 @@ All notable engine changes are documented here. Versioning follows SemVer (`VERS
 human-facing); machine compatibility is anchored separately by `SCHEMA_VERSION` (integer) —
 see `.claude/rules/contract.md`. `skills/update-bobs` points teams here after an update.
 
+## [Unreleased]
+
+Dashboard: **projection panel (D-1)** — a read-only, tenant-scoped rendering of the
+`ai-bobnet` visibility projection (`CONTRACT-visibility.md` schema 1) below the
+roster, plus an optional per-project summary badge in the fleet view. Display only:
+never a runtime gate, never a second truth for agent state (the roster card's own
+heartbeat status is unchanged). Docs: `dashboard/CLAUDE.md` + `dashboard/README.md`
+"Projection panel" sections. Implemented with strict schema validation, uncached
+reads, explicit freshness/source labels and roster drift markers. Specs:
+`tests/dashboard_projection_spec.sh` + `/api/projection` cases in
+`tests/dashboard_http_spec.sh`.
+
 ## [0.18.1] — 2026-07-17
 
 Canon-drift fixes: the 9 code/canon contradictions surfaced by the README sync (built by Bob One / GPT) resolved, gated by the Claude team.

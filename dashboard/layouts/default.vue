@@ -49,7 +49,7 @@ let fast: ReturnType<typeof setInterval> | undefined
 let slow: ReturnType<typeof setInterval> | undefined
 onMounted(() => {
   fast = setInterval(() => refreshNuxtData(['standup', 'tasks', 'inbox']), 3000)
-  slow = setInterval(() => refreshNuxtData(['qa', 'poTasks', 'projects', 'plan']), 10000)
+  slow = setInterval(() => refreshNuxtData(['qa', 'poTasks', 'projects', 'plan', 'projection']), 10000)
 })
 onBeforeUnmount(() => { if (fast) clearInterval(fast); if (slow) clearInterval(slow) })
 

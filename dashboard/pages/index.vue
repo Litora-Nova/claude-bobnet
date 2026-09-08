@@ -4,6 +4,9 @@
 // nicht mehr hier. Der PO ist nicht im Grid (er hat /inbox = "Meine Page").
 
 const { data } = await useStandup()
+const projectionRosterStatus = computed<Record<string, string | null>>(() => Object.fromEntries(
+  ((data.value as any)?.agents || []).map((agent: any) => [agent.name, agent.latest?.status ?? null]),
+))
 // PO-Name aus der Instanz-Config (team.config po.name → public.poName), Fallback
 // 'Owner' — der PO wird (als Sicherheitsnetz) aus dem Roster-Grid gefiltert.
 const poName = (useRuntimeConfig().public.poName as string) || 'Owner'
@@ -161,6 +164,8 @@ function scrollToSprint() { sprintRef.value?.scrollIntoView({ behavior: 'smooth'
         </div>
       </NuxtLink>
     </div>
+
+    <ProjectionPanel :roster-status="projectionRosterStatus" />
 
     <!-- Sprint-Body: serverseitig gerenderter Markdown (sprintHtml aus standup.get.ts). -->
     <section class="sprint" ref="sprintRef">

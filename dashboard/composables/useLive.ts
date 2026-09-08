@@ -15,6 +15,7 @@ export const usePoTasks = () => useFetch('/api/po-tasks', { key: 'poTasks', quer
 export const usePlan = () => useFetch('/api/plan', { key: 'plan', query: useProjectQuery() })
 // Bobiverse-Übersicht (#9/#10): tenant-NEUTRAL — bewusst OHNE ?project-Query.
 export const useProjects = () => useFetch('/api/projects', { key: 'projects' })
+export const useProjection = () => useFetch('/api/projection', { key: 'projection', query: useProjectQuery() })
 
 // Blockierte Agents (letzter Heartbeat = 'blocked'), abzüglich bereits als Task
 // übernommener (Owner+Text) oder dauerhaft aufgelöster — identische Logik wie

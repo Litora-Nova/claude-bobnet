@@ -191,6 +191,85 @@ Each registry entry may carry an optional `icon` (a web URL or path) shown next 
 project in the fleet view; without it the UI falls back to the project's initial label.
 (Favicon auto-discovery is the follow-up in issue #21.)
 
+## Projection panel (broker read model)
+
+The dashboard also renders — read-only, never gating anything — a second, independent
+view of agent state: the **visibility projection** an external broker process
+(`ai-bobnet`) writes per project. This is `docs/DOMAIN.md` Invariant 1 in practice: "a
+dashboard is a projection and a command surface — never a second truth." This panel
+only *displays* what the broker already decided to write; it never derives, decides,
+or corrects anything on its own.
+
+- **Interface = ai-bobnet's `CONTRACT-visibility.md` schema 1 (frozen).** This
+  dashboard is one consumer among possibly several and does not own or extend the
+  shape. Read the contract before touching this panel (`docs/CONTRACT-visibility.md`
+  in the `ai-bobnet` repo, §18 for the exact field list).
+- **Consumer obligations** (binding on every reader of the file, restated here for
+  this codebase — see contract §4/§5):
+  - Render **"as of `generated_at`."** The file's own timestamp is the only
+    freshness signal.
+  - **A missing projection means *unknown*, never *empty*.** No projection file is
+    not the same as "no agents" — show an explicit unknown state, never a
+    blank/empty roster.
+  - **Never a runtime gate.** Nothing in this dashboard may use the projection to
+    hide, block, or decide anything — display only.
+  - **Text is text.** Every string field (`message`, `reason`, …) is untrusted,
+    agent-written free text — render it, never interpret it. No `v-html` anywhere
+    near projection data.
+  - **`attested` is the claim/attestation distinction** (contract §2): agent
+    heartbeat state and `needs:`-derived attention items are `attested:false` (an
+    agent said so); stream/capacity and broker-derived attention items are
+    `attested:true` (the broker observed it). Render both sides, never resolve a
+    disagreement by picking a winner.
+- **Two sources, no second truth.** The existing roster card keeps its own
+  heartbeat-derived status unchanged (2.0 behaviour). This panel shows the
+  projector's own read of agent state *separately* and labels its source; when the
+  two disagree, the panel marks it ("differs from roster") instead of picking one.
+- **Staleness:** `ageSeconds > NUXT_PROJECTION_STALE_SECONDS` marks the panel stale
+  (env, default `60` — six ticks of the projector's 10s cadence).
+- **Server util:** `server/utils/projection.mjs` — `readProjection(standupDir,
+  nowIso)`, node-testable like `beats.mjs`/`activity.mjs`. Returns
+  `{present:false, reason:"missing"|"unreadable"|"unparsable"|"schema"}` or
+  `{present:true, projection, ageSeconds, stale}`. Schema check = schema-1
+  field/type conformance; unknown top-level fields are tolerated (additive-only
+  versioning, contract §18).
+- **Route:** `server/api/projection.get.ts` — tenant-resolved like
+  `standup.get.ts`. A missing projection is **HTTP 200 with `present:false`**,
+  never a 500 — a missing file is unknown, not an error (contract §4).
+- **Component:** `components/ProjectionPanel.vue`, rendered on the tenant page
+  below the roster. New mdi icon names it needs go into `nuxt.config.ts`
+  `icon.clientBundle.icons` before they render — same rule as every other icon in
+  this dashboard.
+- **Fleet view:** `/api/projects` gains an optional per-project `projection`
+  summary (`{present, stale, streamStatus, attention}`), read via the same util.
+
+- The panel polls `/api/projection` every 10 seconds through the shared layout
+  refresh. Both tenant modes use the existing tenant resolver; unknown tenant UIDs
+  remain 404. Responses carry `uid`, `generated_at` and display names alongside the
+  reader result and use `Cache-Control: no-store`. Files are read anew per request,
+  including provisioned symlinks. The projection itself is returned verbatim.
+- Schema 1 validation checks required nested fields, enums, nonnegative integer
+  counts and real offset-bearing timestamps. Unknown additive fields are retained.
+  Invalid UTF-8/JSON is `unparsable`; invalid field types are `schema`; read failures
+  are `unreadable`. No failure is presented as an empty projection.
+- Age is whole seconds from the file timestamp, independent of process timezone.
+  Future timestamps show "clock ahead"; invalid/negative staleness configuration
+  falls back to 60 seconds (zero is allowed). Missing stream/capacity attestations
+  are explicitly "unknown — not observed". A null capacity is never a zero bar.
+- Empty attention means "nothing waiting on a human" **in that snapshot**, with an
+  explicit reminder that absence is not proof that no help is needed. Agent claims
+  and broker-observed attempts keep separate source labels. Roster drift requires
+  matching full UIDs and two known states; missing/unknown states do not disagree.
+- Display names use the existing tenant theme mapping, falling back to the UID
+  with its exact project prefix removed. Full UIDs remain keys and hover titles.
+- The fleet badge reports unknown, or stream status, attention count and staleness;
+  it does not alter the fleet's heartbeat-derived activity or ordering.
+- Icons are bundled locally: `mdi:broadcast`, `mdi:gauge`,
+  `mdi:alert-circle-outline`, `mdi:clock-alert-outline`, `mdi:sync-alert`,
+  `mdi:file-alert-outline`, and the existing `mdi:account-group`. The panel uses
+  the existing dark palette and status pill colors, with responsive CSS in
+  `assets/css/main.css`. Visual release sign-off remains with the PO.
+
 ## Heartbeat-fed (one file per agent → no write conflicts)
 
 1. Each agent appends `YYYY-MM-DD HH:MM | status | message` to **its own** log via the
