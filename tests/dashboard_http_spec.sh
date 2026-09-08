@@ -60,7 +60,7 @@ it "api/health: HTTP 200 (Liveness für Supervisor/systemd)"
 eq "$(status /api/health)" "200"
 
 it "api/health: JSON ok:true (Prozess gesund)"
-contains "$(body /api/health)" '"ok":true'
+eq "$(body /api/health | node -e 'console.log(JSON.parse(require("node:fs").readFileSync(0, "utf8")).ok === true)')" "true"
 
 it "api/health: Cache-Control no-store (Probe nie gecacht)"
 contains "$(printf '%s' "$(headers /api/health)" | tr 'A-Z' 'a-z')" "cache-control: no-store"
@@ -115,8 +115,13 @@ eq "$(status /api/projection)" "200"
 PROJ_PROJ_B="$(body /api/projection)"
 
 it "api/projection: JSON body carries a boolean 'present' field"
-PRES="$(printf '%s' "$PROJ_PROJ_B" | grep -oE '"present":(true|false)' | head -1)"
-neq "$PRES" ""
+eq "$(printf '%s' "$PROJ_PROJ_B" | node -e 'console.log(typeof JSON.parse(require("node:fs").readFileSync(0, "utf8")).present === "boolean")')" "true"
+
+it "api/projection: Cache-Control no-store"
+contains "$(headers /api/projection | tr 'A-Z' 'a-z')" "cache-control: no-store"
+
+it "api/projection: unknown tenant remains 404"
+eq "$(status '/api/projection?project=zzz-gibtsnicht-zzz')" "404"
 
 # ── 404-Semantik (tenant.ts) — unbekannte uid → kein stiller Fallback ─────────
 it "tenant 404: unbekanntes ?project=<uid> → HTTP 404 (kein Fallback auf fremdes Team)"
