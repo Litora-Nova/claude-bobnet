@@ -97,6 +97,30 @@ queried.
 The PWA manifest is generated per active project (its title; `BobNet` if none), so an
 installed dashboard reflects the project you switched to.
 
+## Projection panel
+
+Below the roster, the dashboard also shows a second, independent view of agent
+state: the **visibility projection**, a broker-owned read model an external process
+(`ai-bobnet`) writes per project. This panel only *displays* it — the dashboard
+never writes to it and never uses it to decide anything.
+
+- **Source of truth for the shape:** `ai-bobnet`'s `CONTRACT-visibility.md`, schema 1
+  (frozen). This dashboard is one reader among possibly several.
+- **Render "as of `generated_at`."** The file's own timestamp is the only freshness
+  signal; a pill marks the panel stale once its age exceeds
+  `NUXT_PROJECTION_STALE_SECONDS` (default `60`).
+- **No projection file means *unknown*, never *empty*.** The projector may simply
+  not have run yet — the panel shows an explicit "unknown" state, never a blank
+  roster.
+- **Two sources, one honest picture.** The roster card's own heartbeat-derived
+  status is unchanged. The panel shows the projector's own read of agent state next
+  to it, and flags it when the two disagree — it never picks a winner.
+- **Claim vs. attestation.** Every projected value is marked either agent-asserted
+  (the agent's own heartbeat, unverified) or broker-attested (the broker itself
+  observed it) — both are shown, never merged into one "fact."
+- All text in the panel (agent messages, attention reasons) is untrusted, agent-
+  written free text, rendered as text — never interpreted.
+
 ## How it works
 
 1. Each agent appends `YYYY-MM-DD HH:MM | status | message` to its own log via the

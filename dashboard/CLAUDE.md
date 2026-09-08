@@ -169,6 +169,66 @@ Each registry entry may carry an optional `icon` (a web URL or path) shown next 
 project in the fleet view; without it the UI falls back to the project's initial label.
 (Favicon auto-discovery is the follow-up in issue #21.)
 
+## Projection panel (broker read model)
+
+The dashboard also renders — read-only, never gating anything — a second, independent
+view of agent state: the **visibility projection** an external broker process
+(`ai-bobnet`) writes per project. This is `docs/DOMAIN.md` Invariant 1 in practice: "a
+dashboard is a projection and a command surface — never a second truth." This panel
+only *displays* what the broker already decided to write; it never derives, decides,
+or corrects anything on its own.
+
+- **Interface = ai-bobnet's `CONTRACT-visibility.md` schema 1 (frozen).** This
+  dashboard is one consumer among possibly several and does not own or extend the
+  shape. Read the contract before touching this panel (`docs/CONTRACT-visibility.md`
+  in the `ai-bobnet` repo, §18 for the exact field list).
+- **Consumer obligations** (binding on every reader of the file, restated here for
+  this codebase — see contract §4/§5):
+  - Render **"as of `generated_at`."** The file's own timestamp is the only
+    freshness signal.
+  - **A missing projection means *unknown*, never *empty*.** No projection file is
+    not the same as "no agents" — show an explicit unknown state, never a
+    blank/empty roster.
+  - **Never a runtime gate.** Nothing in this dashboard may use the projection to
+    hide, block, or decide anything — display only.
+  - **Text is text.** Every string field (`message`, `reason`, …) is untrusted,
+    agent-written free text — render it, never interpret it. No `v-html` anywhere
+    near projection data.
+  - **`attested` is the claim/attestation distinction** (contract §2): agent
+    heartbeat state and `needs:`-derived attention items are `attested:false` (an
+    agent said so); stream/capacity and broker-derived attention items are
+    `attested:true` (the broker observed it). Render both sides, never resolve a
+    disagreement by picking a winner.
+- **Two sources, no second truth.** The existing roster card keeps its own
+  heartbeat-derived status unchanged (2.0 behaviour). This panel shows the
+  projector's own read of agent state *separately* and labels its source; when the
+  two disagree, the panel marks it ("differs from roster") instead of picking one.
+- **Staleness:** `ageSeconds > NUXT_PROJECTION_STALE_SECONDS` marks the panel stale
+  (env, default `60` — six ticks of the projector's 10s cadence).
+- **Server util:** `server/utils/projection.mjs` — `readProjection(standupDir,
+  nowIso)`, node-testable like `beats.mjs`/`activity.mjs`. Returns
+  `{present:false, reason:"missing"|"unreadable"|"unparsable"|"schema"}` or
+  `{present:true, projection, ageSeconds, stale}`. Schema check = schema-1
+  field/type conformance; unknown top-level fields are tolerated (additive-only
+  versioning, contract §18).
+- **Route:** `server/api/projection.get.ts` — tenant-resolved like
+  `standup.get.ts`. A missing projection is **HTTP 200 with `present:false`**,
+  never a 500 — a missing file is unknown, not an error (contract §4).
+- **Component:** `components/ProjectionPanel.vue`, rendered on the tenant page
+  below the roster. New mdi icon names it needs go into `nuxt.config.ts`
+  `icon.clientBundle.icons` before they render — same rule as every other icon in
+  this dashboard (see TODO below).
+- **Fleet view:** `/api/projects` gains an optional per-project `projection`
+  summary (`{present, stale, streamStatus, attention}`), read via the same util.
+
+**TODO (builder):** add the mdi icon names `ProjectionPanel.vue` ends up using to
+`nuxt.config.ts` `icon.clientBundle.icons` — none are pre-approved, this is a
+starting proposal only: `mdi:broadcast` (stream status), `mdi:gauge` (capacity),
+`mdi:alert-circle-outline` (attention items), `mdi:clock-alert-outline` (stale
+pill), `mdi:sync-alert` ("differs from roster" marker), `mdi:shield-check-outline`
+(broker-attested marker), `mdi:account-alert-outline` (agent-asserted marker),
+`mdi:file-alert-outline` (anomalies).
+
 ## Heartbeat-fed (one file per agent → no write conflicts)
 
 1. Each agent appends `YYYY-MM-DD HH:MM | status | message` to **its own** log via the
