@@ -201,4 +201,89 @@ not_ok grep -P "[\x{1F300}-\x{1FAFF}\x{2600}-\x{27BF}\x{2190}-\x{21FF}\x{2B00}-\
 it "9e. no emoji codepoint in projection.mjs"
 not_ok grep -P "[\x{1F300}-\x{1FAFF}\x{2600}-\x{27BF}\x{2190}-\x{21FF}\x{2B00}-\x{2BFF}]" "$MJS"
 
+# Additional malformed inputs and replacement semantics, generated under mktemp.
+it "10. component exists"
+ok test -f "$COMPONENT"
+
+it "11. a directory at the projection path is unreadable, not an empty projection"
+mkdir -p "$WORK/unreadable/_projection.json"
+eq "$(rp "$WORK/unreadable" "2026-09-08T12:00:00Z" "r.present + '|' + r.reason")" "false|unreadable"
+
+it "12. provisioned symlinks are readable"
+mkdir -p "$WORK/linked"
+ln -s "$D_SAMPLE/_projection.json" "$WORK/linked/_projection.json"
+eq "$(rp "$WORK/linked" "2026-09-08T12:00:00Z" "r.present")" "true"
+
+it "13. configured threshold is strict, including zero"
+eq "$(NUXT_PROJECTION_STALE_SECONDS=0 rp "$D_SAMPLE" "2026-09-08T11:34:59+02:00" "r.ageSeconds + '|' + r.stale")" "1|true"
+
+it "14. invalid threshold falls back to 60 seconds"
+eq "$(NUXT_PROJECTION_STALE_SECONDS=oops rp "$D_STALE" "2026-09-08T12:01:01+02:00" "r.stale")" "true"
+
+it "15. future generated_at retains its signed age"
+eq "$(rp "$D_STALE" "2026-09-08T11:59:58+02:00" "r.ageSeconds + '|' + r.stale")" "-2|false"
+
+cat > "$WORK/boundaries.mjs" <<'BOUNDARIES'
+import assert from 'node:assert/strict'
+import fs from 'node:fs/promises'
+import { pathToFileURL } from 'node:url'
+import { baseProjection } from './_fixture.mjs'
+const [, , modulePath, dir] = process.argv
+const { readProjection } = await import(pathToFileURL(modulePath))
+await fs.mkdir(dir)
+const path = dir + '/_projection.json'
+const now = '2026-09-08T11:34:58+02:00'
+const read = () => readProjection(dir, now)
+const write = p => fs.writeFile(path, JSON.stringify(p))
+const invalid = [
+  ['schema', 2], ['project_uid', null], ['attested_sources', ['heartbeat']],
+  ['generated_at', '2026-09-08T11:34:58'], ['generated_at', '2026-02-30T11:34:58Z'],
+  ['stream.status', 'healthy'], ['stream.last_seq', -1], ['stream.last_seq', 1.5],
+  ['stream.anchor.value', '68'], ['stream.anchor.relationship', 'equal'],
+  ['stream.torn_tail', 0], ['stream.undecodable_records', [1, '2']],
+  ['capacity.limit', 0], ['capacity.live', -1], ['capacity.as_of', 'yesterday'],
+  ['attention', {}], ['agents.acme-core.state', 'running'],
+  ['agents.acme-core.since', '2026-09-08 11:34'], ['agents.acme-core.message', null],
+  ['agents.acme-core.stale', 'false'], ['agents.acme-core.attested', true],
+  ['agents.acme-core.attempt', {}], ['anomalies', []],
+  ['anomalies.uid_mismatches', -1], ['anomalies.undecodable_records', 0.5],
+]
+for (const [field, value] of invalid) {
+  const p = baseProjection()
+  const keys = field.split('.')
+  const leaf = keys.pop()
+  keys.reduce((o, k) => o[k], p)[leaf] = value
+  await write(p)
+  assert.deepEqual(await read(), { present: false, reason: 'schema' }, field)
+}
+for (const field of Object.keys(baseProjection())) {
+  const p = baseProjection(); delete p[field]; await write(p)
+  assert.equal((await read()).reason, 'schema', 'missing ' + field)
+}
+const attention = { kind: 'input', agent: null, reason: 'Review configuration', since: now, attested: false }
+for (const [field, value] of [['kind', 'urgent'], ['agent', 1], ['reason', []], ['since', null], ['attested', 1]]) {
+  await write(baseProjection({ attention: [{ ...attention, [field]: value }] }))
+  assert.equal((await read()).reason, 'schema', 'attention.' + field)
+}
+const attempt = { id: 'acme-main-68', decided_at: now, decision: 'allow', open: false, last: { class: 'ok', stage: 'provider', ended_at: now } }
+const p = baseProjection(); p.agents['acme-core'].attempt = attempt
+await write(p); assert.equal((await read()).present, true, 'completed attempt')
+for (const [field, value] of [['id', null], ['decided_at', 'today'], ['decision', 'maybe'], ['open', 1], ['last', {}], ['last.class', 'success'], ['last.stage', 'unknown'], ['last.ended_at', 'today']]) {
+  const copy = structuredClone(p)
+  const keys = field.split('.'); const leaf = keys.pop()
+  keys.reduce((o, k) => o[k], copy.agents['acme-core'].attempt)[leaf] = value
+  await write(copy); assert.equal((await read()).reason, 'schema', 'attempt.' + field)
+}
+await fs.writeFile(path, Buffer.from('{"bad":"\xff"}', 'latin1'))
+assert.equal((await read()).reason, 'unparsable', 'invalid UTF-8 must not be replaced silently')
+const empty = baseProjection({ agents: {}, capacity: { limit: 12, live: null, as_of: null }, attention: [attention] })
+await write(empty); assert.equal((await read()).present, true, 'null capacity and empty agents')
+await fs.writeFile(path + '.new', JSON.stringify(baseProjection({ project_uid: 'acme-replaced' })))
+await fs.rename(path + '.new', path)
+assert.equal((await read()).projection.project_uid, 'acme-replaced', 'no cache after atomic replacement')
+await fs.unlink(path); assert.equal((await read()).reason, 'missing', 'no cache after deletion')
+BOUNDARIES
+it "16. nested schema, missing fields, invalid UTF-8 and atomic replacement corpus"
+ok node "$WORK/boundaries.mjs" "$MJS" "$WORK/boundaries"
+
 summary

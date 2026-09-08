@@ -121,6 +121,33 @@ never writes to it and never uses it to decide anything.
 - All text in the panel (agent messages, attention reasons) is untrusted, agent-
   written free text, rendered as text — never interpreted.
 
+- The panel polls `/api/projection` every 10 seconds through the shared layout
+  refresh. Both tenant modes use the existing tenant resolver; unknown tenant UIDs
+  remain 404. Responses carry `uid`, `generated_at` and display names alongside the
+  reader result and use `Cache-Control: no-store`. Files are read anew per request,
+  including provisioned symlinks. The projection itself is returned verbatim.
+- Schema 1 validation checks required nested fields, enums, nonnegative integer
+  counts and real offset-bearing timestamps. Unknown additive fields are retained.
+  Invalid UTF-8/JSON is `unparsable`; invalid field types are `schema`; read failures
+  are `unreadable`. No failure is presented as an empty projection.
+- Age is whole seconds from the file timestamp, independent of process timezone.
+  Future timestamps show "clock ahead"; invalid/negative staleness configuration
+  falls back to 60 seconds (zero is allowed). Missing stream/capacity attestations
+  are explicitly "unknown — not observed". A null capacity is never a zero bar.
+- Empty attention means "nothing waiting on a human" **in that snapshot**, with an
+  explicit reminder that absence is not proof that no help is needed. Agent claims
+  and broker-observed attempts keep separate source labels. Roster drift requires
+  matching full UIDs and two known states; missing/unknown states do not disagree.
+- Display names use the existing tenant theme mapping, falling back to the UID
+  with its exact project prefix removed. Full UIDs remain keys and hover titles.
+- The fleet badge reports unknown, or stream status, attention count and staleness;
+  it does not alter the fleet's heartbeat-derived activity or ordering.
+- Icons are bundled locally: `mdi:broadcast`, `mdi:gauge`,
+  `mdi:alert-circle-outline`, `mdi:clock-alert-outline`, `mdi:sync-alert`,
+  `mdi:file-alert-outline`, and the existing `mdi:account-group`. The panel uses
+  the existing dark palette and status pill colors, with responsive CSS in
+  `assets/css/main.css`. Visual release sign-off remains with the PO.
+
 ## How it works
 
 1. Each agent appends `YYYY-MM-DD HH:MM | status | message` to its own log via the

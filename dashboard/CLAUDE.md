@@ -217,17 +217,36 @@ or corrects anything on its own.
 - **Component:** `components/ProjectionPanel.vue`, rendered on the tenant page
   below the roster. New mdi icon names it needs go into `nuxt.config.ts`
   `icon.clientBundle.icons` before they render — same rule as every other icon in
-  this dashboard (see TODO below).
+  this dashboard.
 - **Fleet view:** `/api/projects` gains an optional per-project `projection`
   summary (`{present, stale, streamStatus, attention}`), read via the same util.
 
-**TODO (builder):** add the mdi icon names `ProjectionPanel.vue` ends up using to
-`nuxt.config.ts` `icon.clientBundle.icons` — none are pre-approved, this is a
-starting proposal only: `mdi:broadcast` (stream status), `mdi:gauge` (capacity),
-`mdi:alert-circle-outline` (attention items), `mdi:clock-alert-outline` (stale
-pill), `mdi:sync-alert` ("differs from roster" marker), `mdi:shield-check-outline`
-(broker-attested marker), `mdi:account-alert-outline` (agent-asserted marker),
-`mdi:file-alert-outline` (anomalies).
+- The panel polls `/api/projection` every 10 seconds through the shared layout
+  refresh. Both tenant modes use the existing tenant resolver; unknown tenant UIDs
+  remain 404. Responses carry `uid`, `generated_at` and display names alongside the
+  reader result and use `Cache-Control: no-store`. Files are read anew per request,
+  including provisioned symlinks. The projection itself is returned verbatim.
+- Schema 1 validation checks required nested fields, enums, nonnegative integer
+  counts and real offset-bearing timestamps. Unknown additive fields are retained.
+  Invalid UTF-8/JSON is `unparsable`; invalid field types are `schema`; read failures
+  are `unreadable`. No failure is presented as an empty projection.
+- Age is whole seconds from the file timestamp, independent of process timezone.
+  Future timestamps show "clock ahead"; invalid/negative staleness configuration
+  falls back to 60 seconds (zero is allowed). Missing stream/capacity attestations
+  are explicitly "unknown — not observed". A null capacity is never a zero bar.
+- Empty attention means "nothing waiting on a human" **in that snapshot**, with an
+  explicit reminder that absence is not proof that no help is needed. Agent claims
+  and broker-observed attempts keep separate source labels. Roster drift requires
+  matching full UIDs and two known states; missing/unknown states do not disagree.
+- Display names use the existing tenant theme mapping, falling back to the UID
+  with its exact project prefix removed. Full UIDs remain keys and hover titles.
+- The fleet badge reports unknown, or stream status, attention count and staleness;
+  it does not alter the fleet's heartbeat-derived activity or ordering.
+- Icons are bundled locally: `mdi:broadcast`, `mdi:gauge`,
+  `mdi:alert-circle-outline`, `mdi:clock-alert-outline`, `mdi:sync-alert`,
+  `mdi:file-alert-outline`, and the existing `mdi:account-group`. The panel uses
+  the existing dark palette and status pill colors, with responsive CSS in
+  `assets/css/main.css`. Visual release sign-off remains with the PO.
 
 ## Heartbeat-fed (one file per agent → no write conflicts)
 

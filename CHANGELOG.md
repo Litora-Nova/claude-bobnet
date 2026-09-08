@@ -11,7 +11,8 @@ Dashboard: **projection panel (D-1)** — a read-only, tenant-scoped rendering o
 roster, plus an optional per-project summary badge in the fleet view. Display only:
 never a runtime gate, never a second truth for agent state (the roster card's own
 heartbeat status is unchanged). Docs: `dashboard/CLAUDE.md` + `dashboard/README.md`
-"Projection panel" sections. Specs (RED, builder next):
+"Projection panel" sections. Implemented with strict schema validation, uncached
+reads, explicit freshness/source labels and roster drift markers. Specs:
 `tests/dashboard_projection_spec.sh` + `/api/projection` cases in
 `tests/dashboard_http_spec.sh`.
 
