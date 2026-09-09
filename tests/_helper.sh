@@ -25,6 +25,12 @@
 
 set -uo pipefail
 
+# Hermetik gegen geerbte Boot-Umgebung: eine per bin/recycle gebootete Session (und jeder
+# Subprozess, den sie startet) trägt BOOT_INBOX/BOOT_FROM/BOOT_TO im Environment. mux_boot
+# bevorzugt BOOT_INBOX vor STANDUP_DIR — ohne dieses unset schreibt boot_spec.sh seine
+# Briefings in die ECHTE Inbox (2026-09-08: drei Gate-Läufe hinterließen "BR-order — (bin/recycle)").
+unset BOOT_INBOX BOOT_FROM BOOT_TO
+
 TESTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENGINE_ROOT_DEFAULT="$(cd "$TESTS_DIR/.." && pwd)"
 ENGINE_ROOT="${ENGINE_ROOT:-$ENGINE_ROOT_DEFAULT}"
