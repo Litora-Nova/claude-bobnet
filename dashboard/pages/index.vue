@@ -4,6 +4,9 @@
 // nicht mehr hier. Der PO ist nicht im Grid (er hat /inbox = "Meine Page").
 
 const { data } = await useStandup()
+const projectionRosterStatus = computed<Record<string, string | null>>(() => Object.fromEntries(
+  ((data.value as any)?.agents || []).map((agent: any) => [agent.name, agent.latest?.status ?? null]),
+))
 // PO-Name aus der Instanz-Config (team.config po.name → public.poName), Fallback
 // 'Owner' — der PO wird (als Sicherheitsnetz) aus dem Roster-Grid gefiltert.
 const poName = (useRuntimeConfig().public.poName as string) || 'Owner'
@@ -20,11 +23,21 @@ const dot = (s?: string) => COLORS[s || ''] || '#6e7681'
 // werden NIE per Emoji gezeigt — fehlt ein Avatar, liefert die Route das Theme-
 // Default-Bild (Anonymous-/Hacker-Maske); laedt selbst das nicht, faellt der Client
 // auf das statische Default-Bild. Name/Bio kommen aus dem Theme (server-seitig am Agent).
+// Team-Grid (PO 2026-07-19): nur der Lead (order===1, ueber alle Live-Configs hinweg
+// konsistent der Tech-/Team-Lead) behaelt das Bild — alle anderen zeigen Initialen
+// statt Foto. Bleibt Emoji-frei (Initialen = Typografie, kein Glyph); der Status-Dot
+// bleibt fuer jede Karte erhalten (sonst waere er bei collapsed/inaktiv unsichtbar).
 const DEFAULT_AVATAR = '/avatars/default.png'    // Anonymous-/Hacker-Maske, NIE Emoji
 const fallback = reactive(new Set<string>())     // Namen, deren Theme-Avatar nicht lud
 const onImgError = (name: string) => fallback.add(name)
 const avatarSrc = (name: string) => avatarUrl(name)   // tenant-aware (#9): ?project=<uid> wenn aktiv
 const displayName = (a: any) => a.displayName || a.name
+const isLead = (a: any) => a.order === 1
+const initialsOf = (name: string) => {
+  const parts = (name || '').trim().split(/\s+/).filter(Boolean)
+  if (!parts.length) return '?'
+  return parts.length === 1 ? parts[0].slice(0, 2).toUpperCase() : (parts[0][0] + parts[1][0]).toUpperCase()
+}
 // Theme-Setting: Bilder anzeigen ja/nein (Default ja). false = nur Name (nie Emoji).
 const showAvatars = computed(() => ((data.value as any)?.theme?.settings?.showAvatars) !== false)
 
@@ -129,13 +142,18 @@ function scrollToSprint() { sprintRef.value?.scrollIntoView({ behavior: 'smooth'
     <div class="grid">
       <NuxtLink class="member" :class="{ inactive: isCollapsed(a), byjob: teamSort !== 'activity' }" :title="isCollapsed(a) ? 'inaktiv — >4h kein Heartbeat' : `${a.name} — Details`" :to="`/team/${a.name}`" v-for="a in visibleAgents" :key="a.name">
         <div class="ava" v-if="showAvatars">
-          <img v-if="!fallback.has(a.name)" :src="avatarSrc(a.name)" :alt="displayName(a)" @error="onImgError(a.name)" />
-          <img v-else :src="DEFAULT_AVATAR" :alt="displayName(a)" />
+          <span v-if="!isLead(a)" class="initials">{{ initialsOf(displayName(a)) }}</span>
+          <template v-else>
+            <img v-if="!fallback.has(a.name)" :src="avatarSrc(a.name)" :alt="displayName(a)" @error="onImgError(a.name)" />
+            <img v-else :src="DEFAULT_AVATAR" :alt="displayName(a)" />
+          </template>
           <span class="sdot" :style="{ background: dot(a.latest?.status) }" :title="a.latest?.status || 'unbekannt'"></span>
         </div>
         <div class="who">
           <div class="nm">{{ isCollapsed(a) ? clip(displayName(a), 17) : displayName(a) }}<span v-if="a.external" class="ext-badge" title="externer Co-Worker (eigener Claude-Kontext)">ext</span><span v-if="helpersFor(a).length" class="helpers" @click.prevent><HelperBadge v-for="h in helpersFor(a)" :key="h.name" :helper="h" /></span></div>
           <div class="role">{{ isCollapsed(a) ? clip(a.role, 23) : a.role }}</div>
+          <!-- Modell(e), falls in team.config gepflegt (nie geraten — s. index.vue-Kopf). -->
+          <div v-if="a.model && !isCollapsed(a)" class="model">{{ a.model }}</div>
           <!-- Sort Rolle/Name: Heartbeat kompakt unter der Rolle (1 Zeile, gedimmt). -->
           <div v-if="teamSort !== 'activity' && a.latest" class="role-beat" :title="a.latest.msg"><span class="ts">{{ a.latest.ts }}</span> <b :style="{ color: dot(a.latest.status) }">{{ a.latest.status }}</b> · {{ clip(a.latest.msg, beatLimit) }}</div>
         </div>
@@ -146,6 +164,8 @@ function scrollToSprint() { sprintRef.value?.scrollIntoView({ behavior: 'smooth'
         </div>
       </NuxtLink>
     </div>
+
+    <ProjectionPanel :roster-status="projectionRosterStatus" />
 
     <!-- Sprint-Body: serverseitig gerenderter Markdown (sprintHtml aus standup.get.ts). -->
     <section class="sprint" ref="sprintRef">

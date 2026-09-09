@@ -181,11 +181,18 @@ h1 { font-size: 21px; margin: 0; color: #e6edf3; display: inline-flex; align-ite
 .role-beat b { font-weight: 600; }
 .ava { position: relative; flex: 0 0 auto; width: 68px; height: 68px; }
 .ava img { width: 68px; height: 68px; border-radius: 10px; object-fit: cover; background: #0d1117; }
+/* Initialen-Fallback statt Foto (Team-Grid, alle ausser Lead — PO 2026-07-19):
+   gleiche Box-Groesse wie das Bild, kein Umbruch-Risiko, Status-Dot bleibt. */
+.ava .initials { display: flex; align-items: center; justify-content: center; width: 68px; height: 68px; border-radius: 10px; background: #21262d; border: 1px solid #30363d; color: #c9d1d9; font-weight: 700; font-size: 22px; letter-spacing: .02em; }
 .ava .sdot { position: absolute; right: -3px; bottom: -3px; width: 14px; height: 14px; border-radius: 50%; border: 2px solid #161b22; }
 .who { flex: 0 0 170px; }
 .who .nm { font-size: 19px; font-weight: 700; color: #e6edf3; line-height: 1.1; display: inline-flex; align-items: center; gap: 6px; }
 .ext-badge { font-size: 9px; font-weight: 700; letter-spacing: .04em; color: #8b949e; background: #21262d; border: 1px solid #30363d; border-radius: 4px; padding: 1px 5px; text-transform: uppercase; vertical-align: middle; }
 .who .role { font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: .03em; margin-top: 3px; }
+/* Modell-Zeile (optional, aus team.config member.model — nie geraten). Hart auf
+   1 Zeile + Ellipsis begrenzt (PO-Warnung: langer Text brach die Karte frueher
+   zweizeilig um). */
+.who .model { font-size: 11px; color: #6e7681; margin-top: 2px; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .beats { flex: 1; min-width: 0; }
 .now { font-size: 15px; color: #c9d1d9; }            /* 25% größer als die Heartbeats (12px), sonst gleich formatiert */
 .now b { font-weight: 600; }
@@ -362,3 +369,33 @@ h1 { font-size: 21px; margin: 0; color: #e6edf3; display: inline-flex; align-ite
 .md th, .md td { border: 1px solid #21262d; padding: 4px 8px; text-align: left; }
 .md th { background: #0d1117; color: #e6edf3; }
 
+
+/* Broker projection: independent snapshot, using the existing status palette. */
+.projection-panel { margin: 24px 0; border: 1px solid #30363d; border-radius: 12px; background: #161b22; padding: 18px; overflow-wrap: anywhere; min-width: 0; }
+.projection-heading, .projection-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.projection-heading { margin-bottom: 14px; color: #8b949e; font-size: 12px; }
+.projection-heading h2 { margin: 0; font-size: 17px; color: #e6edf3; display: flex; align-items: center; gap: 8px; }
+.projection-overview { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; }
+.projection-block { min-width: 0; border-top: 1px solid #30363d; padding: 14px 0 8px; }
+.projection-block h3 { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; color: #e6edf3; font-size: 14px; margin: 0 0 12px; }
+.projection-source { color: #8b949e; font-size: 11px; font-weight: 400; }
+.projection-muted { color: #8b949e; font-size: 12px; }
+.projection-pill { display: inline-flex; align-items: center; gap: 5px; border: 1px solid #30363d; border-radius: 999px; padding: 2px 9px; color: #8b949e; font-size: 11px; }
+.projection-pill.good, .projection-pill.state-busy { color: #3fb950; border-color: #2ea04366; }
+.projection-pill.state-done { color: #58a6ff; border-color: #1f6feb66; }
+.projection-pill.warn { color: #d29922; border-color: #d2992266; }
+.projection-pill.bad, .projection-pill.state-blocked { color: #f85149; border-color: #f8514966; }
+.projection-facts { display: flex; flex-direction: column; gap: 7px; margin: 0; }
+.projection-facts > div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 16px; }
+.projection-facts dt { color: #8b949e; }
+.projection-facts dd { margin: 0; font-variant-numeric: tabular-nums; }
+.projection-capacity { font-size: 24px; margin: 12px 0; }
+.projection-panel meter { width: 100%; height: 16px; accent-color: #3fb950; }
+.projection-list { list-style: none; margin: 0; padding: 0; }
+.projection-list > li { padding: 12px 0; border-top: 1px solid #21262d; }
+.projection-list > li:first-child { border-top: 0; padding-top: 0; }
+.projection-list p { margin: 6px 0; }
+.projection-text { white-space: pre-wrap; }
+.projection-attempt { margin-top: 10px; padding-left: 12px; border-left: 2px solid #30363d; font-size: 12px; }
+.projection-fleet { margin-top: 8px; }
+@media (max-width: 640px) { .projection-overview { grid-template-columns: minmax(0, 1fr); gap: 0; } .projection-panel { padding: 12px; } }

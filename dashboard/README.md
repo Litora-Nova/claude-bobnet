@@ -23,7 +23,7 @@ The dashboard renders an entity in one of three places, driven by its archetype
 
 | Class | Who | Rendering |
 |---|---|---|
-| **Roster** | Team members (`category: bob`) | Card with **image avatar**, name, role, status pill. Avatars are **always an image, never an emoji** — if the theme avatar fails to load, a static default image (anonymous mask) is shown. |
+| **Roster** | Team members (`category: bob`) | Card with name, role, optional model line, status pill. **Image avatar only for the team lead** (`order === 1`); other members show initials instead. Where an image is shown, it's **always an image, never an emoji** — if the theme avatar fails to load, a static default image (anonymous mask) is shown. |
 | **Service** | Cross-project daemons — SCUT / GUPPI / Colonel (`category: service`) | Compact pill showing **alive / dead** (a service either runs or is down) rather than the full status scale. "alive" = a fresh heartbeat within the alive window. |
 | **Helper** | Ephemeral helpers — ROAMER / Sonde / Jeeves (`category: helper`) | Icon-only **badge** rendered on the parent agent's card (helpers are not roster entries). The status colors the badge dot. |
 
@@ -96,6 +96,57 @@ queried.
 
 The PWA manifest is generated per active project (its title; `BobNet` if none), so an
 installed dashboard reflects the project you switched to.
+
+## Projection panel
+
+Below the roster, the dashboard also shows a second, independent view of agent
+state: the **visibility projection**, a broker-owned read model an external process
+(`ai-bobnet`) writes per project. This panel only *displays* it — the dashboard
+never writes to it and never uses it to decide anything.
+
+- **Source of truth for the shape:** `ai-bobnet`'s `CONTRACT-visibility.md`, schema 1
+  (frozen). This dashboard is one reader among possibly several.
+- **Render "as of `generated_at`."** The file's own timestamp is the only freshness
+  signal; a pill marks the panel stale once its age exceeds
+  `NUXT_PROJECTION_STALE_SECONDS` (default `60`).
+- **No projection file means *unknown*, never *empty*.** The projector may simply
+  not have run yet — the panel shows an explicit "unknown" state, never a blank
+  roster.
+- **Two sources, one honest picture.** The roster card's own heartbeat-derived
+  status is unchanged. The panel shows the projector's own read of agent state next
+  to it, and flags it when the two disagree — it never picks a winner.
+- **Claim vs. attestation.** Every projected value is marked either agent-asserted
+  (the agent's own heartbeat, unverified) or broker-attested (the broker itself
+  observed it) — both are shown, never merged into one "fact."
+- All text in the panel (agent messages, attention reasons) is untrusted, agent-
+  written free text, rendered as text — never interpreted.
+
+- The panel polls `/api/projection` every 10 seconds through the shared layout
+  refresh. Both tenant modes use the existing tenant resolver; unknown tenant UIDs
+  remain 404. Responses carry `uid`, `generated_at` and display names alongside the
+  reader result and use `Cache-Control: no-store`. Files are read anew per request,
+  including provisioned symlinks. The projection itself is returned verbatim.
+- Schema 1 validation checks required nested fields, enums, nonnegative integer
+  counts and real offset-bearing timestamps. Unknown additive fields are retained.
+  Invalid UTF-8/JSON is `unparsable`; invalid field types are `schema`; read failures
+  are `unreadable`. No failure is presented as an empty projection.
+- Age is whole seconds from the file timestamp, independent of process timezone.
+  Future timestamps show "clock ahead"; invalid/negative staleness configuration
+  falls back to 60 seconds (zero is allowed). Missing stream/capacity attestations
+  are explicitly "unknown — not observed". A null capacity is never a zero bar.
+- Empty attention means "nothing waiting on a human" **in that snapshot**, with an
+  explicit reminder that absence is not proof that no help is needed. Agent claims
+  and broker-observed attempts keep separate source labels. Roster drift requires
+  matching full UIDs and two known states; missing/unknown states do not disagree.
+- Display names use the existing tenant theme mapping, falling back to the UID
+  with its exact project prefix removed. Full UIDs remain keys and hover titles.
+- The fleet badge reports unknown, or stream status, attention count and staleness;
+  it does not alter the fleet's heartbeat-derived activity or ordering.
+- Icons are bundled locally: `mdi:broadcast`, `mdi:gauge`,
+  `mdi:alert-circle-outline`, `mdi:clock-alert-outline`, `mdi:sync-alert`,
+  `mdi:file-alert-outline`, and the existing `mdi:account-group`. The panel uses
+  the existing dark palette and status pill colors, with responsive CSS in
+  `assets/css/main.css`. Visual release sign-off remains with the PO.
 
 ## How it works
 

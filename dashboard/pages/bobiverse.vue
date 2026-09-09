@@ -43,6 +43,7 @@ const initial = (p: any) => (p.label || p.name || '?').slice(0, 1).toUpperCase()
         </div>
         <span class="act-pill" :class="act(p.activity).cls">{{ act(p.activity).label }}</span>
       </div>
+      <div class="projection-fleet"><span class="projection-pill" :class="{ warn: p.projection?.stale || p.projection?.attention, bad: p.projection?.streamStatus === 'corrupt' }"><Icon name="mdi:broadcast" aria-hidden="true" /> Broker view: <template v-if="p.projection?.present">{{ p.projection.stale ? 'stale · ' : '' }}{{ p.projection.streamStatus }} · {{ p.projection.attention }} attention</template><template v-else>unknown</template></span></div>
       <ul v-if="p.recentBeats?.length" class="beats">
         <li v-for="(b, i) in p.recentBeats" :key="i" class="beat">
           <span class="beat-ts">{{ b.ts }}</span>

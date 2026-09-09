@@ -4,6 +4,48 @@ All notable engine changes are documented here. Versioning follows SemVer (`VERS
 human-facing); machine compatibility is anchored separately by `SCHEMA_VERSION` (integer) —
 see `.claude/rules/contract.md`. `skills/update-bobs` points teams here after an update.
 
+## [0.19.0] — 2026-09-08
+
+Dashboard release: the broker's visibility projection is rendered, the roster grid shows an
+image avatar for the lead only, and the deploy-guard floor merge gained its regression test.
+
+### Added
+- **Dashboard: projection panel (D-1)** — a read-only, tenant-scoped rendering of the
+  `ai-bobnet` visibility projection (`CONTRACT-visibility.md` schema 1) below the roster,
+  plus an optional per-project summary badge in the fleet view. Display only: never a
+  runtime gate, never a second truth for agent state (the roster card's own heartbeat
+  status is unchanged). Strict schema validation, uncached reads, explicit freshness and
+  source labels (`agent-asserted` / `broker-attested`), roster drift markers, no `v-html`.
+  Staleness threshold via `NUXT_PROJECTION_STALE_SECONDS` (default 60). Docs:
+  `dashboard/CLAUDE.md` + `dashboard/README.md` "Projection panel" sections. Specs:
+  `tests/dashboard_projection_spec.sh` + `/api/projection` cases in
+  `tests/dashboard_http_spec.sh`.
+- **Dashboard: lead-only avatar image + optional per-member `model` line** — the team grid
+  and member page show the image avatar for the lead only; other members render initials
+  (same box, status dot preserved). `RosterCard` gains an `avatarMode` string prop
+  (`image` | `initials`); unmigrated callers keep the always-image behaviour. A free-text
+  `model` field per `team.config.json` member is rendered under the role when present.
+- **Dashboard: TypeScript project configuration** — `dashboard/tsconfig.json` extends Nuxt's
+  generated config and the shared heartbeat / mux helper inputs are typed, so editor
+  tooling and `nuxi typecheck` resolve the tree (typecheck is not part of CI yet).
+
+### Changed
+- `.codex-plugin/plugin.json` version follows `VERSION` (0.19.0).
+
+### Tests
+- `tests/deploy_guard_spec.sh`: regression test proving the additive floor merge of
+  project deploy-guard path lists (follow-up recorded in the 0.18.1 gate notes).
+
+Dashboard: **projection panel (D-1)** — a read-only, tenant-scoped rendering of the
+`ai-bobnet` visibility projection (`CONTRACT-visibility.md` schema 1) below the
+roster, plus an optional per-project summary badge in the fleet view. Display only:
+never a runtime gate, never a second truth for agent state (the roster card's own
+heartbeat status is unchanged). Docs: `dashboard/CLAUDE.md` + `dashboard/README.md`
+"Projection panel" sections. Implemented with strict schema validation, uncached
+reads, explicit freshness/source labels and roster drift markers. Specs:
+`tests/dashboard_projection_spec.sh` + `/api/projection` cases in
+`tests/dashboard_http_spec.sh`.
+
 ## [0.18.1] — 2026-07-17
 
 Canon-drift fixes: the 9 code/canon contradictions surfaced by the README sync (built by Bob One / GPT) resolved, gated by the Claude team.

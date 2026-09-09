@@ -65,6 +65,7 @@ export function parseBeatLine(line, fileMtimeMs, opts = {}) {
 
 // Komfort: die letzten N Zeilen einer Log-Datei parsen (Datei-Reihenfolge,
 // NICHT reversed) — kapselt die isLast-Regel an einer Stelle.
+/** @param {string[]} lines */
 export function parseTail(lines, fileMtimeMs, opts = {}) {
   const n = opts.limit ?? lines.length
   const tail = lines.slice(-n)

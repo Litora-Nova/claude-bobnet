@@ -25,7 +25,11 @@ export type Category = 'bob' | 'service' | 'coworker' | 'helper' | 'human'
 // `uid` = Log-/Routing-Key (z. B. `bobnet-infra`), falls er vom Anzeige-`name` (Persona,
 // z. B. `Garfield`) abweicht. Der Heartbeat-Log heisst dann `<uid>.log`; das Grid bildet
 // ihn auf diesen Member ab (Anzeige = name). Fehlt `uid`, IST der name der Log-Key (alt).
-export type TeamMember = { name: string; id?: string; uid?: string; role: string; order: number; external?: boolean; channel?: string; groups?: string[]; category?: Category; parent?: string }
+// `model` = freier Anzeige-Text fuer das/die tatsaechlich beim Spawn genutzten Modelle
+// (z. B. "sonnet5" oder "sonnet5 + codex sol-max") — gepflegt vom Team-Lead beim Spawnen,
+// NICHT aus dem Archetyp abgeleitet (der kennt nur den Katalog-Default, nicht den Ist-
+// Zustand). Optional: fehlt das Feld, wird nichts angezeigt (kein Raten).
+export type TeamMember = { name: string; id?: string; uid?: string; role: string; order: number; external?: boolean; channel?: string; groups?: string[]; category?: Category; parent?: string; model?: string }
 export type TeamConfig = {
   title?: string
   shortTitle?: string
