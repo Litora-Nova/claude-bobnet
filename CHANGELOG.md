@@ -4,6 +4,20 @@ All notable engine changes are documented here. Versioning follows SemVer (`VERS
 human-facing); machine compatibility is anchored separately by `SCHEMA_VERSION` (integer) —
 see `.claude/rules/contract.md`. `skills/update-bobs` points teams here after an update.
 
+## [0.19.1] — 2026-09-20
+
+### Reverted
+- **Dashboard: projection panel (D-1) removed again** — the 2.0 dashboard is not the place for the
+  broker's visibility projection; that view lives in the successor system's own dashboard. Route
+  `/api/projection`, the panel component, the fleet badge and their specs are gone; the roster is
+  as it was in 0.18.1.
+- **Dashboard: lead-only avatar image reverted** — every roster member shows its avatar image again
+  (initials were never asked for). The optional per-member `model` line goes with it.
+
+Reason: product-owner order (2026-09-20). Both changes had been shipped in 0.19.0 without the
+owner's sign-off on the visible defaults; 0.19.1 restores the 0.18.1 dashboard behaviour. The
+test-harness hardening from `development` (inherited boot variables) stays.
+
 ## [0.19.0] — 2026-09-08
 
 Dashboard release: the broker's visibility projection is rendered, the roster grid shows an
