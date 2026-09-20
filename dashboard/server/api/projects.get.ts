@@ -6,7 +6,6 @@ import { tenantFromProject } from '../utils/tenant'
 import { teamOf } from '../utils/team'
 import { agentActivity, projectActivity, thresholdsFrom, resolveMuxBackend, muxListPlan, parseSessionList } from '../utils/activity.mjs'
 import { parseTail, teamTz } from '../utils/beats.mjs'
-import { readProjection } from '../utils/projection.mjs'
 
 // Bobiverse-Übersicht (#9 + #10): ALLE registrierten Projekte aus der Registry,
 // je Projekt der Aktivitäts-Status (registered/running/working/idle + blocked
@@ -64,10 +63,6 @@ export default defineEventHandler(async () => {
     try {
     const tenant = tenantFromProject(p)
     const team = teamOf(tenant)
-    const view = await readProjection(tenant.standupDir, new Date(now).toISOString())
-    const projection = view.present
-      ? { present: true, stale: view.stale, streamStatus: view.projection.stream.status, attention: view.projection.attention.length }
-      : { present: false }
 
     let files: string[] = []
     try { files = await fs.readdir(tenant.standupDir) } catch { /* standup fehlt noch */ }
@@ -109,7 +104,6 @@ export default defineEventHandler(async () => {
       responsibility: p.responsibility || '',          // #7
       icon: p.icon || '',                              // Web-URL/-Pfad; sonst Label-Fallback
       activity,                                        // registered|running|working|idle|blocked
-      projection,
       agents: latestByAgent.map(b => ({ agent: b.agent, status: b.status, ts: b.ts, state: agentActivity(b, now, th) })),
       recentBeats: recent.slice(0, BEATS_PER_PROJECT), // Cross-Projekt-Heartbeat-View
       latestBeatEpoch: recent[0]?.epoch ?? 0,          // #29: jüngster Beat → Aktualitäts-Sort

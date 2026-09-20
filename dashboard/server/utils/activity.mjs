@@ -78,7 +78,6 @@ export function muxListPlan(backend, env = {}) {
 // Backend aus BOBNET_MUX auflösen. has(): "ist dieses Binary aufrufbar?" — der
 // Aufrufer reicht eine Probe-Funktion rein (im Server: command-Existenz-Check),
 // damit diese Datei pur/testbar bleibt. auto bevorzugt tmux (Rückwärtskompat).
-/** @param {(binary: string) => boolean} has */
 export function resolveMuxBackend(env = {}, has = () => true) {
   const want = (env.BOBNET_MUX || 'auto').toLowerCase()
   const home = env.HOME || ''
