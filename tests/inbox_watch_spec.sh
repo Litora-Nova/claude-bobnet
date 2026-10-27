@@ -750,10 +750,15 @@ echo "$(now) | @Alex | SCUT (via email, from client): arrived after acknowledgem
 out="$(run)"
 t "(s) later unread input stays open while the lead is busy" "1" \
   "$(printf '%s\n' "$out" | grep -c '\] acme:.*skip-busy')"
+# Only a signed lead line arrives after that busy verification. The foreign line that crossed
+# the nudge boundary must remain in the baseline, so this mixed delta cannot become self-write.
+echo "$(now) | @Team | progress note — (Alex)" >> "$AC/_inbox.md"
 echo "$(now) | idle | available again" >> "$AC/Alex.log"
 out="$(run)"
 t "(s) later unread input still nudges when the lead is available" "1" \
   "$(printf '%s\n' "$out" | grep -c '\] acme: NUDGE')"
+t "(s) a later signed line cannot absorb the unread foreign input as self-write" "0" \
+  "$(printf '%s\n' "$out" | grep -c '\] acme:.*self-write')"
 
 # ── (t) Retry copy: an unchanged PENDING signature means the already-reported input is
 #     still awaiting its heartbeat acknowledgement. #2/#3 must therefore say "Erinnerung",
@@ -825,6 +830,40 @@ run_reminder >/dev/null
 fourth_text="$(sed -n '4p' "$reminder_calls")"
 t "(t) genuinely new input during pending keeps first-nudge wording" \
   "📬 [acme] Neue Eingänge — bitte $AC/_inbox.md (+ _review-queue.md) lesen." "$fourth_text"
+
+# A legacy PENDING state has ilines but predates nlines/since. Without a trustworthy nudge
+# boundary, verification must conservatively retain the older ilines baseline: the already
+# represented foreign line may be reported again, but it must never be hidden by a later signed
+# lead line.
+echo "2026-10-27 09:20 | @acme-techlead | initial" > "$AC/_inbox.md"
+echo "2026-10-27 09:21 | @acme-techlead | SCUT (via email, from client): legacy pending" >> "$AC/_inbox.md"
+legacy_sig="$(wc -c < "$AC/_inbox.md" | tr -d ' '):0:0"
+echo "$(now) | idle | before legacy nudge" > "$AC/acme-techlead.log"
+printf 'PENDING sig=%s lines=1 attempts=1 ilines=1' "$legacy_sig" > "$tmp/reminder-state/acme.state"
+echo "$(now) | done | legacy nudge handled" >> "$AC/acme-techlead.log"
+echo "$(now) | @Team | signed follow-up — (acme-techlead)" >> "$AC/_inbox.md"
+: > "$reminder_calls"
+out="$(run_reminder)"
+t "(u) legacy PENDING without nlines/since is verified without a corrupt-state error" "1" \
+  "$(printf '%s\n' "$out" | grep -c 'acme: Nudge verifiziert')"
+t "(u) legacy PENDING keeps the conservative old baseline and nudges the mixed delta" "1" \
+  "$(printf '%s\n' "$out" | grep -c 'acme: NUDGE #1')"
+t "(u) legacy PENDING cannot absorb the represented foreign line as self-write" "0" \
+  "$(printf '%s\n' "$out" | grep -c 'acme:.*self-write')"
+
+# `since` comes from a mutable state file. Only the documented timestamp alphabet may enter mux
+# text; invalid legacy/corrupt values fall back to reminder copy without a "since" clause.
+echo "2026-10-27 09:25 | @acme-techlead | SCUT (via email, from client): invalid timestamp state" > "$AC/_inbox.md"
+invalid_since_sig="$(wc -c < "$AC/_inbox.md" | tr -d ' '):0:0"
+echo "$(now) | idle | waiting" > "$AC/acme-techlead.log"
+printf 'PENDING sig=%s lines=1 attempts=1 ilines=0 nlines=1 since=2026-10-27T09:25Z' \
+  "$invalid_since_sig" > "$tmp/reminder-state/acme.state"
+: > "$reminder_calls"
+run_reminder >/dev/null
+invalid_since_text="$(sed -n '1p' "$reminder_calls")"
+t "(v) invalid stored since is omitted from reminder text" \
+  "📬 [acme] Erinnerung #2: Eingänge noch nicht bestätigt — bitte Heartbeat setzen (log.sh acme-techlead ...)." \
+  "$invalid_since_text"
 
 echo "inbox_watch_spec: $pass passed, $fail failed"
 [ "$fail" = 0 ]
