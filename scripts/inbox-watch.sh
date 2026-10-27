@@ -23,7 +23,8 @@
 #        final-legacy:  nackte Signatur (Alt-Format vor diesem Batch) — weiter gelesen, aber ab
 #                       dem nächsten Schreiben auf das neue Format gehoben. Ohne `ilines` ist
 #                       Self-Write-Erkennung diesen Zyklus NICHT möglich (konservativ, s. Punkt 7).
-#        pending:       "PENDING sig=<sig> lines=<N> attempts=<n> ilines=<M>" — ein Nudge ist
+#        pending:       "PENDING sig=<sig> lines=<N> attempts=<n> ilines=<M> nlines=<K>
+#                       since=<YYYY-MM-DDTHH:MM>" — ein Nudge ist
 #                       raus, aber NICHT über den mux_send-rc verifiziert. Verifikation läuft
 #                       über den Lead-Heartbeat: `<standup>/<TEAM_LEAD>.log` hat seit dem Nudge
 #                       eine NEUE Zeile bekommen (aktuelle Zeilenzahl > Snapshot bei Nudge-Zeit) —
@@ -31,13 +32,23 @@
 #                       Log-Eintrag gilt also als Zustellnachweis. (Zeilenzahl statt Timestamp:
 #                       `log.sh` schreibt nur Minutenauflösung — ein Nudge + Heartbeat in
 #                       derselben Minute wäre über Timestamps nicht sauber unterscheidbar.)
+#                       `ilines` bleibt die stabile Zyklus-Baseline; `nlines` ist die Inbox-
+#                       Zeilengrenze beim Nudge und trennt danach bereits gemeldete Eingänge
+#                       von späteren, weiterhin ungelesenen Eingängen. `since` merkt die Minute
+#                       des ersten Nudge-Versuchs für eindeutige Reminder-Texte.
 #   3. Bei ausstehendem Pending zuerst verifizieren:
 #        verifiziert                   → State finalisieren (auf die Signatur DES Nudges — ist
 #                                         die aktuelle Signatur seither weitergewandert, bleibt
 #                                         SIE offen und wird im selben Tick als neuer Zyklus
-#                                         weiterbehandelt)
-#        nicht verifiziert, Sig gleich  → Re-Nudge, Versuchszähler hoch, bis INBOX_WATCH_MAX_NUDGE
-#        nicht verifiziert, Sig weiter  → neuer Zyklus (Versuchszähler resettet auf 1)
+#                                         ab der gespeicherten Nudge-Zeilengrenze weiterbehandelt;
+#                                         so erzeugt eine Lead-Eigenantwort keinen zweiten Nudge,
+#                                         später eingegangene Fremdpost bleibt aber offen)
+#        nicht verifiziert, Sig gleich  → Re-Nudge mit "Erinnerung #N" statt erneut "Neue
+#                                         Eingänge", Versuchszähler hoch, bis MAX_NUDGE; der
+#                                         Text nennt Heartbeat + `log.sh`, damit Lesen allein
+#                                         nicht wie eine Bestätigung wirkt
+#        nicht verifiziert, Sig weiter  → wirklich neuer Eingang: neuer Zyklus (Versuchszähler
+#                                         resettet auf 1) mit unverändertem "Neue Eingänge"
 #   4. Bei Neuem den Lead-Zustand lesen (Heartbeat-Log `<standup>/<TEAM_LEAD>.log`):
 #        idle|done|kein Log     → NUDGE (wenn MUX_SESSION konfiguriert + Session lebt)
 #        busy älter als STALE   → NUDGE (vergessener busy-Status blockiert sonst ewig)
@@ -271,11 +282,17 @@ state_field() { sed -n "s/.* $2=\([^ ]*\).*/\1/p" "$1" 2>/dev/null | head -n1; }
 # is_uint <wert> -> true bei einer nichtleeren Ziffernfolge.
 is_uint() { case "$1" in ''|*[!0-9]*) return 1 ;; *) return 0 ;; esac; }
 
+# is_state_since <value> -> true only for the documented, space-free state timestamp alphabet.
+is_state_since() { [[ "$1" =~ ^[0-9T:-]+$ ]]; }
+
 # state_write_final <statef> <sig> <ilines>
 state_write_final() { printf 'FINAL sig=%s ilines=%s' "$2" "$3" > "$1"; }
 
-# state_write_pending <statef> <sig> <lines> <attempts> <ilines>
-state_write_pending() { printf 'PENDING sig=%s lines=%s attempts=%s ilines=%s' "$2" "$3" "$4" "$5" > "$1"; }
+# state_write_pending <statef> <sig> <lines> <attempts> <ilines> <nlines> <since>
+# <ilines> is the stable cycle baseline across re-nudges. <nlines> is the inbox line count at
+# nudge time: once verified, only input after this acknowledgement boundary remains unread.
+# <since> is the first-nudge minute (space-free ISO in state, rendered with a space in copy).
+state_write_pending() { printf 'PENDING sig=%s lines=%s attempts=%s ilines=%s nlines=%s since=%s' "$2" "$3" "$4" "$5" "$6" "$7" > "$1"; }
 
 # self_write_line <line> <lead-uid> [lead-persona] -> true NUR für das kanonische Inbox-Format
 # `timestamp | @target | text — (author)`, wenn der Autor nach dem LETZTEN Signatur-Delimiter
@@ -456,12 +473,15 @@ while IFS=$'\t' read -r uid path standup; do
   attempts=0        # Versuche für die AKTUELL zu behandelnde Signatur (0 = frischer Zyklus)
   prev_ilines=""     # ilines-Baseline VOR diesem Zyklus (leer = nicht verfügbar/Alt-Format)
   old_sig=""         # letzte bekannte Signatur (für Review-Queue-Delta/Severity)
+  cycle_since=""     # Minute des ersten Nudge-Versuchs; bleibt für Re-Nudges stabil
 
   if [ "$kind" = pending ]; then
     psig="$(state_field "$statef" sig)"
     plines_raw="$(state_field "$statef" lines)"
     patt_raw="$(state_field "$statef" attempts)"
     pilines_raw="$(state_field "$statef" ilines)"
+    pnlines_raw="$(state_field "$statef" nlines)"
+    psince_raw="$(state_field "$statef" since)"
 
     if [ -z "$psig" ] || ! is_uint "$plines_raw" || ! is_uint "$patt_raw"; then
       # 0.14.0-Gate, Marvin-Fund: ein fehlendes Pflichtfeld NICHT permissiv defaulten (ein
@@ -474,16 +494,26 @@ while IFS=$'\t' read -r uid path standup; do
       old_sig="$psig"
       if heartbeat_since "$leadlog" "$plines"; then
         echo "[inbox-watch] $uid: Nudge verifiziert — Lead $lead heartbeatete seither ($patt Versuch(e))"
-        # cur_ilines statt der PENDING-Baseline: verifiziert markiert "jetzt vollständig
-        # abgearbeitet bis hierhin" — die (stabile, seit Zyklusbeginn unveränderte)
-        # Pending-Baseline bleibt Sache der Klassifikation weiter unten, nicht des Final-Writes.
-        state_write_final "$statef" "$psig" "$cur_ilines"
+        # If input moved after the nudge, only the nudge-time boundary is acknowledged. Persist it
+        # before classifying the moved signature so a busy skip cannot absorb later foreign input
+        # into the next tick's baseline. Legacy states without nlines keep the old fallback.
+        verified_ilines="$cur_ilines"
+        if [ "$sig" != "$psig" ] && is_uint "$pnlines_raw"; then
+          verified_ilines="$pnlines_raw"
+        fi
+        state_write_final "$statef" "$psig" "$verified_ilines"
         if [ "$sig" = "$psig" ]; then
           continue
         fi
         # Signatur ist seit dem Nudge weitergewandert -> unten als frischer Zyklus behandelt.
+        # Start its inbox delta at the nudge-time boundary, not the older cycle baseline. This
+        # excludes the already-notified foreign line from a subsequent self-write check while
+        # keeping every line that arrived after the nudge open. Legacy PENDING states without
+        # nlines retain the conservative old baseline for this one transition.
+        is_uint "$pnlines_raw" && prev_ilines="$pnlines_raw"
       elif [ "$sig" = "$psig" ]; then
         attempts="$patt"
+        is_state_since "$psince_raw" && cycle_since="$psince_raw"
       else
         echo "[inbox-watch] $uid: weitere Eingänge, alter Nudge an $lead noch unverifiziert — neuer Zyklus"
       fi
@@ -574,7 +604,14 @@ while IFS=$'\t' read -r uid path standup; do
   fi
 
   next_attempt=$((attempts+1))
-  text="📬 [$uid] Neue Eingänge — bitte $standup/_inbox.md (+ _review-queue.md) lesen."
+  if [ "$next_attempt" -eq 1 ]; then
+    cycle_since="$(date '+%Y-%m-%dT%H:%M')"
+    text="📬 [$uid] Neue Eingänge — bitte $standup/_inbox.md (+ _review-queue.md) lesen."
+  elif is_state_since "$cycle_since"; then
+    text="📬 [$uid] Erinnerung #$next_attempt: Eingänge seit ${cycle_since/T/ } noch nicht bestätigt — bitte Heartbeat setzen (log.sh $lead ...)."
+  else
+    text="📬 [$uid] Erinnerung #$next_attempt: Eingänge noch nicht bestätigt — bitte Heartbeat setzen (log.sh $lead ...)."
+  fi
   lines_before="$(log_line_count "$leadlog")"
 
   if [ "$next_attempt" -ge 2 ] && [ "$DRYRUN" != 1 ]; then
@@ -583,7 +620,7 @@ while IFS=$'\t' read -r uid path standup; do
 
   if [ "$DRYRUN" = 1 ]; then
     echo "[inbox-watch] $uid: NUDGE #$next_attempt → $session (dryrun, Lead $lead war $st) — wartet auf Heartbeat-Verifikation"
-    state_write_pending "$statef" "$sig" "$lines_before" "$next_attempt" "$baseline_ilines"
+    state_write_pending "$statef" "$sig" "$lines_before" "$next_attempt" "$baseline_ilines" "$cur_ilines" "$cycle_since"
     n_nudge=$((n_nudge+1))
     continue
   fi
@@ -591,7 +628,7 @@ while IFS=$'\t' read -r uid path standup; do
   if mux_has "$session" 2>/dev/null; then
     if mux_send "$session" "$text" 2>/dev/null; then
       echo "[inbox-watch] $uid: NUDGE #$next_attempt → $session (Lead $lead war $st) — wartet auf Heartbeat-Verifikation"
-      state_write_pending "$statef" "$sig" "$lines_before" "$next_attempt" "$baseline_ilines"
+      state_write_pending "$statef" "$sig" "$lines_before" "$next_attempt" "$baseline_ilines" "$cur_ilines" "$cycle_since"
       n_nudge=$((n_nudge+1))
     else
       echo "[inbox-watch] $uid: NUDGE #$next_attempt an $session fehlgeschlagen — State bleibt offen"
