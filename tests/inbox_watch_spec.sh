@@ -704,5 +704,127 @@ t "(r) kein Alert-Aufruf für ein gegatetes info-Event" "0" "$(wc -l < "$rho_cap
 t "(r) Summary zählt exakt 1 unterhalb-Mindest-Severity in diesem Tick" "1" \
   "$(printf '%s\n' "$out" | grep -cE '── inbox-watch:.*, 1 unterhalb-Mindest-Severity, ')"
 
+# ── (s) Verified-nudge regression: a real external entry correctly triggers a nudge, then
+#     the lead heartbeats and appends a signed triage reply. The fresh cycle must start at the
+#     inbox boundary captured when the nudge was sent. Otherwise its delta still includes the
+#     already-notified external line, self-write detection fails, and the same tick sends a
+#     second nudge even though no new unread input arrived.
+mkdir -p "$tmp/acme/_dev_team/standup"
+AC="$tmp/acme/_dev_team/standup"
+printf 'export TEAM_LEAD="Alex"\nexport MUX_SESSION="acme_lead"\n' > "$tmp/acme/_dev_team/dev-team.env"
+reg_add acme "$tmp/acme" "$AC"
+echo "x | @Alex | initial" > "$AC/_inbox.md"
+echo "$(now) | idle | start" > "$AC/Alex.log"
+MAXN=3
+run >/dev/null                                  # First contact -> nudge.
+echo "$(now) | idle | back" >> "$AC/Alex.log"
+run >/dev/null                                  # Verified -> establish the initial baseline.
+
+echo "$(now) | @Alex | SCUT (via email, from client): please review" >> "$AC/_inbox.md"
+out="$(run)"
+t "(s) genuine external input sends the first nudge" "1" \
+  "$(printf '%s\n' "$out" | grep -c '\] acme: NUDGE #1')"
+
+# The lead acknowledges that nudge and writes only their own signed triage reply.
+echo "$(now) | done | client email handled" >> "$AC/Alex.log"
+echo "$(now) | @Team | email triaged and answered — (Alex)" >> "$AC/_inbox.md"
+out="$(run)"
+t "(s) the lead heartbeat verifies the pending nudge" "1" \
+  "$(printf '%s\n' "$out" | grep -c '\] acme: Nudge verifiziert')"
+t "(s) the signed reply sends no second nudge" "0" \
+  "$(printf '%s\n' "$out" | grep -c '\] acme: NUDGE')"
+t "(s) the signed reply is quietly finalized as self-write" "1" \
+  "$(printf '%s\n' "$out" | grep -c '\] acme:.*self-write')"
+out="$(run)"
+t "(s) unchanged inputs remain quiet on the next tick" "1" \
+  "$(printf '%s\n' "$out" | grep -c '\] acme: ok')"
+
+# Counterexample: external input arriving after the acknowledgement boundary remains unread and
+# must still trigger escalation behavior once the lead is available again.
+echo "$(now) | @Alex | SCUT (via email, from client): second request" >> "$AC/_inbox.md"
+out="$(run)"
+t "(s) a second genuine external input sends a new first nudge" "1" \
+  "$(printf '%s\n' "$out" | grep -c '\] acme: NUDGE #1')"
+echo "$(now) | busy | working elsewhere" >> "$AC/Alex.log"
+echo "$(now) | @Alex | SCUT (via email, from client): arrived after acknowledgement" >> "$AC/_inbox.md"
+out="$(run)"
+t "(s) later unread input stays open while the lead is busy" "1" \
+  "$(printf '%s\n' "$out" | grep -c '\] acme:.*skip-busy')"
+echo "$(now) | idle | available again" >> "$AC/Alex.log"
+out="$(run)"
+t "(s) later unread input still nudges when the lead is available" "1" \
+  "$(printf '%s\n' "$out" | grep -c '\] acme: NUDGE')"
+
+# ── (t) Retry copy: an unchanged PENDING signature means the already-reported input is
+#     still awaiting its heartbeat acknowledgement. #2/#3 must therefore say "Erinnerung",
+#     retain one stable cycle time, and show the lead UID in the acknowledgement command. A
+#     changed signature is genuinely new input and still gets the unchanged first-nudge copy.
+mkdir -p "$tmp/reminder-bin" "$tmp/reminder-mux" "$tmp/reminder-state"
+reminder_calls="$tmp/reminder-mux/calls.log"
+: > "$reminder_calls"
+cat > "$tmp/reminder-bin/tmux" <<'SH'
+#!/usr/bin/env bash
+S="${FAKE_MUX_DIR:?}"
+cmd="${1:-}"; shift || true
+case "$cmd" in
+  has-session) exit 0 ;;
+  send-keys)
+    while [ "$#" -gt 0 ]; do
+      if [ "$1" = "--" ]; then
+        shift
+        printf '%s\n' "$*" >> "$S/calls.log"
+        exit 0
+      fi
+      shift
+    done
+    ;;
+esac
+SH
+chmod +x "$tmp/reminder-bin/tmux"
+cat > "$tmp/reminder-registry.json" <<JSON
+{ "version":1, "projects":[
+  {"uid":"acme","name":"acme","path":"$tmp/acme","standup":"$AC","status":"active"}
+]}
+JSON
+printf 'export TEAM_LEAD="acme-techlead"\nexport MUX_SESSION="acme_lead"\n' > "$tmp/acme/_dev_team/dev-team.env"
+echo "2026-10-27 09:15 | @acme-techlead | SCUT (via email, from client): contract question" > "$AC/_inbox.md"
+echo "$(now) | busy | handling release" > "$AC/acme-techlead.log"
+
+run_reminder() {
+  env DEV_TEAM_REGISTRY="$tmp/reminder-registry.json" INBOX_WATCH_STATE="$tmp/reminder-state" \
+      INBOX_WATCH_MAX_NUDGE=3 BOBNET_MUX=tmux PATH="$tmp/reminder-bin:$PATH" \
+      FAKE_MUX_DIR="$tmp/reminder-mux" bash "$BIN" 2>/dev/null
+}
+
+out="$(run_reminder)"
+t "(t) fresh busy lead is skipped before any nudge" "1" \
+  "$(printf '%s\n' "$out" | grep -c 'acme: NEU.*skip-busy')"
+t "(t) busy skip sends no mux text" "0" "$(wc -l < "$reminder_calls" 2>/dev/null || echo 0)"
+
+echo "$(now) | idle | available" > "$AC/acme-techlead.log"
+run_reminder >/dev/null
+run_reminder >/dev/null
+run_reminder >/dev/null
+first_text="$(sed -n '1p' "$reminder_calls")"
+second_text="$(sed -n '2p' "$reminder_calls")"
+third_text="$(sed -n '3p' "$reminder_calls")"
+t "(t) first nudge text stays unchanged" \
+  "📬 [acme] Neue Eingänge — bitte $AC/_inbox.md (+ _review-queue.md) lesen." "$first_text"
+t "(t) retry #2 is an explicit reminder with time + heartbeat command" "1" \
+  "$(printf '%s\n' "$second_text" | grep -cE '^📬 \[acme\] Erinnerung #2: Eingänge seit [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} noch nicht bestätigt — bitte Heartbeat setzen \(log\.sh acme-techlead \.\.\.\)\.$')"
+t "(t) retry #3 is an explicit reminder with time + heartbeat command" "1" \
+  "$(printf '%s\n' "$third_text" | grep -cE '^📬 \[acme\] Erinnerung #3: Eingänge seit [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} noch nicht bestätigt — bitte Heartbeat setzen \(log\.sh acme-techlead \.\.\.\)\.$')"
+second_since="$(printf '%s\n' "$second_text" | sed -n 's/.*Eingänge seit \([^ ]* [^ ]*\) noch nicht.*/\1/p')"
+third_since="$(printf '%s\n' "$third_text" | sed -n 's/.*Eingänge seit \([^ ]* [^ ]*\) noch nicht.*/\1/p')"
+t "(t) retries retain the original pending-cycle time" "$second_since" "$third_since"
+t "(t) retries never masquerade as new input" "0" \
+  "$(printf '%s\n%s\n' "$second_text" "$third_text" | grep -c 'Neue Eingänge')"
+
+echo "2026-10-27 09:18 | @acme-techlead | SCUT (via email, from client): genuinely new follow-up" >> "$AC/_inbox.md"
+run_reminder >/dev/null
+fourth_text="$(sed -n '4p' "$reminder_calls")"
+t "(t) genuinely new input during pending keeps first-nudge wording" \
+  "📬 [acme] Neue Eingänge — bitte $AC/_inbox.md (+ _review-queue.md) lesen." "$fourth_text"
+
 echo "inbox_watch_spec: $pass passed, $fail failed"
 [ "$fail" = 0 ]
