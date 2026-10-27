@@ -282,6 +282,9 @@ state_field() { sed -n "s/.* $2=\([^ ]*\).*/\1/p" "$1" 2>/dev/null | head -n1; }
 # is_uint <wert> -> true bei einer nichtleeren Ziffernfolge.
 is_uint() { case "$1" in ''|*[!0-9]*) return 1 ;; *) return 0 ;; esac; }
 
+# is_state_since <value> -> true only for the documented, space-free state timestamp alphabet.
+is_state_since() { [[ "$1" =~ ^[0-9T:-]+$ ]]; }
+
 # state_write_final <statef> <sig> <ilines>
 state_write_final() { printf 'FINAL sig=%s ilines=%s' "$2" "$3" > "$1"; }
 
@@ -491,10 +494,14 @@ while IFS=$'\t' read -r uid path standup; do
       old_sig="$psig"
       if heartbeat_since "$leadlog" "$plines"; then
         echo "[inbox-watch] $uid: Nudge verifiziert — Lead $lead heartbeatete seither ($patt Versuch(e))"
-        # cur_ilines statt der PENDING-Baseline: verifiziert markiert "jetzt vollständig
-        # abgearbeitet bis hierhin" — die (stabile, seit Zyklusbeginn unveränderte)
-        # Pending-Baseline bleibt Sache der Klassifikation weiter unten, nicht des Final-Writes.
-        state_write_final "$statef" "$psig" "$cur_ilines"
+        # If input moved after the nudge, only the nudge-time boundary is acknowledged. Persist it
+        # before classifying the moved signature so a busy skip cannot absorb later foreign input
+        # into the next tick's baseline. Legacy states without nlines keep the old fallback.
+        verified_ilines="$cur_ilines"
+        if [ "$sig" != "$psig" ] && is_uint "$pnlines_raw"; then
+          verified_ilines="$pnlines_raw"
+        fi
+        state_write_final "$statef" "$psig" "$verified_ilines"
         if [ "$sig" = "$psig" ]; then
           continue
         fi
@@ -506,7 +513,7 @@ while IFS=$'\t' read -r uid path standup; do
         is_uint "$pnlines_raw" && prev_ilines="$pnlines_raw"
       elif [ "$sig" = "$psig" ]; then
         attempts="$patt"
-        cycle_since="$psince_raw"
+        is_state_since "$psince_raw" && cycle_since="$psince_raw"
       else
         echo "[inbox-watch] $uid: weitere Eingänge, alter Nudge an $lead noch unverifiziert — neuer Zyklus"
       fi
@@ -597,11 +604,13 @@ while IFS=$'\t' read -r uid path standup; do
   fi
 
   next_attempt=$((attempts+1))
-  [ -n "$cycle_since" ] || cycle_since="$(date '+%Y-%m-%dT%H:%M')"
   if [ "$next_attempt" -eq 1 ]; then
+    cycle_since="$(date '+%Y-%m-%dT%H:%M')"
     text="📬 [$uid] Neue Eingänge — bitte $standup/_inbox.md (+ _review-queue.md) lesen."
-  else
+  elif is_state_since "$cycle_since"; then
     text="📬 [$uid] Erinnerung #$next_attempt: Eingänge seit ${cycle_since/T/ } noch nicht bestätigt — bitte Heartbeat setzen (log.sh $lead ...)."
+  else
+    text="📬 [$uid] Erinnerung #$next_attempt: Eingänge noch nicht bestätigt — bitte Heartbeat setzen (log.sh $lead ...)."
   fi
   lines_before="$(log_line_count "$leadlog")"
 
