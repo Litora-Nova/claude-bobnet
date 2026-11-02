@@ -82,3 +82,36 @@
   History-Rewrite zum Fixen ist meist tabu. (Dieser Absatz nutzt bewusst nur `#N` in Backticks.)
 - **Reflex:** Bevor `#N` in eine Commit-/PR-Message kommt — entweder das Issue ZUERST anlegen und
   die echte Nummer nehmen, oder `#N` weglassen. Lokale Orchestrierungs-Tasks ≠ Tracker-Issues.
+
+## Release-Artefakte: Identität im Quell-Commit binden
+
+- **Ein Installer, der Binary und Prüfsumme aus demselben veränderbaren Release lädt, prüft nur
+  den Transport, nicht die Identität.** Wer beide Assets ersetzt, ändert die ausgeführten Bytes,
+  während der geprüfte Commit gleich bleibt. Ein Marketplace-Maintainer hat genau das als Medium-Fund
+  gemeldet („mutable-release-binary“: Digest und Binary aus demselben Release, `immutable: false`,
+  kein im Quellcode gepinnter Digest). Das Ticket blieb ohne Freigabe offen. Berechtigt, und vorher
+  hatte es kein Reviewer im Team gesehen.
+- **Reflex für jedes Release mit ausführbarem Artefakt** (Binary, Skript, Container-Image,
+  Plugin-Bundle, Installer):
+  1. **Digest im Quell-Repo pinnen.** Der Installer prüft gegen den Wert im Commit (z. B. eine
+     Lock-Datei `version sha256`), nicht gegen eine `.sha256` aus dem Release. Die darf zusätzlich
+     liegen, ist aber kein Identitätsbeweis.
+  2. **Provenienz belegen.** CI baut aus dem getaggten Commit und erzeugt eine Attestation
+     (GitHub: `actions/attest-build-provenance`, prüfbar mit `gh attestation verify`). Den Build-Lauf
+     in die Release-Notes schreiben.
+  3. **Releases unveränderlich machen** (GitHub: immutable releases) und Assets nie überschreiben
+     (kein `--clobber`). Das allein reicht nicht, gehört aber dazu.
+  4. **Reihenfolge:** bauen → Digest committen → genau dieser Commit wird geprüft bzw. eingereicht.
+     Der geprüfte Commit muss das ausgeführte Artefakt eindeutig bestimmen.
+- **Prüffrage für Gate-Reviews:** „Ändern sich die ausgeführten Bytes, wenn sich nur etwas
+  *außerhalb* des geprüften Commits ändert (Release-Asset, `latest`-Tag, CDN, Branch-Head)?" Ja → Fund,
+  auch wenn Prüfsummen, TLS und `--fail` sauber aussehen.
+
+## Fremde Validatoren: Grenzen aus deren Code lesen
+
+- **Ein generischer Fehler eines fremden Validators („compatibility validation failed") nennt den
+  Grund oft nicht.** Beispiel: ein Plugin-Katalog lehnte ein Update ab, weil die `description` 649
+  statt höchstens 500 Zeichen hatte. Die Grenze stand nur im Validator-Code, nicht in der Doku.
+- **Reflex:** Vor dem Einreichen bei einem fremden Katalog, Store oder Registry die Feldgrenzen und
+  Prüfregeln aus deren Repo lesen (Schema, Validator-Skript) und gegen die eigene Einreichung prüfen.
+  Nach einem Fehlschlag zuerst den Fehlercode im Validator-Code suchen, nicht raten.
