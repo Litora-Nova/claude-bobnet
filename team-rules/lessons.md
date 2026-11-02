@@ -115,3 +115,15 @@
 - **Reflex:** Vor dem Einreichen bei einem fremden Katalog, Store oder Registry die Feldgrenzen und
   Prüfregeln aus deren Repo lesen (Schema, Validator-Skript) und gegen die eigene Einreichung prüfen.
   Nach einem Fehlschlag zuerst den Fehlercode im Validator-Code suchen, nicht raten.
+
+## Lehren zwischen Bobnets teilen (es fehlt noch ein Weg)
+
+- **Eine Lehre, die nur in einer Instanz landet, hilft genau einer Instanz.** Die beiden Lehren oben
+  entstanden im Omarchy-Bob-Bobnet. Einen Weg, sie an andere Bobnets weiterzugeben (Haupt-Bobnet auf der
+  VM, Kunden-Bobnets, neue Instanzen), gibt es bisher nicht. Bleibt nur der Umweg über einen PR an die
+  Engine. Der braucht Rechte, die eine Instanz oft nicht hat, und Garfield muss ihn bemerken.
+- **Reflex:** Eine Lehre, die über das eigene Projekt hinaus gilt, ausdrücklich als „engine-würdig"
+  markieren, bereinigt um Projekt- und Kundendaten (keine Namen, Repos, Hosts, Zahlen aus Kundensystemen).
+  Dann über den Engine-Maintainer in den Kanon bringen. Ziel für Engine 3.0: ein eigener Kanal, in dem
+  Bobnets bereinigte, generische Lehren austauschen. So wie sich Entwickler gegenseitig von ihren
+  Stolpersteinen erzählen.
