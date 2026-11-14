@@ -52,7 +52,8 @@
 #   4. Bei Neuem den Lead-Zustand lesen (Heartbeat-Log `<standup>/<TEAM_LEAD>.log`):
 #        idle|done|kein Log     → NUDGE (wenn MUX_SESSION konfiguriert + Session lebt)
 #        busy älter als STALE   → NUDGE (vergessener busy-Status blockiert sonst ewig)
-#        busy (frisch)|blocked  → SKIP (State bleibt „offen" → nächster Tick prüft erneut)
+#        blocked älter als BLOCKED_MIN → NUDGE (ein blocked-Lead verpasst sonst jede Antwort)
+#        busy (frisch)|blocked (frisch) → SKIP (State bleibt „offen" → nächster Tick prüft erneut)
 #        Session down           → report (opt-in Boot via INBOX_WATCH_BOOT=1 + BOOT_CMD; ein
 #                                  Boot gilt als zugestellt) ODER — ohne Boot — GENAU EINMAL pro
 #                                  Down-Vorgang eskalieren statt endlos zu loggen (Punkt 10, #55).
@@ -160,6 +161,9 @@
 #                           wird nur laut geloggt (siehe Punkt 5). Kontrakt siehe oben.
 #   INBOX_WATCH_ALERT_MIN_SEVERITY   Mindest-Severity, ab der der Alert-Cmd überhaupt gerufen
 #                           wird (`info`|`mid`|`urgent`, Default `mid`) — s. Punkt 8.
+#   INBOX_WATCH_BLOCKED_MIN Minuten, ab denen ein blocked-Heartbeat als veraltet gilt (Default 60):
+#                           neue Eingänge wecken den Lead dann trotzdem (die Nachricht kann genau
+#                           die Antwort sein, auf die er wartet). Frisch blocked → weiter SKIP.
 #   INBOX_WATCH_BOOT        1 = Lead bei Session-down via mux_boot wecken (Default 0)
 #   INBOX_WATCH_DRYRUN      1 = keine mux-Aufrufe (Nudge/Re-Nudge gelten als versucht); Pending-
 #                           State + Verifikation laufen normal weiter (deterministisch testbar)
@@ -172,6 +176,7 @@ TOOLHUB="$(cd "$ENGINE_ROOT/.." && pwd)"
 REGISTRY="${DEV_TEAM_REGISTRY:-$TOOLHUB/projects.registry.json}"
 STATE_DIR="${INBOX_WATCH_STATE:-$HOME/.claude/inbox-watch}"
 STALE_MIN="${INBOX_WATCH_STALE_MIN:-90}"
+BLOCKED_MIN="${INBOX_WATCH_BLOCKED_MIN:-60}"
 MAX_NUDGE="${INBOX_WATCH_MAX_NUDGE:-3}"
 ALERT_CMD_DEFAULT="${INBOX_WATCH_ALERT_CMD:-}"
 MIN_SEVERITY="${INBOX_WATCH_ALERT_MIN_SEVERITY:-mid}"
@@ -577,7 +582,7 @@ while IFS=$'\t' read -r uid path standup; do
   decide="nudge"
   case "$st" in
     busy)    [ "$age" -lt "$STALE_MIN" ] && decide="skip-busy" ;;
-    blocked) decide="skip-blocked" ;;
+    blocked) [ "$age" -lt "$BLOCKED_MIN" ] && decide="skip-blocked" ;;
   esac
 
   if [ "$decide" != "nudge" ]; then

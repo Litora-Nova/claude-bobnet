@@ -99,6 +99,14 @@ echo "$(now) | blocked | warte auf PO" > "$A/Zed.log"
 out="$(run)"
 t "blocked → skip-blocked" "1" "$(printf '%s\n' "$out" | grep -c 'alpha: NEU.*skip-blocked')"
 
+# blocked älter als INBOX_WATCH_BLOCKED_MIN → NUDGE (der Lead wartet evtl. genau auf diese Antwort;
+# ohne Grenze verpasst ein blocked-Lead jeden Eingang für immer)
+echo "antwort vom menschen" >> "$A/_inbox.md"
+echo "2020-01-01 00:00 | blocked | warte auf PO" > "$A/Zed.log"
+out="$(run)"
+t "stale-blocked → NUDGE" "1" "$(printf '%s\n' "$out" | grep -c 'alpha: NUDGE')"
+t "stale-blocked → kein skip-blocked" "0" "$(printf '%s\n' "$out" | grep -c 'skip-blocked')"
+
 # kein Lead-Log (none) → nudgen (unbekannt behandeln wir wie idle)
 rm "$A/Zed.log"
 out="$(run)"
