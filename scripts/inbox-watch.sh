@@ -319,7 +319,7 @@ pane_has_dialog() {
   # letzten 20 Zeilen bis zur letzten nicht leeren Zeile (leere Pane-Zeilen unten zählen nicht).
   printf '%s\n' "$screen" | awk '
     function lstrip(s) { sub(/^(│| )*/, "", s); return s }
-    function is_rule(s) { return index(s, "──────────") > 0 && s !~ /(└|┘|┌|┐|├|┤|┬|┴|┼)/ }
+    function is_rule(s) { return index(s, "──────────") > 0 && s !~ /(└|┘|┌|┐|├|┤|┬|┴|┼|╭|╮|╰|╯)/ }
     function is_ptr(s)  { s = lstrip(s); return index(s, "❯ ") == 1 && s !~ /^❯ *$/ }
     function is_field(s){ s = lstrip(s); return index(s, "❯") == 1 }
     { line[NR] = $0; if ($0 !~ /^[ \t]*$/) last = NR }

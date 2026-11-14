@@ -163,8 +163,14 @@ pd 'irgendeine Ausgabe' '❯ '
 out="$(dialog_run)"; t "nackter Zeiger → kein skip-dialog" "0" "$(printf '%s\n' "$out" | grep -c 'skip-dialog')"
 # Tabellen-Unterkante über einer früheren Eingabe ist kein Eingabefeld: Dialog darunter zählt
 pd '└──────────────┴──────┘' '❯ frühere Eingabe' '' ' Bash command' ' Do you want to proceed?' ' ❯ No' '   Yes'
+echo "tabelle eckig" >> "$A/_inbox.md"
+out="$(dialog_run)"; t "Tabellenkante eckig ≠ Eingabefeld → skip-dialog" "1" "$(printf '%s\n' "$out" | grep -c 'skip-dialog')"
+pd '╰──────────────────────╯' '❯ frühere Eingabe' '' ' Bash command' ' Do you want to proceed?' ' ❯ No' '   Yes'
 echo "tabelle fall" >> "$A/_inbox.md"
-out="$(dialog_run)"; t "Tabellenkante ≠ Eingabefeld → skip-dialog" "1" "$(printf '%s\n' "$out" | grep -c 'skip-dialog')"
+out="$(dialog_run)"; t "Tabellenkante rund ≠ Eingabefeld → skip-dialog" "1" "$(printf '%s\n' "$out" | grep -c 'skip-dialog')"
+# Eingabefeld mit Leerzeile zwischen Linie und Zeiger bleibt Eingabefeld
+pd 'Ausgabe' "$RULE" '' '❯ entwurf' "$RULE"; echo "leerzeile feld" >> "$A/_inbox.md"
+out="$(dialog_run)"; t "Eingabefeld mit Leerzeile unter der Linie → kein skip-dialog" "0" "$(printf '%s\n' "$out" | grep -c 'skip-dialog')"
 # Byte-awk / C-Locale: dieselben Fälle müssen gleich ausgehen
 pd ' ❯ No' '   Yes'
 out="$(LC_ALL=C dialog_run)"; t "LC_ALL=C: Rückfrage ohne Nummern → skip-dialog" "1" "$(printf '%s\n' "$out" | grep -c 'skip-dialog')"
