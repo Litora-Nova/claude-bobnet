@@ -314,19 +314,24 @@ pane_has_dialog() {
   else
     screen="$(mux_capture "$1" 2>/dev/null)"
   fi
-  printf '%s\n' "$screen" | tail -n 20 | awk '
-    function is_rule(s) { return index(s, "──────────") > 0 }
-    function is_ptr(s)  { sub(/^[│ ]*/, "", s); return index(s, "❯ ") == 1 && length(s) > length("❯ ") }
-    function is_field(s){ sub(/^[│ ]*/, "", s); return index(s, "❯") == 1 }
-    { line[NR] = $0 }
+  # Portabel für gawk, mawk und LC_ALL=C: Mehrbyte-Zeichen nie in eckigen Klammern (Byte-awk
+  # zerlegt sie sonst in Einzelbytes), nur als Literal oder Alternation. Das Fenster sind die
+  # letzten 20 Zeilen bis zur letzten nicht leeren Zeile (leere Pane-Zeilen unten zählen nicht).
+  printf '%s\n' "$screen" | awk '
+    function lstrip(s) { sub(/^(│| )*/, "", s); return s }
+    function is_rule(s) { return index(s, "──────────") > 0 && s !~ /(└|┘|┌|┐|├|┤|┬|┴|┼)/ }
+    function is_ptr(s)  { s = lstrip(s); return index(s, "❯ ") == 1 && s !~ /^❯ *$/ }
+    function is_field(s){ s = lstrip(s); return index(s, "❯") == 1 }
+    { line[NR] = $0; if ($0 !~ /^[ \t]*$/) last = NR }
     END {
       field = 0; ptr = 0; foot = 0; prev = ""
-      for (i = 1; i <= NR; i++) {
+      first = last - 19; if (first < 1) first = 1
+      for (i = first; i <= last; i++) {
         s = line[i]
         if (is_field(s) && is_rule(prev)) field = 1
         else if (is_ptr(s)) ptr = 1
         if (s ~ /Enter to (select|confirm)/ && s ~ /Esc to (cancel|close|go back)/) foot = 1
-        if (s !~ /^[[:space:]]*$/) prev = s
+        if (s !~ /^[ \t]*$/) prev = s
       }
       exit !(field == 0 && (ptr || foot))
     }'
@@ -628,6 +633,7 @@ while IFS=$'\t' read -r uid path standup; do
   esac
 
   if [ "$decide" != "nudge" ]; then
+    rm -f "$STATE_DIR/$uid.dialog"   # frischer Heartbeat: eine frühere Dialog-Episode ist vorbei
     echo "[inbox-watch] $uid: NEU, aber Lead $lead=$st (${age}min) — $decide (State bleibt offen)"
     continue
   fi
@@ -672,7 +678,9 @@ while IFS=$'\t' read -r uid path standup; do
       run_severity_alert "$alert_cmd" "$uid" "$lead" "$standup" "$severity" \
         "Neue Eingänge, aber im Pane $session ist ein Dialog offen — kein Nudge, bitte nachsehen" dialog-open
       esc_count "$_ESC_RESULT"
-      printf '%s\n' "$_ESC_RESULT" > "$dialog_marker"
+      # Marker nur nach echtem Alarm: gated/swallowed/alert_failed versucht der nächste Tick erneut
+      # (z. B. wenn die Severity steigt oder der Alert-Cmd wieder geht).
+      [ "$_ESC_RESULT" = escalated ] && printf '%s\n' "$_ESC_RESULT" > "$dialog_marker"
       echo "[inbox-watch] $uid: NEU, aber in $session ist ein Dialog offen — skip-dialog (State bleibt offen, Eskalation: $_ESC_RESULT)"
     fi
     continue

@@ -154,10 +154,49 @@ out="$(dialog_run)"; t "Freitext-Frage → kein skip-dialog" "0" "$(printf '%s\n
 echo "banner fall" >> "$A/_inbox.md"
 pd 'limit reached, continuing automatically · Esc to cancel' "$RULE" '❯ ' "$RULE"
 out="$(dialog_run)"; t "Banner nur mit Esc to cancel → kein skip-dialog" "0" "$(printf '%s\n' "$out" | grep -c 'skip-dialog')"
+# Vertrauensdialog live aufgenommen in einem 40-Zeilen-Pane (leere Zeilen unten), Dialog oben
+cp "$HERE/fixtures/inbox-watch/trust_dialog_40rows.txt" "$tmp/pane.txt"
+echo "hoher pane" >> "$A/_inbox.md"
+out="$(dialog_run)"; t "Vertrauensdialog im hohen Pane → skip-dialog" "1" "$(printf '%s\n' "$out" | grep -c 'skip-dialog')"
+# ein nackter Zeiger ohne Option (ohne Linie darüber) ist kein Dialog
+pd 'irgendeine Ausgabe' '❯ '
+out="$(dialog_run)"; t "nackter Zeiger → kein skip-dialog" "0" "$(printf '%s\n' "$out" | grep -c 'skip-dialog')"
+# Tabellen-Unterkante über einer früheren Eingabe ist kein Eingabefeld: Dialog darunter zählt
+pd '└──────────────┴──────┘' '❯ frühere Eingabe' '' ' Bash command' ' Do you want to proceed?' ' ❯ No' '   Yes'
+echo "tabelle fall" >> "$A/_inbox.md"
+out="$(dialog_run)"; t "Tabellenkante ≠ Eingabefeld → skip-dialog" "1" "$(printf '%s\n' "$out" | grep -c 'skip-dialog')"
+# Byte-awk / C-Locale: dieselben Fälle müssen gleich ausgehen
+pd ' ❯ No' '   Yes'
+out="$(LC_ALL=C dialog_run)"; t "LC_ALL=C: Rückfrage ohne Nummern → skip-dialog" "1" "$(printf '%s\n' "$out" | grep -c 'skip-dialog')"
+pd 'Antwort mit Enter to select · Esc to cancel im Text' "$RULE" '❯ ' "$RULE"
+echo "c locale feld" >> "$A/_inbox.md"
+out="$(LC_ALL=C dialog_run)"; t "LC_ALL=C: Eingabefeld sichtbar → kein skip-dialog" "0" "$(printf '%s\n' "$out" | grep -c 'skip-dialog')"
+if command -v mawk >/dev/null 2>&1; then
+  mkdir -p "$tmp/mawkbin"; ln -sf "$(command -v mawk)" "$tmp/mawkbin/awk"
+  pd ' ❯ No' '   Yes'
+  echo "mawk dialog" >> "$A/_inbox.md"
+  out="$(PATH="$tmp/mawkbin:$PATH" dialog_run)"; t "mawk: Rückfrage ohne Nummern → skip-dialog" "1" "$(printf '%s\n' "$out" | grep -c 'skip-dialog')"
+  pd 'Antwort mit Enter to select · Esc to cancel im Text' "$RULE" '❯ ' "$RULE"
+  echo "mawk feld" >> "$A/_inbox.md"
+  out="$(PATH="$tmp/mawkbin:$PATH" dialog_run)"; t "mawk: Eingabefeld sichtbar → kein skip-dialog" "0" "$(printf '%s\n' "$out" | grep -c 'skip-dialog')"
+fi
+# frischer busy-Heartbeat beendet eine Dialog-Episode (Marker weg, nächster Dialog meldet neu)
+pd ' ❯ No' '   Yes'; echo "episode 1" >> "$A/_inbox.md"
+out="$(INBOX_WATCH_ALERT_CMD=true dialog_run)"
+echo "$(now) | busy | arbeite" > "$A/Zed.log"; echo "zwischendurch" >> "$A/_inbox.md"
+out="$(dialog_run)"
+t "frischer busy → Dialog-Marker entfernt" "0" "$([ -f "$tmp/state/alpha.dialog" ] && echo 1 || echo 0)"
+echo "$(ago 200) | busy | alt" > "$A/Zed.log"
+out="$(INBOX_WATCH_ALERT_CMD=true dialog_run)"
+t "neue Episode → wieder gemeldet" "1" "$(printf '%s\n' "$out" | grep -c 'Eskalation: escalated')"
+echo "$(ago 120) | blocked | warte" > "$A/Zed.log"
+pd "$RULE" '❯ ' "$RULE"; out="$(dialog_run)"   # Dialog zu → Episode endet
+
 # ohne Alert-Cmd: Dialog verschluckt nichts — State bleibt offen, Nudge nach dem Dialog
 echo "ohne alert" >> "$A/_inbox.md"
 pd ' ❯ No' '   Yes'
 out="$(dialog_run)"; t "ohne Alert-Cmd → skip-dialog, State offen" "1" "$(printf '%s\n' "$out" | grep -c 'State bleibt offen, Eskalation: swallowed')"
+out="$(dialog_run)"; t "ohne Alert-Cmd → kein Marker, nächster Tick versucht erneut" "1" "$(printf '%s\n' "$out" | grep -c 'State bleibt offen, Eskalation: swallowed')"
 pd "$RULE" '❯ ' "$RULE"
 out="$(dialog_run)"; t "ohne Alert-Cmd, Dialog weg → NUDGE" "1" "$(printf '%s\n' "$out" | grep -c 'alpha: NUDGE')"
 
