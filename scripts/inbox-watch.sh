@@ -164,6 +164,7 @@
 #   INBOX_WATCH_BLOCKED_MIN Minuten, ab denen ein blocked-Heartbeat als veraltet gilt (Default 60):
 #                           neue Eingänge wecken den Lead dann trotzdem (die Nachricht kann genau
 #                           die Antwort sein, auf die er wartet). Frisch blocked → weiter SKIP.
+#   INBOX_WATCH_PANE_FIXTURE  nur Specs: Datei, deren Inhalt statt mux_capture als Bildschirm gilt
 #   INBOX_WATCH_BOOT        1 = Lead bei Session-down via mux_boot wecken (Default 0)
 #   INBOX_WATCH_DRYRUN      1 = keine mux-Aufrufe (Nudge/Re-Nudge gelten als versucht); Pending-
 #                           State + Verifikation laufen normal weiter (deterministisch testbar)
@@ -289,6 +290,23 @@ is_uint() { case "$1" in ''|*[!0-9]*) return 1 ;; *) return 0 ;; esac; }
 
 # is_state_since <value> -> true only for the documented, space-free state timestamp alphabet.
 is_state_since() { [[ "$1" =~ ^[0-9T:-]+$ ]]; }
+
+# Kaputte Minuten-Grenze → Default statt "[: integer expression expected" bei jedem Tick.
+is_uint "$BLOCKED_MIN" || { echo "[inbox-watch] WARN: INBOX_WATCH_BLOCKED_MIN='$BLOCKED_MIN' ungültig → 60"; BLOCKED_MIN=60; }
+
+# pane_has_dialog <session> -> true, wenn im Pane ein offener Auswahl-/Freigabe-Dialog steht.
+# Ein Nudge tippt Text + Enter; in einem Dialog würde Enter die markierte Option bestätigen
+# (oder eine Ziffer im Text eine Option wählen) — eine Entscheidung, die nur ein Mensch trifft.
+# Dann nicht senden; der Zyklus bleibt offen und der nächste Tick prüft erneut.
+pane_has_dialog() {
+  local screen
+  if [ -n "${INBOX_WATCH_PANE_FIXTURE:-}" ]; then
+    screen="$(cat "$INBOX_WATCH_PANE_FIXTURE" 2>/dev/null)"
+  else
+    screen="$(mux_capture "$1" 2>/dev/null)"
+  fi
+  printf '%s\n' "$screen" | tail -n 20 | grep -Eq 'Do you want to|Enter to select|Esc to cancel|❯ [0-9]+\.'
+}
 
 # state_write_final <statef> <sig> <ilines>
 state_write_final() { printf 'FINAL sig=%s ilines=%s' "$2" "$3" > "$1"; }
@@ -618,6 +636,17 @@ while IFS=$'\t' read -r uid path standup; do
     text="📬 [$uid] Erinnerung #$next_attempt: Eingänge noch nicht bestätigt — bitte Heartbeat setzen (log.sh $lead ...)."
   fi
   lines_before="$(log_line_count "$leadlog")"
+
+  if { [ "$DRYRUN" != 1 ] || [ -n "${INBOX_WATCH_PANE_FIXTURE:-}" ]; } && pane_has_dialog "$session"; then
+    # Nicht tippen, sondern einmal den Menschen holen: ein offener Dialog plus neue Eingänge heißt,
+    # jemand muss ohnehin auf den Bildschirm schauen. Ein Fehltreffer (Dialog-Text in normaler
+    # Ausgabe) kostet so höchstens einen Alarm statt eines für immer verschluckten Eingangs.
+    echo "[inbox-watch] $uid: NEU, aber in $session ist ein Dialog offen — skip-dialog"
+    escalate_or_swallow "$statef" "$sig" "$uid" "$lead" "$standup" "$alert_cmd" \
+      "NEU, Lead $lead=$st, im Pane $session ist ein Dialog offen (kein Nudge)" "$severity" "$source_" "$cur_ilines"
+    esc_count "$_ESC_RESULT"
+    continue
+  fi
 
   if [ "$next_attempt" -ge 2 ] && [ "$DRYRUN" != 1 ]; then
     mux_flush_draft "$session" 2>/dev/null   # hängenden zellij-Draft vor dem Re-Nudge submitten

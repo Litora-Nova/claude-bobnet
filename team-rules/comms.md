@@ -64,7 +64,10 @@ Die Inbox hat keines dieser Probleme: asynchron, auditierbar, kollisionsfrei.
 5. **Eskalation, wenn Inbox zu langsam wäre:** den eigenen Heartbeat-Status auf **`blocked`**
    setzen — das Dashboard zeigt blocked prominent/urgent, der Hilferuf ist sichtbar, ohne
    fremde Prompts zu kapern. Perspektivisch übernimmt ein Comms-Router-/Concierge-Dienst die
-   Weck-Funktion sauber; bis dahin gilt: blocked + Inbox, nicht Injection.
+   Weck-Funktion sauber; bis dahin gilt: blocked + Inbox, nicht Injection. Der Watcher respektiert
+   einen **frischen** blocked-Status; ist er älter als `INBOX_WATCH_BLOCKED_MIN` (Default 60 min),
+   weckt ein neuer Eingang trotzdem per Pointer-Nudge — die Antwort kann genau die sein, auf die
+   der Lead wartet. Steht im Pane ein offener Dialog, tippt er nicht, sondern eskaliert einmal (skip-dialog).
 
 ## §6 Bobiverse-Sync — Transport zum `{HUMAN}`-Gerät & für externe Coworker (PO-Design 2026-06-10)
 

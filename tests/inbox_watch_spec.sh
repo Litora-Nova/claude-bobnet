@@ -107,6 +107,31 @@ out="$(run)"
 t "stale-blocked → NUDGE" "1" "$(printf '%s\n' "$out" | grep -c 'alpha: NUDGE')"
 t "stale-blocked → kein skip-blocked" "0" "$(printf '%s\n' "$out" | grep -c 'skip-blocked')"
 
+# Grenze 59/60 min, Env-Override, unparsbarer Timestamp bei blocked
+ago(){ date -d "-$1 min" '+%Y-%m-%d %H:%M'; }
+echo "grenze 59" >> "$A/_inbox.md"; echo "$(ago 59) | blocked | warte" > "$A/Zed.log"
+out="$(run)"; t "blocked 59min → skip-blocked" "1" "$(printf '%s\n' "$out" | grep -c 'alpha: NEU.*skip-blocked')"
+echo "$(ago 61) | blocked | warte" > "$A/Zed.log"
+out="$(run)"; t "blocked 61min → NUDGE" "1" "$(printf '%s\n' "$out" | grep -c 'alpha: NUDGE')"
+echo "override" >> "$A/_inbox.md"; echo "$(ago 61) | blocked | warte" > "$A/Zed.log"
+out="$(INBOX_WATCH_BLOCKED_MIN=600 run)"; t "BLOCKED_MIN=600 → skip-blocked" "1" "$(printf '%s\n' "$out" | grep -c 'alpha: NEU.*skip-blocked')"
+out="$(INBOX_WATCH_BLOCKED_MIN=abc run)"; t "BLOCKED_MIN=abc → Warnung + Default" "1" "$(printf '%s\n' "$out" | grep -c 'INBOX_WATCH_BLOCKED_MIN=.abc. ungültig')"
+t "BLOCKED_MIN=abc → kein Shell-Fehler" "0" "$(printf '%s\n' "$out" | grep -c 'integer expression')"
+echo "kaputt ts" >> "$A/_inbox.md"; echo "GARBAGE | blocked | warte" > "$A/Zed.log"
+out="$(run)"; t "blocked + unparsbarer ts → NUDGE" "1" "$(printf '%s\n' "$out" | grep -c 'alpha: NUDGE')"
+
+# offener Dialog im Pane → kein Nudge (Enter würde eine Option bestätigen), State bleibt offen
+echo "dialog fall" >> "$A/_inbox.md"; echo "$(ago 120) | blocked | warte" > "$A/Zed.log"
+printf 'Frage an dich\n❯ 1. Ja\n  2. Nein\nEnter to select · Esc to cancel\n' > "$tmp/pane_dialog.txt"
+out="$(INBOX_WATCH_PANE_FIXTURE="$tmp/pane_dialog.txt" run)"
+t "Dialog offen → skip-dialog" "1" "$(printf '%s\n' "$out" | grep -c 'alpha: NEU.*skip-dialog')"
+t "Dialog offen → kein NUDGE" "0" "$(printf '%s\n' "$out" | grep -c 'alpha: NUDGE')"
+t "Dialog offen → einmal eskaliert statt verschluckt" "1" "$(printf '%s\n' "$out" | grep -c 'Dialog offen (kein Nudge)')"
+echo "nach dem dialog" >> "$A/_inbox.md"
+printf '✻ fertig\n❯ \n' > "$tmp/pane_idle.txt"
+out="$(INBOX_WATCH_PANE_FIXTURE="$tmp/pane_idle.txt" run)"
+t "kein Dialog → NUDGE" "1" "$(printf '%s\n' "$out" | grep -c 'alpha: NUDGE')"
+
 # kein Lead-Log (none) → nudgen (unbekannt behandeln wir wie idle)
 rm "$A/Zed.log"
 out="$(run)"
