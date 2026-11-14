@@ -54,6 +54,9 @@
 #        busy älter als STALE   → NUDGE (vergessener busy-Status blockiert sonst ewig)
 #        blocked älter als BLOCKED_MIN → NUDGE (ein blocked-Lead verpasst sonst jede Antwort)
 #        busy (frisch)|blocked (frisch) → SKIP (State bleibt „offen" → nächster Tick prüft erneut)
+#        Dialog im Pane offen   → kein Nudge (Enter würde eine Option bestätigen): GENAU EINMAL pro
+#                                  Eingangs-Signatur eskalieren (Marker `<STATE_DIR>/<uid>.dialog`),
+#                                  State bleibt offen; ist der Dialog weg, nudgt der nächste Tick.
 #        Session down           → report (opt-in Boot via INBOX_WATCH_BOOT=1 + BOOT_CMD; ein
 #                                  Boot gilt als zugestellt) ODER — ohne Boot — GENAU EINMAL pro
 #                                  Down-Vorgang eskalieren statt endlos zu loggen (Punkt 10, #55).
@@ -64,7 +67,7 @@
 #      Schlägt der Alert-Cmd selbst fehl (rc≠0), zählt das NICHT als „eskaliert" mit — eigener
 #      Zähler „Alert-Fehlschlag(e)" in der Summary-Zeile (0.14.0-Gate, Riker-Fund).
 #   6. State fortschreiben NUR bei Nudge (→ pending) oder Verifikation/Eskalation/report-only/
-#      Self-Write (→ final) — busy/blocked-Skips + fehlgeschlagene Sends bleiben „offen". Eine
+#      Self-Write (→ final) — busy/blocked-/Dialog-Skips + fehlgeschlagene Sends bleiben „offen". Eine
 #      korrupte PENDING-Zeile (Pflichtfeld sig/lines/attempts fehlt oder ist nicht numerisch)
 #      wird KONSERVATIV wie „kein State" behandelt — frischer Zyklus statt eines permissiven
 #      Default (0.14.0-Gate, Marvin-Fund: ein defaultendes `lines=0` hätte fast jeden Heartbeat
@@ -298,6 +301,9 @@ is_uint "$BLOCKED_MIN" || { echo "[inbox-watch] WARN: INBOX_WATCH_BLOCKED_MIN='$
 # Ein Nudge tippt Text + Enter; in einem Dialog würde Enter die markierte Option bestätigen
 # (oder eine Ziffer im Text eine Option wählen) — eine Entscheidung, die nur ein Mensch trifft.
 # Dann nicht senden; der Zyklus bleibt offen und der nächste Tick prüft erneut.
+# Erkannt wird ein Auswahlmenü (Zeiger „❯ N." plus mindestens eine weitere nummerierte Zeile)
+# oder die Fußzeile „Enter to select … Esc to cancel". Freitext wie „Do you want to …?" oder ein
+# Banner mit nur „Esc to cancel" zählt bewusst NICHT (Fehltreffer würden Nudges blockieren).
 pane_has_dialog() {
   local screen
   if [ -n "${INBOX_WATCH_PANE_FIXTURE:-}" ]; then
@@ -305,7 +311,10 @@ pane_has_dialog() {
   else
     screen="$(mux_capture "$1" 2>/dev/null)"
   fi
-  printf '%s\n' "$screen" | tail -n 20 | grep -Eq 'Do you want to|Enter to select|Esc to cancel|❯ [0-9]+\.'
+  local tail20; tail20="$(printf '%s\n' "$screen" | tail -n 20)"
+  printf '%s\n' "$tail20" | grep -Eq 'Enter to select.*Esc to cancel' && return 0
+  printf '%s\n' "$tail20" | grep -Eq '^[│ ]*❯ [0-9]+\. ' || return 1
+  [ "$(printf '%s\n' "$tail20" | grep -Ec '^[│ ]*(❯ )?[0-9]+\. ')" -ge 2 ]
 }
 
 # state_write_final <statef> <sig> <ilines>
@@ -637,16 +646,22 @@ while IFS=$'\t' read -r uid path standup; do
   fi
   lines_before="$(log_line_count "$leadlog")"
 
+  dialog_marker="$STATE_DIR/$uid.dialog"
   if { [ "$DRYRUN" != 1 ] || [ -n "${INBOX_WATCH_PANE_FIXTURE:-}" ]; } && pane_has_dialog "$session"; then
-    # Nicht tippen, sondern einmal den Menschen holen: ein offener Dialog plus neue Eingänge heißt,
-    # jemand muss ohnehin auf den Bildschirm schauen. Ein Fehltreffer (Dialog-Text in normaler
-    # Ausgabe) kostet so höchstens einen Alarm statt eines für immer verschluckten Eingangs.
-    echo "[inbox-watch] $uid: NEU, aber in $session ist ein Dialog offen — skip-dialog"
-    escalate_or_swallow "$statef" "$sig" "$uid" "$lead" "$standup" "$alert_cmd" \
-      "NEU, Lead $lead=$st, im Pane $session ist ein Dialog offen (kein Nudge)" "$severity" "$source_" "$cur_ilines"
-    esc_count "$_ESC_RESULT"
+    # Nicht tippen, sondern den Menschen holen — GENAU EINMAL pro Eingangs-Signatur. Der State
+    # bleibt offen (wie bei Session-down): ist der Dialog weg, nudgt der nächste Tick normal.
+    if [ "$(cat "$dialog_marker" 2>/dev/null)" = "$sig" ]; then
+      echo "[inbox-watch] $uid: NEU, Dialog in $session weiterhin offen — bereits eskaliert, skip-dialog (State bleibt offen)"
+    else
+      printf '%s\n' "$sig" > "$dialog_marker"
+      run_severity_alert "$alert_cmd" "$uid" "$lead" "$standup" "$severity" \
+        "Neue Eingänge, aber im Pane $session ist ein Dialog offen — kein Nudge, bitte nachsehen" dialog-open
+      esc_count "$_ESC_RESULT"
+      echo "[inbox-watch] $uid: NEU, aber in $session ist ein Dialog offen — skip-dialog (State bleibt offen, Eskalation: $_ESC_RESULT)"
+    fi
     continue
   fi
+  rm -f "$dialog_marker"
 
   if [ "$next_attempt" -ge 2 ] && [ "$DRYRUN" != 1 ]; then
     mux_flush_draft "$session" 2>/dev/null   # hängenden zellij-Draft vor dem Re-Nudge submitten
