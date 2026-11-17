@@ -466,7 +466,8 @@ return to the Team-Lead, who remains the sole editor for shared plans/backlogs. 
 into another agent's terminal session.
 
 **Watcher / delivery.** `scripts/inbox-watch.sh` is a one-shot, scheduler-friendly fleet watcher.
-It wakes only idle/done or stale-busy leads, treats a new heartbeat as delivery proof, re-nudges
+It wakes only idle/done, stale-busy or stale-blocked leads (`INBOX_WATCH_BLOCKED_MIN`, default
+60 minutes), reports once per dialog instead of typing into a pane that shows an open dialog (and nudges after it closes), treats a new heartbeat as delivery proof, re-nudges
 unverified events and then escalates by `info` / `mid` / `urgent`. An `.off-duty` flag suppresses
 wakes without discarding state; session-down events escalate once per outage. Lead-authored deltas
 finalize silently only when the canonical line ends exactly in `— (<lead UID or unambiguous

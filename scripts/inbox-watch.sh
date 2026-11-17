@@ -52,7 +52,12 @@
 #   4. Bei Neuem den Lead-Zustand lesen (Heartbeat-Log `<standup>/<TEAM_LEAD>.log`):
 #        idle|done|kein Log     → NUDGE (wenn MUX_SESSION konfiguriert + Session lebt)
 #        busy älter als STALE   → NUDGE (vergessener busy-Status blockiert sonst ewig)
-#        busy (frisch)|blocked  → SKIP (State bleibt „offen" → nächster Tick prüft erneut)
+#        blocked älter als BLOCKED_MIN → NUDGE (ein blocked-Lead verpasst sonst jede Antwort)
+#        busy (frisch)|blocked (frisch) → SKIP (State bleibt „offen" → nächster Tick prüft erneut)
+#        Dialog im Pane offen   → kein Nudge (Enter würde eine Option bestätigen): GENAU EINMAL pro
+#                                  Dialog-Episode melden (Marker `<STATE_DIR>/<uid>.dialog`, hält
+#                                  das Alarm-Ergebnis), State bleibt offen; ist der Dialog weg,
+#                                  endet die Episode und der nächste Tick nudgt normal.
 #        Session down           → report (opt-in Boot via INBOX_WATCH_BOOT=1 + BOOT_CMD; ein
 #                                  Boot gilt als zugestellt) ODER — ohne Boot — GENAU EINMAL pro
 #                                  Down-Vorgang eskalieren statt endlos zu loggen (Punkt 10, #55).
@@ -63,7 +68,7 @@
 #      Schlägt der Alert-Cmd selbst fehl (rc≠0), zählt das NICHT als „eskaliert" mit — eigener
 #      Zähler „Alert-Fehlschlag(e)" in der Summary-Zeile (0.14.0-Gate, Riker-Fund).
 #   6. State fortschreiben NUR bei Nudge (→ pending) oder Verifikation/Eskalation/report-only/
-#      Self-Write (→ final) — busy/blocked-Skips + fehlgeschlagene Sends bleiben „offen". Eine
+#      Self-Write (→ final) — busy/blocked-/Dialog-Skips + fehlgeschlagene Sends bleiben „offen". Eine
 #      korrupte PENDING-Zeile (Pflichtfeld sig/lines/attempts fehlt oder ist nicht numerisch)
 #      wird KONSERVATIV wie „kein State" behandelt — frischer Zyklus statt eines permissiven
 #      Default (0.14.0-Gate, Marvin-Fund: ein defaultendes `lines=0` hätte fast jeden Heartbeat
@@ -160,6 +165,10 @@
 #                           wird nur laut geloggt (siehe Punkt 5). Kontrakt siehe oben.
 #   INBOX_WATCH_ALERT_MIN_SEVERITY   Mindest-Severity, ab der der Alert-Cmd überhaupt gerufen
 #                           wird (`info`|`mid`|`urgent`, Default `mid`) — s. Punkt 8.
+#   INBOX_WATCH_BLOCKED_MIN Minuten, ab denen ein blocked-Heartbeat als veraltet gilt (Default 60):
+#                           neue Eingänge wecken den Lead dann trotzdem (die Nachricht kann genau
+#                           die Antwort sein, auf die er wartet). Frisch blocked → weiter SKIP.
+#   INBOX_WATCH_PANE_FIXTURE  nur Specs: Datei, deren Inhalt statt mux_capture als Bildschirm gilt
 #   INBOX_WATCH_BOOT        1 = Lead bei Session-down via mux_boot wecken (Default 0)
 #   INBOX_WATCH_DRYRUN      1 = keine mux-Aufrufe (Nudge/Re-Nudge gelten als versucht); Pending-
 #                           State + Verifikation laufen normal weiter (deterministisch testbar)
@@ -172,6 +181,7 @@ TOOLHUB="$(cd "$ENGINE_ROOT/.." && pwd)"
 REGISTRY="${DEV_TEAM_REGISTRY:-$TOOLHUB/projects.registry.json}"
 STATE_DIR="${INBOX_WATCH_STATE:-$HOME/.claude/inbox-watch}"
 STALE_MIN="${INBOX_WATCH_STALE_MIN:-90}"
+BLOCKED_MIN="${INBOX_WATCH_BLOCKED_MIN:-60}"
 MAX_NUDGE="${INBOX_WATCH_MAX_NUDGE:-3}"
 ALERT_CMD_DEFAULT="${INBOX_WATCH_ALERT_CMD:-}"
 MIN_SEVERITY="${INBOX_WATCH_ALERT_MIN_SEVERITY:-mid}"
@@ -284,6 +294,48 @@ is_uint() { case "$1" in ''|*[!0-9]*) return 1 ;; *) return 0 ;; esac; }
 
 # is_state_since <value> -> true only for the documented, space-free state timestamp alphabet.
 is_state_since() { [[ "$1" =~ ^[0-9T:-]+$ ]]; }
+
+# Kaputte Minuten-Grenze → Default statt "[: integer expression expected" bei jedem Tick.
+is_uint "$BLOCKED_MIN" || { echo "[inbox-watch] WARN: INBOX_WATCH_BLOCKED_MIN='$BLOCKED_MIN' ungültig → 60"; BLOCKED_MIN=60; }
+
+# pane_has_dialog <session> -> true, wenn im Pane ein offener Auswahl-/Freigabe-Dialog steht.
+# Ein Nudge tippt Text + Enter; in einem Dialog würde Enter die markierte Option bestätigen
+# (oder eine Ziffer im Text eine Option wählen) — eine Entscheidung, die nur ein Mensch trifft.
+# Dann nicht senden; der Zyklus bleibt offen und der nächste Tick prüft erneut.
+# Erkennung am Layout: Ein Dialog ERSETZT das Eingabefeld (das Feld ist eine Zeile „❯ …" direkt
+# unter einer „─"-Linie). Ist das Feld zu sehen, ist nie ein Dialog offen. Fehlt es, zählt eine
+# Zeigerzeile „❯ <Option>" (auch ohne Nummern, z. B. Vertrauens- oder Auto-Modus-Rückfrage) oder
+# eine Fußzeile „Enter to select|confirm … Esc to cancel|close|go back". Freitext wie „Do you want
+# to …?" oder ein Banner mit nur „Esc to cancel" zählt nicht.
+pane_has_dialog() {
+  local screen
+  if [ -n "${INBOX_WATCH_PANE_FIXTURE:-}" ]; then
+    screen="$(cat "$INBOX_WATCH_PANE_FIXTURE" 2>/dev/null)"
+  else
+    screen="$(mux_capture "$1" 2>/dev/null)"
+  fi
+  # Portabel für gawk, mawk und LC_ALL=C: Mehrbyte-Zeichen nie in eckigen Klammern (Byte-awk
+  # zerlegt sie sonst in Einzelbytes), nur als Literal oder Alternation. Das Fenster sind die
+  # letzten 20 Zeilen bis zur letzten nicht leeren Zeile (leere Pane-Zeilen unten zählen nicht).
+  printf '%s\n' "$screen" | awk '
+    function lstrip(s) { sub(/^(│| )*/, "", s); return s }
+    function is_rule(s) { return index(s, "──────────") > 0 && s !~ /(└|┘|┌|┐|├|┤|┬|┴|┼|╭|╮|╰|╯)/ }
+    function is_ptr(s)  { s = lstrip(s); return index(s, "❯ ") == 1 && s !~ /^❯ *$/ }
+    function is_field(s){ s = lstrip(s); return index(s, "❯") == 1 }
+    { line[NR] = $0; if ($0 !~ /^[ \t]*$/) last = NR }
+    END {
+      field = 0; ptr = 0; foot = 0; prev = ""
+      first = last - 19; if (first < 1) first = 1
+      for (i = first; i <= last; i++) {
+        s = line[i]
+        if (is_field(s) && is_rule(prev)) field = 1
+        else if (is_ptr(s)) ptr = 1
+        if (s ~ /Enter to (select|confirm)/ && s ~ /Esc to (cancel|close|go back)/) foot = 1
+        if (s !~ /^[ \t]*$/) prev = s
+      }
+      exit !(field == 0 && (ptr || foot))
+    }'
+}
 
 # state_write_final <statef> <sig> <ilines>
 state_write_final() { printf 'FINAL sig=%s ilines=%s' "$2" "$3" > "$1"; }
@@ -577,10 +629,11 @@ while IFS=$'\t' read -r uid path standup; do
   decide="nudge"
   case "$st" in
     busy)    [ "$age" -lt "$STALE_MIN" ] && decide="skip-busy" ;;
-    blocked) decide="skip-blocked" ;;
+    blocked) [ "$age" -lt "$BLOCKED_MIN" ] && decide="skip-blocked" ;;
   esac
 
   if [ "$decide" != "nudge" ]; then
+    rm -f "$STATE_DIR/$uid.dialog"   # frischer Heartbeat: eine frühere Dialog-Episode ist vorbei
     echo "[inbox-watch] $uid: NEU, aber Lead $lead=$st (${age}min) — $decide (State bleibt offen)"
     continue
   fi
@@ -613,6 +666,26 @@ while IFS=$'\t' read -r uid path standup; do
     text="📬 [$uid] Erinnerung #$next_attempt: Eingänge noch nicht bestätigt — bitte Heartbeat setzen (log.sh $lead ...)."
   fi
   lines_before="$(log_line_count "$leadlog")"
+
+  dialog_marker="$STATE_DIR/$uid.dialog"
+  if { [ "$DRYRUN" != 1 ] || [ -n "${INBOX_WATCH_PANE_FIXTURE:-}" ]; } && pane_has_dialog "$session"; then
+    # Nicht tippen, sondern den Menschen holen — GENAU EINMAL pro Dialog-Episode (weitere Eingänge
+    # während desselben Dialogs melden nicht erneut). Der State bleibt offen (wie bei Session-down):
+    # ist der Dialog weg, endet die Episode und der nächste Tick nudgt normal.
+    if [ -f "$dialog_marker" ]; then
+      echo "[inbox-watch] $uid: NEU, Dialog in $session weiterhin offen — bereits gemeldet ($(cat "$dialog_marker" 2>/dev/null)), skip-dialog (State bleibt offen)"
+    else
+      run_severity_alert "$alert_cmd" "$uid" "$lead" "$standup" "$severity" \
+        "Neue Eingänge, aber im Pane $session ist ein Dialog offen — kein Nudge, bitte nachsehen" dialog-open
+      esc_count "$_ESC_RESULT"
+      # Marker nur nach echtem Alarm: gated/swallowed/alert_failed versucht der nächste Tick erneut
+      # (z. B. wenn die Severity steigt oder der Alert-Cmd wieder geht).
+      [ "$_ESC_RESULT" = escalated ] && printf '%s\n' "$_ESC_RESULT" > "$dialog_marker"
+      echo "[inbox-watch] $uid: NEU, aber in $session ist ein Dialog offen — skip-dialog (State bleibt offen, Eskalation: $_ESC_RESULT)"
+    fi
+    continue
+  fi
+  rm -f "$dialog_marker"
 
   if [ "$next_attempt" -ge 2 ] && [ "$DRYRUN" != 1 ]; then
     mux_flush_draft "$session" 2>/dev/null   # hängenden zellij-Draft vor dem Re-Nudge submitten

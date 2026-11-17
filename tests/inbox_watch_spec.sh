@@ -99,6 +99,113 @@ echo "$(now) | blocked | warte auf PO" > "$A/Zed.log"
 out="$(run)"
 t "blocked → skip-blocked" "1" "$(printf '%s\n' "$out" | grep -c 'alpha: NEU.*skip-blocked')"
 
+# blocked älter als INBOX_WATCH_BLOCKED_MIN → NUDGE (der Lead wartet evtl. genau auf diese Antwort;
+# ohne Grenze verpasst ein blocked-Lead jeden Eingang für immer)
+echo "antwort vom menschen" >> "$A/_inbox.md"
+echo "2020-01-01 00:00 | blocked | warte auf PO" > "$A/Zed.log"
+out="$(run)"
+t "stale-blocked → NUDGE" "1" "$(printf '%s\n' "$out" | grep -c 'alpha: NUDGE')"
+t "stale-blocked → kein skip-blocked" "0" "$(printf '%s\n' "$out" | grep -c 'skip-blocked')"
+
+# Grenze 59/60 min, Env-Override, unparsbarer Timestamp bei blocked
+ago(){ date -d "-$1 min" '+%Y-%m-%d %H:%M'; }
+echo "grenze 59" >> "$A/_inbox.md"; echo "$(ago 59) | blocked | warte" > "$A/Zed.log"
+out="$(run)"; t "blocked 59min → skip-blocked" "1" "$(printf '%s\n' "$out" | grep -c 'alpha: NEU.*skip-blocked')"
+echo "$(ago 61) | blocked | warte" > "$A/Zed.log"
+out="$(run)"; t "blocked 61min → NUDGE" "1" "$(printf '%s\n' "$out" | grep -c 'alpha: NUDGE')"
+echo "override" >> "$A/_inbox.md"; echo "$(ago 61) | blocked | warte" > "$A/Zed.log"
+out="$(INBOX_WATCH_BLOCKED_MIN=600 run)"; t "BLOCKED_MIN=600 → skip-blocked" "1" "$(printf '%s\n' "$out" | grep -c 'alpha: NEU.*skip-blocked')"
+out="$(DEV_TEAM_REGISTRY="$tmp/registry.json" INBOX_WATCH_STATE="$tmp/state" INBOX_WATCH_DRYRUN=1 INBOX_WATCH_MAX_NUDGE="$MAXN" INBOX_WATCH_BLOCKED_MIN=abc bash "$BIN" 2>&1)"; t "BLOCKED_MIN=abc → Warnung + Default" "1" "$(printf '%s\n' "$out" | grep -c 'INBOX_WATCH_BLOCKED_MIN=.abc. ungültig')"
+t "BLOCKED_MIN=abc → kein Shell-Fehler" "0" "$(printf '%s\n' "$out" | grep -c 'integer expression')"
+echo "kaputt ts" >> "$A/_inbox.md"; echo "GARBAGE | blocked | warte" > "$A/Zed.log"
+out="$(run)"; t "blocked + unparsbarer ts → NUDGE" "1" "$(printf '%s\n' "$out" | grep -c 'alpha: NUDGE')"
+
+# offener Dialog im Pane → kein Nudge (Enter würde eine Option bestätigen): einmal pro Episode
+# melden, State bleibt offen; ist der Dialog weg, nudgt der nächste Tick und die Episode endet
+pd(){ printf '%s\n' "$@" > "$tmp/pane.txt"; }
+dialog_run(){ INBOX_WATCH_PANE_FIXTURE="$tmp/pane.txt" run; }
+RULE='────────────────────────────────────────'
+echo "dialog fall" >> "$A/_inbox.md"; echo "$(ago 120) | blocked | warte" > "$A/Zed.log"
+pd 'Frage an dich' '❯ 1. Ja' '  2. Nein' 'Enter to select · ↑/↓ to navigate · Esc to cancel'
+out="$(INBOX_WATCH_ALERT_CMD=true dialog_run)"
+t "Dialog (AskUserQuestion) → skip-dialog" "1" "$(printf '%s\n' "$out" | grep -c 'alpha: NEU.*skip-dialog')"
+t "Dialog → kein NUDGE" "0" "$(printf '%s\n' "$out" | grep -c 'alpha: NUDGE')"
+t "Dialog → gemeldet" "1" "$(printf '%s\n' "$out" | grep -c 'Eskalation: escalated')"
+echo "noch ein eingang im dialog" >> "$A/_inbox.md"
+out="$(INBOX_WATCH_ALERT_CMD=true dialog_run)"
+t "Dialog weiter offen, neuer Eingang → nicht erneut gemeldet" "1" "$(printf '%s\n' "$out" | grep -c 'bereits gemeldet (escalated), skip-dialog')"
+# Vertrauensdialog (live in 2.1.325 aufgenommen): Optionen ohne Nummern
+pd ' Do you trust the files in this folder?' '' ' ❯ No, exit' '   Yes, I trust this folder' '' ' Enter to confirm · Esc to cancel'
+out="$(dialog_run)"; t "Vertrauensdialog ohne Nummern → skip-dialog" "1" "$(printf '%s\n' "$out" | grep -c 'skip-dialog')"
+# Auto-Modus-Rückfrage: Indizes versteckt, keine Fußzeile
+pd "$RULE" ' Bash command' '   rm -rf build' ' Do you want to proceed?' ' ❯ No' '   Yes'
+out="$(dialog_run)"; t "Rückfrage ohne Nummern/Fußzeile → skip-dialog" "1" "$(printf '%s\n' "$out" | grep -c 'skip-dialog')"
+# nur Fußzeile (Zurück-Variante)
+pd ' Wähle eine Option' '' ' Enter to select · Esc to go back'
+out="$(dialog_run)"; t "nur Fußzeile → skip-dialog" "1" "$(printf '%s\n' "$out" | grep -c 'skip-dialog')"
+# Fehltreffer-Schutz: Eingabefeld sichtbar = nie Dialog (auch mit Nummern-Liste + Vorschlagstext)
+pd 'Antwort:' '  1. erst das' '  2. dann das' '❯ 1. frühere Eingabe' "$RULE" '❯ 2. Variante B' "$RULE" '  ⏵⏵ auto mode on'
+out="$(dialog_run)"; t "Eingabefeld sichtbar → kein skip-dialog" "0" "$(printf '%s\n' "$out" | grep -c 'skip-dialog')"
+t "Dialog weg → NUDGE" "1" "$(printf '%s\n' "$out" | grep -c 'alpha: NUDGE')"
+t "Dialog weg → Episode-Marker entfernt" "0" "$([ -f "$tmp/state/alpha.dialog" ] && echo 1 || echo 0)"
+echo "freitext fall" >> "$A/_inbox.md"
+pd 'Do you want to keep the old flag?' "$RULE" '❯ ' "$RULE"
+out="$(dialog_run)"; t "Freitext-Frage → kein skip-dialog" "0" "$(printf '%s\n' "$out" | grep -c 'skip-dialog')"
+echo "banner fall" >> "$A/_inbox.md"
+pd 'limit reached, continuing automatically · Esc to cancel' "$RULE" '❯ ' "$RULE"
+out="$(dialog_run)"; t "Banner nur mit Esc to cancel → kein skip-dialog" "0" "$(printf '%s\n' "$out" | grep -c 'skip-dialog')"
+# Vertrauensdialog live aufgenommen in einem 40-Zeilen-Pane (leere Zeilen unten), Dialog oben
+cp "$HERE/fixtures/inbox-watch/trust_dialog_40rows.txt" "$tmp/pane.txt"
+echo "hoher pane" >> "$A/_inbox.md"
+out="$(dialog_run)"; t "Vertrauensdialog im hohen Pane → skip-dialog" "1" "$(printf '%s\n' "$out" | grep -c 'skip-dialog')"
+# ein nackter Zeiger ohne Option (ohne Linie darüber) ist kein Dialog
+pd 'irgendeine Ausgabe' '❯ '
+out="$(dialog_run)"; t "nackter Zeiger → kein skip-dialog" "0" "$(printf '%s\n' "$out" | grep -c 'skip-dialog')"
+# Tabellen-Unterkante über einer früheren Eingabe ist kein Eingabefeld: Dialog darunter zählt
+pd '└──────────────┴──────┘' '❯ frühere Eingabe' '' ' Bash command' ' Do you want to proceed?' ' ❯ No' '   Yes'
+echo "tabelle eckig" >> "$A/_inbox.md"
+out="$(dialog_run)"; t "Tabellenkante eckig ≠ Eingabefeld → skip-dialog" "1" "$(printf '%s\n' "$out" | grep -c 'skip-dialog')"
+pd '╰──────────────────────╯' '❯ frühere Eingabe' '' ' Bash command' ' Do you want to proceed?' ' ❯ No' '   Yes'
+echo "tabelle fall" >> "$A/_inbox.md"
+out="$(dialog_run)"; t "Tabellenkante rund ≠ Eingabefeld → skip-dialog" "1" "$(printf '%s\n' "$out" | grep -c 'skip-dialog')"
+# Eingabefeld mit Leerzeile zwischen Linie und Zeiger bleibt Eingabefeld
+pd 'Ausgabe' "$RULE" '' '❯ entwurf' "$RULE"; echo "leerzeile feld" >> "$A/_inbox.md"
+out="$(dialog_run)"; t "Eingabefeld mit Leerzeile unter der Linie → kein skip-dialog" "0" "$(printf '%s\n' "$out" | grep -c 'skip-dialog')"
+# Byte-awk / C-Locale: dieselben Fälle müssen gleich ausgehen
+pd ' ❯ No' '   Yes'
+out="$(LC_ALL=C dialog_run)"; t "LC_ALL=C: Rückfrage ohne Nummern → skip-dialog" "1" "$(printf '%s\n' "$out" | grep -c 'skip-dialog')"
+pd 'Antwort mit Enter to select · Esc to cancel im Text' "$RULE" '❯ ' "$RULE"
+echo "c locale feld" >> "$A/_inbox.md"
+out="$(LC_ALL=C dialog_run)"; t "LC_ALL=C: Eingabefeld sichtbar → kein skip-dialog" "0" "$(printf '%s\n' "$out" | grep -c 'skip-dialog')"
+if command -v mawk >/dev/null 2>&1; then
+  mkdir -p "$tmp/mawkbin"; ln -sf "$(command -v mawk)" "$tmp/mawkbin/awk"
+  pd ' ❯ No' '   Yes'
+  echo "mawk dialog" >> "$A/_inbox.md"
+  out="$(PATH="$tmp/mawkbin:$PATH" dialog_run)"; t "mawk: Rückfrage ohne Nummern → skip-dialog" "1" "$(printf '%s\n' "$out" | grep -c 'skip-dialog')"
+  pd 'Antwort mit Enter to select · Esc to cancel im Text' "$RULE" '❯ ' "$RULE"
+  echo "mawk feld" >> "$A/_inbox.md"
+  out="$(PATH="$tmp/mawkbin:$PATH" dialog_run)"; t "mawk: Eingabefeld sichtbar → kein skip-dialog" "0" "$(printf '%s\n' "$out" | grep -c 'skip-dialog')"
+fi
+# frischer busy-Heartbeat beendet eine Dialog-Episode (Marker weg, nächster Dialog meldet neu)
+pd ' ❯ No' '   Yes'; echo "episode 1" >> "$A/_inbox.md"
+out="$(INBOX_WATCH_ALERT_CMD=true dialog_run)"
+echo "$(now) | busy | arbeite" > "$A/Zed.log"; echo "zwischendurch" >> "$A/_inbox.md"
+out="$(dialog_run)"
+t "frischer busy → Dialog-Marker entfernt" "0" "$([ -f "$tmp/state/alpha.dialog" ] && echo 1 || echo 0)"
+echo "$(ago 200) | busy | alt" > "$A/Zed.log"
+out="$(INBOX_WATCH_ALERT_CMD=true dialog_run)"
+t "neue Episode → wieder gemeldet" "1" "$(printf '%s\n' "$out" | grep -c 'Eskalation: escalated')"
+echo "$(ago 120) | blocked | warte" > "$A/Zed.log"
+pd "$RULE" '❯ ' "$RULE"; out="$(dialog_run)"   # Dialog zu → Episode endet
+
+# ohne Alert-Cmd: Dialog verschluckt nichts — State bleibt offen, Nudge nach dem Dialog
+echo "ohne alert" >> "$A/_inbox.md"
+pd ' ❯ No' '   Yes'
+out="$(dialog_run)"; t "ohne Alert-Cmd → skip-dialog, State offen" "1" "$(printf '%s\n' "$out" | grep -c 'State bleibt offen, Eskalation: swallowed')"
+out="$(dialog_run)"; t "ohne Alert-Cmd → kein Marker, nächster Tick versucht erneut" "1" "$(printf '%s\n' "$out" | grep -c 'State bleibt offen, Eskalation: swallowed')"
+pd "$RULE" '❯ ' "$RULE"
+out="$(dialog_run)"; t "ohne Alert-Cmd, Dialog weg → NUDGE" "1" "$(printf '%s\n' "$out" | grep -c 'alpha: NUDGE')"
+
 # kein Lead-Log (none) → nudgen (unbekannt behandeln wir wie idle)
 rm "$A/Zed.log"
 out="$(run)"
